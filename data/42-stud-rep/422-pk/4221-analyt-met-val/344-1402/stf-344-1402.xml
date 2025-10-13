@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet href="../../../../../util/style/ich-stf-stylesheet-2-2a.xsl" type="text/xsl"?>
+<!DOCTYPE ectd:study SYSTEM "../../../../../util/dtd/ich-stf-v2-2.dtd">
+
+<ectd:study xmlns:ectd="http://www.ich.org/ectd" xmlns:xlink="http://www.w3.org/1999/xlink" xml:lang="en" dtd-version="2.2">
+  <study-identifier>
+    <title>The Validation of an ECL Assay for the Detection of Anti-Drug Antibodies (ADA) Directed Against LT3114 in Rat Serum</title>
+    <study-id>344-1402</study-id>
+  </study-identifier>
+  <study-document>
+    <doc-content xlink:href="../../../../../../0000/index.xml#ID2855093">
+      <file-tag name="pre-clinical-study-report" info-type="ich" />
+    </doc-content>
+  </study-document>
+</ectd:study>
+

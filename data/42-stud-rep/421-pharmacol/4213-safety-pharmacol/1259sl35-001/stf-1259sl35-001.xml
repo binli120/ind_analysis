@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet href="../../../../../util/style/ich-stf-stylesheet-2-2a.xsl" type="text/xsl"?>
+<!DOCTYPE ectd:study SYSTEM "../../../../../util/dtd/ich-stf-v2-2.dtd">
+
+<ectd:study xmlns:ectd="http://www.ich.org/ectd" xmlns:xlink="http://www.w3.org/1999/xlink" xml:lang="en" dtd-version="2.2">
+  <study-identifier>
+    <title>A Single Slow Bolus Injection Study of LT3114 in Cynomolgus Monkeys</title>
+    <study-id>1259SL35-001</study-id>
+  </study-identifier>
+  <study-document>
+    <doc-content xlink:href="../../../../../../0000/index.xml#ID2921271">
+      <file-tag name="pre-clinical-study-report" info-type="ich" />
+    </doc-content>
+  </study-document>
+</ectd:study>
+

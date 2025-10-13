@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet href="../../../../../util/style/ich-stf-stylesheet-2-2a.xsl" type="text/xsl"?>
+<!DOCTYPE ectd:study SYSTEM "../../../../../util/dtd/ich-stf-v2-2.dtd">
+
+<ectd:study xmlns:ectd="http://www.ich.org/ectd" xmlns:xlink="http://www.w3.org/1999/xlink" xml:lang="en" dtd-version="2.2">
+  <study-identifier>
+    <title>Repeat Intravenous Dose Range Finding Toxicity Study of LT3114 in Monkeys with Toxicokinetics (non-GLP)</title>
+    <study-id>0437SL35-001</study-id>
+    <category name="species" info-type="ich">non-human-primate</category>
+    <category name="duration" info-type="us">short</category>
+    <category name="route-of-admin" info-type="ich">intravenous</category>
+  </study-identifier>
+  <study-document>
+    <doc-content xlink:href="../../../../../../0000/index.xml#ID2921199">
+      <file-tag name="pre-clinical-study-report" info-type="ich" />
+    </doc-content>
+  </study-document>
+</ectd:study>
+
