@@ -35,7 +35,9 @@ class PipelineContext:
     extras: Dict[str, Any] = field(default_factory=dict)
 
     def full_text(self) -> str:
-        return "\n\n".join(page.get("text", "") for page in self.pages if page.get("text"))
+        return "\n\n".join(
+            page.get("text", "") for page in self.pages if page.get("text")
+        )
 
 
 @dataclass(slots=True)
@@ -84,9 +86,7 @@ class PDFProcessingPipeline:
             len(ctx.tables),
         )
         ctx.key_values = self._run_key_value_stage(ctx)
-        logger.debug(
-            "[pipeline] extracted key-values count=%d", len(ctx.key_values)
-        )
+        logger.debug("[pipeline] extracted key-values count=%d", len(ctx.key_values))
 
         markdown, html = self._build_editor_artifacts(ctx)
         quality = self._generate_quality(ctx)
@@ -195,13 +195,17 @@ class PDFProcessingPipeline:
         elif strategy == "textract":
             client = self.config.ocr.textract_client
             if client is None:
-                self._handle_missing_client("textract", "Provide boto3 Textract client callable")
+                self._handle_missing_client(
+                    "textract", "Provide boto3 Textract client callable"
+                )
             else:
                 texts = self._invoke_callable_client(client, ctx.pdf_path, empty_ids)
         elif strategy in {"gcv", "vision"}:
             client = self.config.ocr.gcv_client
             if client is None:
-                self._handle_missing_client("google-vision", "Provide Vision API callable")
+                self._handle_missing_client(
+                    "google-vision", "Provide Vision API callable"
+                )
             else:
                 texts = self._invoke_callable_client(client, ctx.pdf_path, empty_ids)
         else:
@@ -336,15 +340,17 @@ class PDFProcessingPipeline:
             return None
 
         try:
+            from langchain_core.documents import Document
             from langchain_core.prompts import ChatPromptTemplate
             from langchain_text_splitters import RecursiveCharacterTextSplitter
-            from langchain_core.documents import Document
         except ModuleNotFoundError as exc:
             self._handle_missing_dependency("langchain", exc)
             return None
 
         documents = [
-            Document(page_content=ctx.full_text(), metadata={"source": ctx.pdf_path.name})
+            Document(
+                page_content=ctx.full_text(), metadata={"source": ctx.pdf_path.name}
+            )
         ]
         if ctx.tables:
             table_text = []

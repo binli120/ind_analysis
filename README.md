@@ -68,6 +68,7 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
 - Optional extras: `poetry install --with ocr,pymupdf,llm` (add `cloud_ocr` when wiring Google Vision or Textract clients). OCR fallbacks that use pdf2image expect the Poppler binaries (`pdfinfo`, `pdftoppm`) on `PATH`.
 - Logging: configure via `logging.basicConfig(level=logging.INFO)` (or DEBUG) before constructing the pipeline; the module logs each stage’s progress under `pdf_analysis.pipeline`.
 - Quick start:
+
   ```python
   from pathlib import Path
   from pdf_analysis.pipeline import (
@@ -91,4 +92,10 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
 
   result = PDFProcessingPipeline(config=config).run(Path("./sample.pdf"))
   print(result.text_engine, len(result.pages), result.langchain_output)
+  ```
+
+- run test
+
+  ```shell
+  poetry run python scripts/pipeline.py data/42-stud-rep/421-pharmacol/4211-prim-pd/lt3114-pha-001-r/lt3114-pha-001-r.pdf
   ```

@@ -28,7 +28,9 @@ def main():
     sp.add_argument("pdf", nargs="+", help="PDF file(s)")
     sp.add_argument("-o", "--outdir", required=True, help="Output directory")
     sp.add_argument(
-        "--ocr-fallback", action="store_true", help="Enable OCR if a page has no text"
+        "--ocr-fallback",
+        action="store_true",
+        help="Enable OCR if a page has no text",
     )
     sp.add_argument(
         "--engine",
@@ -37,7 +39,10 @@ def main():
         help="Table engine (default: pdfplumber)",
     )
     sp.add_argument(
-        "--max-pages", type=int, default=None, help="Limit page count for testing"
+        "--max-pages",
+        type=int,
+        default=None,
+        help="Limit page count for testing",
     )
     args = ap.parse_args()
 
@@ -56,7 +61,11 @@ def main():
         )
 
         # 2) Tables (dataframes + metadata)
-        tables = extract_tables_all(pdf, engine=args.engine, max_pages=args.max_pages)
+        tables = extract_tables_all(
+            pdf,
+            engine=args.engine,
+            max_pages=args.max_pages,
+        )
 
         # 3) Persist tables
         table_manifest = save_tables(pdf, tables, outdir)
