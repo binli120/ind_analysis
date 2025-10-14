@@ -1,3 +1,6 @@
+# @author: Bin Lee
+# @email: blee@filynai.com
+
 import logging
 from pathlib import Path
 

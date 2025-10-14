@@ -1,3 +1,6 @@
+# @author: Bin Lee
+# @email: blee@filynai.com
+
 from pathlib import Path
 from typing import Any, Dict, List
 

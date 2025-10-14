@@ -1,3 +1,6 @@
+# @author: Bin Lee
+# @email: blee@filynai.com
+
 """Configuration objects for the multi-stage PDF processing pipeline."""
 
 from __future__ import annotations

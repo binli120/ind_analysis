@@ -1,3 +1,6 @@
+# @author: Bin Lee
+# @email: blee@filynai.com
+
 from __future__ import annotations
 
 import logging

@@ -1,3 +1,6 @@
+# @author: Bin Lee
+# @email: blee@filynai.com
+
 """High-level orchestration for multi-stage PDF analysis pipelines."""
 
 from .config import (

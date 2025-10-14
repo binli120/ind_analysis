@@ -1,3 +1,6 @@
+# @author: Bin Lee
+# @email: blee@filynai.com
+
 from html import escape
 from typing import Any, Dict, List
 
