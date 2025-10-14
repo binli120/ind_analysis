@@ -43,10 +43,17 @@ def build_markdown_document(
 
         for table in tables_by_page.get(page_number, []):
             parts.append("")
-            parts.append(
-                f"**Table (p{page_number} t{table['index_on_page']})**  \n"
-                f"[CSV]({table['csv']}) · [JSON]({table['json']})"
-            )
+            header = f"**Table (p{page_number} t{table['index_on_page']})**"
+            links = []
+            csv_path = table.get("csv")
+            json_path = table.get("json")
+            if csv_path:
+                links.append(f"[CSV]({csv_path})")
+            if json_path:
+                links.append(f"[JSON]({json_path})")
+            if links:
+                header += "  \n" + " · ".join(links)
+            parts.append(header)
             preview = table.get("preview_rows")
             if preview is not None:
                 parts.append("")
@@ -101,11 +108,22 @@ def build_html_document(
 
         for table in tables_by_page.get(page_number, []):
             parts.append("<div class=\"table-block\">")
-            parts.append(
-                f"<p><strong>Table (p{page_number} t{table['index_on_page']})</strong> "
-                f"<a href=\"{escape(table['csv'])}\">CSV</a> · "
-                f"<a href=\"{escape(table['json'])}\">JSON</a></p>"
-            )
+            links = []
+            csv_path = table.get("csv")
+            json_path = table.get("json")
+            if csv_path:
+                links.append(f"<a href=\"{escape(csv_path)}\">CSV</a>")
+            if json_path:
+                links.append(f"<a href=\"{escape(json_path)}\">JSON</a>")
+            if links:
+                link_markup = " · ".join(links)
+                parts.append(
+                    f"<p><strong>Table (p{page_number} t{table['index_on_page']})</strong> {link_markup}</p>"
+                )
+            else:
+                parts.append(
+                    f"<p><strong>Table (p{page_number} t{table['index_on_page']})</strong></p>"
+                )
             preview = table.get("preview_rows")
             if preview is not None:
                 parts.append(_df_to_html_table(preview))
