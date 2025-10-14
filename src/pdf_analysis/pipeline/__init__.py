@@ -11,6 +11,7 @@ from .config import (
     TextExtractionConfig,
 )
 from .pipeline import PDFProcessingPipeline, PipelineResult
+from .executor import PipelineRunner, PipelineTaskResult
 
 __all__ = [
     "LangChainConfig",
@@ -20,4 +21,6 @@ __all__ = [
     "TextExtractionConfig",
     "PDFProcessingPipeline",
     "PipelineResult",
+    "PipelineRunner",
+    "PipelineTaskResult",
 ]

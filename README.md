@@ -66,6 +66,8 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
 - Configure stages via `PipelineConfig`—pick engines for pure text (`pdfplumber`, `pymupdf`, `pdfminer`), choose OCR providers (`tesseract`, `textract`, `gcv`), and supply regexes or SDK callables for form/table extraction.
 - Enable LLM summarisation by installing the `llm` extra and toggling `LangChainConfig(enabled=True, provider="openai", model="gpt-4o-mini")`; the pipeline will build prompts and invoke the configured chain.
 - Optional extras: `poetry install --with ocr,pymupdf,llm` (add `cloud_ocr` when wiring Google Vision or Textract clients). OCR fallbacks that use pdf2image expect the Poppler binaries (`pdfinfo`, `pdftoppm`) on `PATH`.
+- Parallelism: batch PDFs with `PipelineRunner` to fan out work across threads while keeping per-PDF state isolated.
+- API workers: set `PDF_PIPELINE_MAX_WORKERS=<int>` to bound the thread pool each request uses when the FastAPI endpoint fans out work.
 - Logging: configure via `logging.basicConfig(level=logging.INFO)` (or DEBUG) before constructing the pipeline; the module logs each stage’s progress under `pdf_analysis.pipeline`.
 - Quick start:
 
@@ -78,6 +80,7 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
       OCRConfig,
       StructuredExtractionConfig,
       LangChainConfig,
+      PipelineRunner,
   )
 
   config = PipelineConfig(
@@ -92,6 +95,10 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
 
   result = PDFProcessingPipeline(config=config).run(Path("./sample.pdf"))
   print(result.text_engine, len(result.pages), result.langchain_output)
+
+  runner = PipelineRunner(config=config, max_workers=4)
+  batch = runner.run_many([Path("./sample.pdf"), Path("./other.pdf")])
+  print([task.succeeded for task in batch])
   ```
 
 - run test

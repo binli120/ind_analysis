@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import os
 import shutil
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -11,19 +13,21 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 
-from pdf_analysis.ingest.pdf_text import extract_pages_text
-from pdf_analysis.ingest.tables import extract_tables_all
-from pdf_analysis.transform.markdown_writer import (
-    build_html_document,
-    build_markdown_document,
-)
-from pdf_analysis.validate import generate_quality_report
+from pdf_analysis.pipeline import PipelineConfig, PipelineRunner
 
 app = FastAPI(
     title="PDF Analysis API",
     description="Upload a PDF study report and receive extracted content, structured tables, and quality analysis.",
     version="0.1.0",
 )
+
+
+_PIPELINE_MAX_WORKERS_ENV = os.getenv("PDF_PIPELINE_MAX_WORKERS")
+_PIPELINE_MAX_WORKERS: Optional[int]
+if _PIPELINE_MAX_WORKERS_ENV and _PIPELINE_MAX_WORKERS_ENV.isdigit():
+    _PIPELINE_MAX_WORKERS = int(_PIPELINE_MAX_WORKERS_ENV)
+else:
+    _PIPELINE_MAX_WORKERS = None
 
 
 def _table_to_payload(
@@ -101,47 +105,57 @@ async def analyze_pdf(
             file.file.close()
 
     try:
-        try:
-            pages = extract_pages_text(
-                tmp_path, ocr_fallback=ocr_fallback, max_pages=max_pages
-            )
-            tables = extract_tables_all(tmp_path, engine=engine, max_pages=max_pages)
-        except (ValueError, RuntimeError) as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except HTTPException:
-            raise
-        except Exception as exc:
-            raise HTTPException(
-                status_code=500, detail="Failed to extract text or tables from PDF."
-            ) from exc
-
-        try:
-            table_manifest = _build_table_manifest(tables)
-            markdown_doc = build_markdown_document(filename, pages, table_manifest)
-            html_doc = build_html_document(filename, pages, table_manifest)
-            quality = generate_quality_report(
-                tmp_path,
-                pages,
-                tables,
-                extraction_limit=max_pages,
-            )
-            tables_payload = [_table_to_payload(t, max_rows=table_rows) for t in tables]
-        except Exception as exc:
-            raise HTTPException(
-                status_code=500, detail="Failed to build response artefacts."
-            ) from exc
-
-        return {
-            "document": filename,
-            "pages": pages,
-            "markdown": markdown_doc,
-            "html": html_doc,
-            "tables": tables_payload,
-            "quality": quality["json"],
-            "quality_markdown": quality["markdown"],
-        }
+        return await asyncio.to_thread(
+            _run_pipeline_with_runner,
+            tmp_path,
+            filename,
+            max_pages,
+            engine,
+            ocr_fallback,
+            table_rows,
+        )
     finally:
         try:
             tmp_path.unlink()
         except Exception:
             pass
+
+
+def _run_pipeline_with_runner(
+    pdf_path: Path,
+    filename: str,
+    max_pages: Optional[int],
+    table_engine: str,
+    ocr_fallback: bool,
+    table_rows: Optional[int],
+) -> Dict[str, Any]:
+    config = PipelineConfig()
+    config.text.max_pages = max_pages
+    config.ocr.enable = ocr_fallback
+    config.structured.table_engines = (table_engine,)
+
+    runner = PipelineRunner(config=config, max_workers=_PIPELINE_MAX_WORKERS)
+    tasks = runner.run_many([pdf_path])
+    if not tasks:
+        raise HTTPException(status_code=500, detail="Pipeline runner returned no results.")
+
+    task = tasks[0]
+    if task.error or task.result is None:
+        error = task.error or RuntimeError("Pipeline returned no result")
+        if isinstance(error, HTTPException):
+            raise error
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+    result = task.result
+
+    tables_payload = [_table_to_payload(t, max_rows=table_rows) for t in result.tables]
+
+    return {
+        "document": filename,
+        "pages": result.pages,
+        "markdown": result.markdown,
+        "html": result.html,
+        "tables": tables_payload,
+        "quality": result.quality_report or {},
+        "quality_markdown": result.quality_markdown,
+    }
