@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import shutil
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -13,21 +12,19 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 
-from pdf_analysis.pipeline import PipelineConfig, PipelineRunner
+from pdf_analysis.ingest.pdf_text import extract_pages_text
+from pdf_analysis.ingest.tables import extract_tables_all
+from pdf_analysis.transform.markdown_writer import (
+    build_html_document,
+    build_markdown_document,
+)
+from pdf_analysis.validate import generate_quality_report
 
 app = FastAPI(
     title="PDF Analysis API",
     description="Upload a PDF study report and receive extracted content, structured tables, and quality analysis.",
     version="0.1.0",
 )
-
-
-_PIPELINE_MAX_WORKERS_ENV = os.getenv("PDF_PIPELINE_MAX_WORKERS")
-_PIPELINE_MAX_WORKERS: Optional[int]
-if _PIPELINE_MAX_WORKERS_ENV and _PIPELINE_MAX_WORKERS_ENV.isdigit():
-    _PIPELINE_MAX_WORKERS = int(_PIPELINE_MAX_WORKERS_ENV)
-else:
-    _PIPELINE_MAX_WORKERS = None
 
 
 def _table_to_payload(
@@ -129,33 +126,58 @@ def _run_pipeline_with_runner(
     ocr_fallback: bool,
     table_rows: Optional[int],
 ) -> Dict[str, Any]:
-    config = PipelineConfig()
-    config.text.max_pages = max_pages
-    config.ocr.enable = ocr_fallback
-    config.structured.table_engines = (table_engine,)
+    pages = extract_pages_text(
+        pdf_path,
+        ocr_fallback=ocr_fallback,
+        max_pages=max_pages,
+    )
 
-    runner = PipelineRunner(config=config, max_workers=_PIPELINE_MAX_WORKERS)
-    tasks = runner.run_many([pdf_path])
-    if not tasks:
-        raise HTTPException(status_code=500, detail="Pipeline runner returned no results.")
+    tables = extract_tables_all(
+        pdf_path,
+        engine=table_engine,
+        max_pages=max_pages,
+    )
 
-    task = tasks[0]
-    if task.error or task.result is None:
-        error = task.error or RuntimeError("Pipeline returned no result")
-        if isinstance(error, HTTPException):
-            raise error
-        raise HTTPException(status_code=500, detail=str(error)) from error
+    table_manifest = _build_table_manifest(tables)
+    markdown = build_markdown_document(filename, pages, table_manifest)
+    html = build_html_document(filename, pages, table_manifest)
 
-    result = task.result
+    quality = generate_quality_report(
+        pdf_path,
+        pages,
+        tables,
+        extraction_limit=max_pages,
+    )
 
-    tables_payload = [_table_to_payload(t, max_rows=table_rows) for t in result.tables]
+    tables_payload = [_table_to_payload(t, max_rows=table_rows) for t in tables]
+
+    metrics_payload = {
+        "total_pages": len(pages),
+        "pages_with_text": sum(
+            1 for page in pages if (page.get("text") or "").strip()
+        ),
+        "tables_total": len(tables),
+        "table_pages": len(
+            {table["page_number"] for table in tables if table.get("page_number")}
+        ),
+        "ocr_pages": 0,
+        "key_value_pairs": 0,
+        "text_coverage": 0.0,
+        "confidence": None,
+    }
+    total_pages = metrics_payload["total_pages"]
+    if total_pages:
+        metrics_payload["text_coverage"] = round(
+            metrics_payload["pages_with_text"] / total_pages, 3
+        )
 
     return {
         "document": filename,
-        "pages": result.pages,
-        "markdown": result.markdown,
-        "html": result.html,
+        "pages": pages,
+        "markdown": markdown,
+        "html": html,
         "tables": tables_payload,
-        "quality": result.quality_report or {},
-        "quality_markdown": result.quality_markdown,
+        "quality": quality.get("json", {}) if quality else {},
+        "quality_markdown": quality.get("markdown") if quality else None,
+        "metrics": metrics_payload,
     }

@@ -68,6 +68,8 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
 - Optional extras: `poetry install --with ocr,pymupdf,llm` (add `cloud_ocr` when wiring Google Vision or Textract clients). OCR fallbacks that use pdf2image expect the Poppler binaries (`pdfinfo`, `pdftoppm`) on `PATH`.
 - Parallelism: batch PDFs with `PipelineRunner` to fan out work across threads while keeping per-PDF state isolated.
 - API workers: set `PDF_PIPELINE_MAX_WORKERS=<int>` to bound the thread pool each request uses when the FastAPI endpoint fans out work.
+- Diagnostics: every run emits `PipelineMetrics` (text/table coverage, OCR usage, heuristic confidence) and embeds the headline figures inside the quality report payload.
+- Chunked streaming: iterate with `PDFProcessingPipeline.stream(...)` to receive `PipelineChunk` objects one batch of pages at a time. Each chunk includes text, tables, OCR flags, and can be persisted to Redis by passing `redis_client`/`redis_key`, enabling long-running docs to stream straight into downstream consumers.
 - Logging: configure via `logging.basicConfig(level=logging.INFO)` (or DEBUG) before constructing the pipeline; the module logs each stage’s progress under `pdf_analysis.pipeline`.
 - Quick start:
 
@@ -94,11 +96,53 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
   )
 
   result = PDFProcessingPipeline(config=config).run(Path("./sample.pdf"))
-  print(result.text_engine, len(result.pages), result.langchain_output)
+  print(result.text_engine, len(result.pages), result.metrics.confidence)
 
   runner = PipelineRunner(config=config, max_workers=4)
   batch = runner.run_many([Path("./sample.pdf"), Path("./other.pdf")])
-  print([task.succeeded for task in batch])
+  print([task.result.metrics.text_coverage if task.result else None for task in batch])
+  ```
+
+- Streaming usage example:
+
+  ```python
+  from pathlib import Path
+  from redis import Redis
+  from pdf_analysis.pipeline import PDFProcessingPipeline
+
+  redis_client = Redis.from_url("redis://localhost:6379/0")
+  pipeline = PDFProcessingPipeline()
+
+  for chunk in pipeline.stream(
+      Path("./large.pdf"),
+      chunk_size=5,
+      redis_client=redis_client,
+      redis_key="doc:large",
+      redis_expire=3600,
+  ):
+      print(f"chunk {chunk.chunk_index}: pages {[p['page_number'] for p in chunk.pages]}")
+      # Optionally perform additional per-chunk post-processing here.
+  ```
+
+- Environment-specific Redis wiring can be centralised with `RedisStreamingConfig`:
+
+  ```python
+  from redis import Redis
+  from pdf_analysis.pipeline import PipelineConfig, RedisStreamingConfig
+
+  config = PipelineConfig(
+      redis=RedisStreamingConfig(
+          enabled=True,
+          url="redis://dev-cache:6379/2",
+          key_template="pdf:{stem}:{env}",
+          expire_seconds=3600,
+          client_factory=lambda cfg: Redis.from_url(cfg.url.replace("{env}", "dev")),
+      )
+  )
+
+  pipeline = PDFProcessingPipeline(config=config)
+  for _chunk in pipeline.stream(Path("./study.pdf"), chunk_size=10):
+      pass  # chunks are persisted automatically using the derived key.
   ```
 
 - run test

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 
 @dataclass(slots=True)
@@ -17,6 +17,7 @@ class TextExtractionConfig:
     max_pages: Optional[int] = None
     keep_intermediate: bool = False
     detect_layout: bool = True
+    stream_probe_pages: int = 5
 
 
 @dataclass(slots=True)
@@ -62,6 +63,20 @@ class LangChainConfig:
 
 
 @dataclass(slots=True)
+class RedisStreamingConfig:
+    """Controls optional Redis persistence of streaming chunks."""
+
+    enabled: bool = False
+    url: Optional[str] = None
+    host: str = "localhost"
+    port: int = 6379
+    db: int = 0
+    key_template: str = "doc:{stem}"
+    expire_seconds: Optional[int] = None
+    client_factory: Optional[Callable[["RedisStreamingConfig"], Any]] = None
+
+
+@dataclass(slots=True)
 class PipelineConfig:
     """Aggregates all stage configurations."""
 
@@ -69,6 +84,7 @@ class PipelineConfig:
     ocr: OCRConfig = field(default_factory=OCRConfig)
     structured: StructuredExtractionConfig = field(default_factory=StructuredExtractionConfig)
     llm: LangChainConfig = field(default_factory=LangChainConfig)
+    redis: RedisStreamingConfig = field(default_factory=RedisStreamingConfig)
     raise_on_missing_dependencies: bool = False
 
 
