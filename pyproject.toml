@@ -64,6 +64,12 @@ llm = [
     "langchain-text-splitters (>=0.3.0,<0.4.0)",
 ]
 
+infra = [
+    "boto3 (>=1.35.0,<2.0.0)",
+    "redis (>=5.2.0,<6.0.0)",
+    "python-dotenv (>=1.0.1,<2.0.0)",
+]
+
 
 
 
@@ -93,6 +99,17 @@ optional = true
 langchain-core = ">=0.3.0,<0.4.0"
 langchain-openai = ">=0.2.0,<0.4.0"
 langchain-text-splitters = ">=0.3.0,<0.4.0"
+
+
+
+
+[tool.poetry.group.infra]
+optional = true
+
+[tool.poetry.group.infra.dependencies]
+boto3 = ">=1.35.0,<2.0.0"
+redis = ">=5.2.0,<6.0.0"
+python-dotenv = ">=1.0.1,<2.0.0"
 
 
 

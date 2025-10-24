@@ -145,6 +145,56 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
       pass  # chunks are persisted automatically using the derived key.
   ```
 
+## S3 → Redis Synchronisation Service
+
+- Install the infra extras to pick up the required clients:
+
+  ```shell
+  poetry install --with infra
+  ```
+
+- Configure a daily cron (or GitHub Action) that runs the new helper script:
+
+  ```shell
+  poetry run python scripts/s3_sync.py \
+    --bucket YOUR_BUCKET \
+    --company filynai.com \
+    --projects LT1009 \
+    --modules 1,2,3 \
+    --redis-url redis://localhost:6379/0 \
+    --redis-key-template "{company}:{project_slug}:{module_slug}:{filename}" \
+    --redis-expire 86400
+  ```
+
+  The script honours `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_REGION` environment variables, so credentials can be injected via your secrets manager instead of CLI flags.
+  On startup it automatically loads variables from `.env` and `.env.local` (if present) using `python-dotenv`.
+  The path parser expects keys shaped like `filynai.com/<Project>/Module N.<description>/...`. Module numbers are inferred automatically; pass `--modules` with integers (e.g. `--modules 1,2`) if you want to limit the scrape, otherwise omit the flag to index every module it encounters.
+
+- Keys in Redis take the form `company:module:filename` and a hash payload with `markdown`, `s3_version`, `last_modified`, etc. The S3 document hierarchy is preserved, which makes it easy for downstream systems to correlate entries back to their source objects.
+
+### Local Redis Quickstart
+
+- macOS (Homebrew):
+
+  ```shell
+  brew install redis
+  brew services start redis   # or `redis-server` to run in the foreground
+  redis-cli ping              # should reply with PONG
+  ```
+
+- Ubuntu/Debian:
+
+  ```shell
+  sudo apt-get update
+  sudo apt-get install redis-server
+  sudo systemctl enable --now redis-server
+  redis-cli ping
+  ```
+
+- Windows (WSL or native): install from <https://github.com/microsoftarchive/redis/releases> or run `sudo apt-get install redis-server` inside WSL. Ensure the daemon is listening on `localhost:6379`.
+
+Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and run the sync script. Use `redis-cli hgetall filynai.com:module1:example.pdf` to inspect the stored markdown.
+
 - run test
 
   ```shell
