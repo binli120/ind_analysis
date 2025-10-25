@@ -16,6 +16,7 @@ from pdf_analysis.transform.markdown_writer import (
     build_html_document,
     build_markdown_document,
 )
+from utils.log import info
 
 
 def _persist_outputs(
@@ -112,13 +113,13 @@ def main(pdf_path: Path, outdir: Optional[Path] = None) -> None:
     pipeline = PDFProcessingPipeline(PipelineConfig())
     result = pipeline.run(pdf_path)
 
-    print(f"Text engine: {result.text_engine}")
-    print(f"OCR strategy: {result.ocr_strategy}")
-    print(f"Tables detected: {len(result.tables)}")
+    info(f"Text engine: {result.text_engine}")
+    info(f"OCR strategy: {result.ocr_strategy}")
+    info(f"Tables detected: {len(result.tables)}")
     if result.metrics:
-        print("Metrics:")
+        info("Metrics:")
         for key, value in asdict(result.metrics).items():
-            print(f"  {key}: {value}")
+            info(f"  {key}: {value}")
 
     if outdir:
         artefacts = _persist_outputs(pdf_path, result, outdir)
@@ -127,13 +128,13 @@ def main(pdf_path: Path, outdir: Optional[Path] = None) -> None:
                 continue
             if isinstance(value, list):
                 for index, item in enumerate(value, start=1):
-                    print(f"{label}[{index}]: {item}")
+                    info(f"{label}[{index}]: {item}")
             else:
-                print(f"{label}: {value}")
+                info(f"{label}: {value}")
 
     if result.markdown:
-        print("\n--- Extracted Markdown ---\n")
-        print(result.markdown)
+        info("\n--- Extracted Markdown ---\n")
+        info(result.markdown)
 
 
 if __name__ == "__main__":

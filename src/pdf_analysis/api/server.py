@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import shutil
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
@@ -168,7 +169,9 @@ def _run_pipeline_with_runner(
     total_pages = metrics_payload["total_pages"]
     if total_pages:
         metrics_payload["text_coverage"] = round(
-            metrics_payload["pages_with_text"] / total_pages, 3
+            float(cast(float, metrics_payload["pages_with_text"])) /
+            float(cast(float, total_pages)),
+            3,
         )
 
     return {
@@ -181,3 +184,17 @@ def _run_pipeline_with_runner(
         "quality_markdown": quality.get("markdown") if quality else None,
         "metrics": metrics_payload,
     }
+
+def export_openapi_to_file(app: FastAPI, out_path: str | Path) -> None:
+    """Write the OpenAPI spec to JSON (or YAML)."""
+    openapi_dict = app.openapi()
+    out_path = Path(out_path)
+
+    # JSON
+    if out_path.suffix in {".json", ".yml", ".yaml"}:
+        data = json.dumps(openapi_dict, indent=2)
+    else:
+        raise ValueError("Supported extensions: .json, .yml, .yaml")
+
+    out_path.write_text(data, encoding="utf-8")
+    print(f"✅ OpenAPI spec written to {out_path}")

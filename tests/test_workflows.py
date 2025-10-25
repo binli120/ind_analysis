@@ -8,7 +8,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Dict
+from typing import Dict, cast
 from unittest.mock import patch
 
 import pandas as pd
@@ -179,7 +179,7 @@ class PipelineStreamingTests(unittest.TestCase):
 
         stored = fake_redis.hashes["doc:demo"]
         self.assertIn("chunk:00001", stored)
-        chunk_two_payload = json.loads(stored["chunk:00002"])
+        chunk_two_payload = json.loads(cast(str, stored["chunk:00002"]))
         self.assertEqual(chunk_two_payload["ocr_pages"], [2])
         self.assertEqual(chunk_two_payload["tables"][0]["engine"], "pdfplumber")
         self.assertEqual(stored["status"], "complete")

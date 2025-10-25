@@ -195,6 +195,19 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
 
 Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and run the sync script. Use `redis-cli hgetall filynai.com:module1:example.pdf` to inspect the stored markdown.
 
+## Build & Test Helper
+
+- Use the helper script to install dependencies, run static checks, and execute tests in one shot:
+
+  ```shell
+  poetry run python scripts/build.py --with infra
+  ```
+
+  Optional flags:
+  - `--with infra,llm` installs additional poetry groups.
+  - `--skip-install` or `--skip-tests` bypass individual stages for faster iteration.
+  - The script attempts `mypy` first (warnings are logged but do not stop the build) and finishes with `pytest` unless skipped.
+
 - run test
 
   ```shell

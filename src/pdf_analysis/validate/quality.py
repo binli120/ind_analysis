@@ -1,5 +1,6 @@
 # @author: Bin Lee
 # @email: blee@filynai.com
+# this module caculate the quality of pdf-service.
 
 from __future__ import annotations
 
@@ -261,7 +262,7 @@ def generate_quality_report(
     }
 
     if extraction_limit is not None:
-        json_report["extraction_limit"] = extraction_limit
+        json_report["extraction_limit"] = str(extraction_limit)
 
     md_lines = [
         f"# Data Quality Report — {pdf_path.name}",

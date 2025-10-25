@@ -14,6 +14,7 @@ from pdf_analysis.transform.markdown_writer import (
     build_markdown_document,
 )
 from pdf_analysis.validate import generate_quality_report
+from utils.log import info
 
 
 def main():
@@ -52,7 +53,7 @@ def main():
     for pdf_path in args.pdf:
         pdf = Path(pdf_path)
         if not pdf.exists():
-            print(f"[WARN] Missing: {pdf}")
+            info(f"[WARN] Missing: {pdf}")
             continue
 
         # 1) Page text (optionally OCR)
@@ -79,7 +80,7 @@ def main():
             if existing_md != md:
                 modified_pdf_path = outdir / f"{pdf.stem}.modified.pdf"
                 markdown_to_pdf(existing_md, modified_pdf_path)
-                print(f"[INFO] Preserved modified draft → {modified_pdf_path}")
+                info(f"[INFO] Preserved modified draft → {modified_pdf_path}")
 
         write_text(md_path, md)
 
@@ -98,10 +99,10 @@ def main():
         write_text(quality_json_path, json.dumps(quality["json"], indent=2))
         write_text(quality_md_path, quality["markdown"])
 
-        print(f"[OK] {pdf.name} → {md_path}")
-        print(f"[OK] {pdf.name} → {html_path}")
-        print(f"[OK] {pdf.name} → {quality_json_path}")
-        print(f"[OK] {pdf.name} → {quality_md_path}")
+        info(f"[OK] {pdf.name} → {md_path}")
+        info(f"[OK] {pdf.name} → {html_path}")
+        info(f"[OK] {pdf.name} → {quality_json_path}")
+        info(f"[OK] {pdf.name} → {quality_md_path}")
 
 
 if __name__ == "__main__":

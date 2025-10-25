@@ -12,6 +12,7 @@ from typing import Sequence
 
 from pdf_analysis.pipeline import PipelineConfig
 from pdf_analysis.service.s3_sync import S3RedisSyncService, S3SyncConfig
+from utils.log import info
 
 try:  # optional dependency loaded via `poetry install --with infra`
     from dotenv import load_dotenv
@@ -152,7 +153,7 @@ def main(argv: Sequence[str]) -> int:
 
     service = S3RedisSyncService(config)
     processed = service.run()
-    print(f"Processed {processed} documents.")
+    info(f"Processed {processed} documents.")
     return 0
 
 
