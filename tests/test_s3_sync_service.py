@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import json
+import tempfile
 import types
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Any, Dict, Iterable, List
 from unittest.mock import patch
 
 from pdf_analysis.pipeline import PipelineConfig
@@ -41,6 +43,9 @@ class FakePaginator:
 class FakeS3Client:
     def __init__(self) -> None:
         self.downloads: List[Path] = []
+        self.copies: List[Dict[str, Any]] = []
+        self.puts: List[Dict[str, Any]] = []
+        self.metadata_store: Dict[tuple[str, str], Dict[str, str]] = {}
         self._paginator = FakePaginator(
             [
                 {
@@ -82,6 +87,25 @@ class FakeS3Client:
         _ = (bucket, key, ExtraArgs)
         fileobj.write(b"%PDF-1.4 mock")
 
+    def head_object(
+        self, Bucket: str, Key: str, VersionId: str | None = None
+    ) -> Dict[str, Any]:  # type: ignore[override]
+        _ = VersionId
+        return {
+            "Metadata": self.metadata_store.get((Bucket, Key), {}),
+            "ContentType": "application/pdf",
+        }
+
+    def copy_object(self, **kwargs: Any) -> Dict[str, Any]:
+        self.copies.append(kwargs)
+        meta = kwargs.get("Metadata", {})
+        self.metadata_store[(kwargs["Bucket"], kwargs["Key"])] = meta
+        return {"CopyObjectResult": {}}
+
+    def put_object(self, **kwargs: Any) -> Dict[str, Any]:
+        self.puts.append(kwargs)
+        return {"VersionId": "meta-version"}
+
 
 class DummyPipeline:
     def run(self, _: Path) -> types.SimpleNamespace:
@@ -91,32 +115,71 @@ class DummyPipeline:
 class S3RedisSyncServiceTests(unittest.TestCase):
     def test_run_writes_markdown_to_redis(self) -> None:
         fake_redis = FakeRedis()
-        config = S3SyncConfig(
-            bucket="demo-bucket",
-            company="filynai.com",
-            projects=("LT1009",),
-            module_filters=(1,),
-            redis_client=fake_redis,
-            pipeline_config=PipelineConfig(),
-        )
-        service = S3RedisSyncService(
-            config,
-            pipeline_factory=lambda _: DummyPipeline(),  # type: ignore[arg-type]
-        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_path = Path(tmp_dir)
+            config = S3SyncConfig(
+                bucket="demo-bucket",
+                company="filynai.com",
+                projects=("LT1009",),
+                module_filters=(1,),
+                redis_client=fake_redis,
+                pipeline_config=PipelineConfig(),
+                output_dir=output_path,
+            )
+            metadata_stub = lambda text: {
+                "labels": ["clinical", "efficacy"],
+                "keywords": ["efficacy", "safety"],
+                "language": "en",
+            }
+            service = S3RedisSyncService(
+                config,
+                pipeline_factory=lambda _: DummyPipeline(),  # type: ignore[arg-type]
+                metadata_generator=metadata_stub,
+            )
 
-        fake_s3 = FakeS3Client()
-        with patch.object(S3RedisSyncService, "_build_s3_client", return_value=fake_s3):
-            processed = service.run()
+            fake_s3 = FakeS3Client()
+            with patch.object(S3RedisSyncService, "_build_s3_client", return_value=fake_s3):
+                processed = service.run()
 
-        self.assertEqual(processed, 1)
-        key = "filynai.com:lt1009:module-1-quality:report.pdf"
-        self.assertIn(key, fake_redis.store)
-        payload = fake_redis.store[key]
-        self.assertEqual(payload["s3_bucket"], "demo-bucket")
-        self.assertEqual(payload["s3_version"], "abc123")
-        self.assertTrue(payload["markdown"].startswith("# mock"))
-        self.assertEqual(payload["project"], "LT1009")
-        self.assertEqual(payload["module_number"], 1)
+            self.assertEqual(processed, 1)
+            key = "filynai.com:lt1009:module-1-quality:report.pdf"
+            self.assertIn(key, fake_redis.store)
+            payload = fake_redis.store[key]
+            self.assertEqual(payload["s3_bucket"], "demo-bucket")
+            self.assertEqual(payload["s3_version"], "abc123")
+            self.assertTrue(payload["markdown"].startswith("# mock"))
+            self.assertEqual(payload["project"], "LT1009")
+            self.assertEqual(payload["module_number"], "1")
+            self.assertEqual(payload["labels"], "clinical,efficacy")
+            self.assertEqual(payload["keywords"], "efficacy,safety")
+            metadata_json = json.loads(payload["metadata_json"])
+            self.assertTrue(metadata_json["analyzed"])
+
+            markdown_path = (
+                output_path
+                / "filynai.com"
+                / "LT1009"
+                / "Module 1.Quality"
+                / "report.pdf.md"
+            )
+            meta_path = (
+                output_path
+                / "filynai.com"
+                / "LT1009"
+                / "Module 1.Quality"
+                / "report.pdf.meta.json"
+            )
+            self.assertTrue(markdown_path.exists())
+            self.assertTrue(meta_path.exists())
+            self.assertEqual(markdown_path.read_text(encoding="utf-8"), "# mock\n\ncontent")
+            meta_payload = json.loads(meta_path.read_text(encoding="utf-8"))
+            self.assertEqual(meta_payload["metadata"]["labels"], ["clinical", "efficacy"])
+
+            self.assertEqual(len(fake_s3.copies), 1)
+            self.assertIn("Metadata", fake_s3.copies[0])
+            self.assertEqual(fake_s3.copies[0]["Metadata"]["labels"], "clinical,efficacy")
+            self.assertEqual(len(fake_s3.puts), 1)
+            self.assertTrue(fake_s3.puts[0]["Key"].endswith("report.pdf.meta.json"))
 
 
 if __name__ == "__main__":

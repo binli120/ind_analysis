@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import io
 import json
+import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
-from typing import Dict, cast
+from typing import Any, Dict, List, cast
 from unittest.mock import patch
 
 import pandas as pd
@@ -239,6 +241,146 @@ class ApiEndpointTests(unittest.TestCase):
         self.assertEqual(payload["tables"][0]["row_count"], 2)
         self.assertIn("document", payload["quality"])
         self.assertEqual(payload["quality_markdown"], "# Quality")
+
+    def test_fetch_s3_markdown_endpoint(self) -> None:
+        client = TestClient(server.app)
+
+        class FakeS3Client:
+            def __init__(self) -> None:
+                self.download_calls: List[tuple] = []
+                self.copy_calls: List[Dict[str, Any]] = []
+                self.put_calls: List[Dict[str, Any]] = []
+
+            def download_fileobj(self, bucket, key, fileobj, ExtraArgs=None):
+                self.download_calls.append((bucket, key, ExtraArgs))
+                fileobj.write(b"%PDF-1.4 mock")
+
+            def head_object(self, **kwargs):
+                return {"Metadata": {}, "ContentType": "application/pdf"}
+
+            def copy_object(self, **kwargs):
+                self.copy_calls.append(kwargs)
+                return {}
+
+            def put_object(self, **kwargs):
+                self.put_calls.append(kwargs)
+                return {"VersionId": "meta-json"}
+
+        fake_s3_client = FakeS3Client()
+
+        fake_pipeline_result = types.SimpleNamespace(
+            markdown="# sample markdown",
+            text_engine="pdfminer",
+            ocr_strategy=None,
+            tables=[],
+        )
+
+        metadata_backup = server._metadata_generator
+        server._metadata_generator = lambda _: {
+            "labels": ["pharmacology"],
+            "keywords": ["efficacy"],
+            "language": "en",
+        }
+
+        with patch.object(server, "PDFProcessingPipeline") as mock_pipeline:
+            mock_pipeline.return_value.run.return_value = fake_pipeline_result
+
+            fake_exceptions = types.SimpleNamespace(BotoCoreError=Exception, ClientError=Exception)
+            fake_botocore = types.ModuleType("botocore")
+            fake_botocore.exceptions = fake_exceptions
+            with patch.dict(
+                sys.modules,
+                {
+                    "boto3": types.SimpleNamespace(client=lambda *args, **kwargs: fake_s3_client),
+                    "botocore": fake_botocore,
+                    "botocore.exceptions": fake_exceptions,
+                },
+            ):
+                response = client.post(
+                    "/s3/markdown",
+                    json={
+                        "bucket": "demo-bucket",
+                        "key": "LT1009/Module 1.Quality/report.pdf",
+                        "version_id": "abc123",
+                        "aws_region": "us-east-1",
+                    },
+                )
+
+        server._metadata_generator = metadata_backup
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["markdown"], "# sample markdown")
+        self.assertEqual(data["text_engine"], "pdfminer")
+        self.assertEqual(data["tables"], 0)
+        self.assertEqual(data["metadata"]["labels"], ["pharmacology"])
+        self.assertEqual(len(fake_s3_client.download_calls), 1)
+        bucket, key, extra = fake_s3_client.download_calls[0]
+        self.assertEqual(bucket, "demo-bucket")
+        self.assertEqual(key, "LT1009/Module 1.Quality/report.pdf")
+        self.assertEqual(extra, {"VersionId": "abc123"})
+        self.assertEqual(len(fake_s3_client.copy_calls), 1)
+        self.assertEqual(fake_s3_client.copy_calls[0]["Metadata"]["labels"], "pharmacology")
+        self.assertEqual(len(fake_s3_client.put_calls), 1)
+        self.assertTrue(fake_s3_client.put_calls[0]["Key"].endswith("report.pdf.meta.json"))
+
+    def test_save_s3_markdown_endpoint(self) -> None:
+        client = TestClient(server.app)
+        put_calls: List[Dict[str, Any]] = []
+
+        def put_object(**kwargs: Any) -> Dict[str, Any]:
+            put_calls.append(kwargs)
+            return {"VersionId": "ver-002"}
+
+        fake_s3_client = types.SimpleNamespace(put_object=put_object)
+        fake_exceptions = types.SimpleNamespace(BotoCoreError=Exception, ClientError=Exception)
+        fake_botocore = types.ModuleType("botocore")
+        fake_botocore.exceptions = fake_exceptions
+
+        with patch.dict(
+            sys.modules,
+            {
+                "boto3": types.SimpleNamespace(client=lambda *args, **kwargs: fake_s3_client),
+                "botocore": fake_botocore,
+                "botocore.exceptions": fake_exceptions,
+            },
+        ):
+            response = client.post(
+                "/s3/markdown/save",
+                json={
+                    "bucket": "demo-bucket",
+                    "path": "filynai.com/LT1009/Module 1.Quality",
+                    "filename": "report",
+                    "markdown": "# updated",
+                    "label": "annotated",
+                    "tags": {"status": "draft", "reviewer": "QA"},
+                    "metadata": {"source": "editor"},
+                    "aws_region": "us-east-1",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["bucket"], "demo-bucket")
+        self.assertEqual(payload["key"], "filynai.com/LT1009/Module 1.Quality/report.md")
+        self.assertEqual(payload["version_id"], "ver-002")
+        self.assertEqual(payload["label"], "annotated")
+        self.assertEqual(payload["tags"], {"status": "draft", "reviewer": "QA"})
+
+        self.assertEqual(payload["metadata"], {"source": "editor", "label": "annotated"})
+
+        self.assertGreaterEqual(len(put_calls), 1)
+        primary_put = put_calls[0]
+        self.assertEqual(primary_put["Bucket"], "demo-bucket")
+        self.assertEqual(primary_put["Key"], "filynai.com/LT1009/Module 1.Quality/report.md")
+        self.assertEqual(primary_put["ContentType"], "text/markdown")
+        self.assertIn(b"# updated", primary_put["Body"])
+        self.assertEqual(primary_put["Metadata"], {"source": "editor", "label": "annotated"})
+
+        self.assertTrue(
+            any(call.get("Key", "").endswith("report.md.meta.json") for call in put_calls),
+            "Metadata JSON upload not detected",
+        )
 
 
 if __name__ == "__main__":

@@ -12,7 +12,6 @@ from typing import Sequence
 
 from pdf_analysis.pipeline import PipelineConfig
 from pdf_analysis.service.s3_sync import S3RedisSyncService, S3SyncConfig
-from utils.log import info
 
 try:  # optional dependency loaded via `poetry install --with infra`
     from dotenv import load_dotenv
@@ -106,7 +105,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--redis-key-template",
-        default="{company}:{module}:{filename}",
+        default="{company}:{project_slug}:{module_slug}:{filename}",
         help="Template for Redis keys.",
     )
     parser.add_argument(
@@ -114,6 +113,22 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         type=int,
         default=None,
         help="Optional TTL (seconds) to set on redis hashes.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Directory where extracted markdown files will be written (mirrors S3 hierarchy).",
+    )
+    parser.add_argument(
+        "--ai-metadata",
+        action="store_true",
+        help="Enable OpenAI-powered metadata labeling (requires OPENAI_API_KEY and infra extras).",
+    )
+    parser.add_argument(
+        "--ai-model",
+        default=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        help="OpenAI model to use when --ai-metadata is enabled (default: gpt-4o-mini).",
     )
     parser.add_argument(
         "--limit",
@@ -149,11 +164,21 @@ def main(argv: Sequence[str]) -> int:
         redis_key_template=args.redis_key_template,
         redis_expire_seconds=args.redis_expire,
         maximum_documents=args.limit,
+        output_dir=Path(args.output_dir).resolve() if args.output_dir else None,
     )
 
-    service = S3RedisSyncService(config)
+    metadata_generator = None
+    if args.ai_metadata:
+        try:
+            from pdf_analysis.service.ai_metadata import OpenAIMetadataGenerator
+
+            metadata_generator = OpenAIMetadataGenerator(model=args.ai_model)
+        except ModuleNotFoundError:
+            logging.warning("OpenAI metadata generator unavailable. Install infra extras to enable it.")
+
+    service = S3RedisSyncService(config, metadata_generator=metadata_generator)
     processed = service.run()
-    info(f"Processed {processed} documents.")
+    logging.info("Processed %d documents.", processed)
     return 0
 
 

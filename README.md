@@ -163,11 +163,15 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
     --modules 1,2,3 \
     --redis-url redis://localhost:6379/0 \
     --redis-key-template "{company}:{project_slug}:{module_slug}:{filename}" \
-    --redis-expire 86400
+    --redis-expire 86400 \
+    --ai-metadata \
+    --output-dir ./synced-markdown
   ```
 
   The script honours `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_REGION` environment variables, so credentials can be injected via your secrets manager instead of CLI flags.
   On startup it automatically loads variables from `.env` and `.env.local` (if present) using `python-dotenv`.
+  When `--output-dir` is set, the service mirrors the S3 hierarchy locally, writing `<output>/<company>/<Project>/<Module N.*>/<filename>.pdf.md` and a companion `<filename>.pdf.meta.json` alongside the source PDF structure.
+  Add `--ai-metadata` (and set `OPENAI_API_KEY`) to label each document via OpenAI, generating up to three labels and five keywords. The results are written back to Redis, uploaded to the bucket via `copy_object` as object metadata, and stored in the `.meta.json` artefact.
   The path parser expects keys shaped like `filynai.com/<Project>/Module N.<description>/...`. Module numbers are inferred automatically; pass `--modules` with integers (e.g. `--modules 1,2`) if you want to limit the scrape, otherwise omit the flag to index every module it encounters.
 
 - Keys in Redis take the form `company:module:filename` and a hash payload with `markdown`, `s3_version`, `last_modified`, etc. The S3 document hierarchy is preserved, which makes it easy for downstream systems to correlate entries back to their source objects.
@@ -194,6 +198,43 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
 - Windows (WSL or native): install from <https://github.com/microsoftarchive/redis/releases> or run `sudo apt-get install redis-server` inside WSL. Ensure the daemon is listening on `localhost:6379`.
 
 Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and run the sync script. Use `redis-cli hgetall filynai.com:module1:example.pdf` to inspect the stored markdown.
+
+### On-Demand S3 Markdown API
+
+- Call the API endpoint to transform a single S3 object into markdown without running the full sync:
+
+  ```http
+  POST /s3/markdown
+  Content-Type: application/json
+
+  {
+    "bucket": "YOUR_BUCKET",
+    "key": "filynai.com/LT1009/Module 1.Quality/report.pdf",
+    "version_id": "optional-version",
+    "aws_region": "us-east-1"
+  }
+  ```
+
+  The service downloads the object (using the environment AWS credentials), runs the pipeline, derives labels/keywords when `OPENAI_API_KEY` is present, and returns `{ "markdown": "...", "text_engine": "...", "tables": <count>, "metadata": {...} }`. Install the `infra` extras so boto3 and OpenAI are available on the API host.
+
+- To upload edited markdown back to S3 (creating a new object version) send:
+
+  ```http
+  POST /s3/markdown/save
+  Content-Type: application/json
+
+  {
+    "bucket": "YOUR_BUCKET",
+    "path": "filynai.com/LT1009/Module 1.Quality",
+    "filename": "report",
+    "markdown": "# revised ...",
+    "label": "annotated",
+    "tags": {"status": "review", "reviewer": "QA"},
+    "metadata": {"source": "editor"}
+  }
+  ```
+
+  The service writes `<path>/<filename>.md` with `text/markdown`, attaches the `metadata` map to the object, persists tags, and uploads a companion `<path>/<filename>.md.meta.json` describing the revision. When you hit `POST /s3/markdown`, the pipeline performs the same metadata enrichment (labels, keywords, language) before returning the markdown payload and S3 reference. For richer querying (search, audit), mirror the JSON metadata into DynamoDB or another durable store.
 
 ## Build & Test Helper
 
