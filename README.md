@@ -236,6 +236,16 @@ Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and r
 
   The service writes `<path>/<filename>.md` with `text/markdown`, attaches the `metadata` map to the object, persists tags, and uploads a companion `<path>/<filename>.md.meta.json` describing the revision. When you hit `POST /s3/markdown`, the pipeline performs the same metadata enrichment (labels, keywords, language) before returning the markdown payload and S3 reference. For richer querying (search, audit), mirror the JSON metadata into DynamoDB or another durable store.
 
+### Generate OpenAPI Schema
+
+- Produce a static OpenAPI document for integration or documentation tooling:
+
+  ```shell
+  poetry run python scripts/generate_openapi.py --output dist/openapi.json
+  ```
+
+  Adjust `--output` or `--indent` as needed. The script loads the FastAPI app defined in `pdf_analysis.api.server`, so ensure optional dependencies (e.g., boto3, openai) are available if you’ve enabled related routes.
+
 ## Build & Test Helper
 
 - Use the helper script to install dependencies, run static checks, and execute tests in one shot:

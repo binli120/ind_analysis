@@ -1,11 +1,42 @@
+# author: Bin Lee
+# email: blee@filynai.com
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
 from pathlib import Path
-import uvicorn
 
-from pdf_analysis.api.server import export_openapi_to_file, app
+from pdf_analysis.api.server import app
 
-# from main import app, export_openapi_to_file
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Generate the OpenAPI specification for the PDF Analysis API.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("dist/openapi.json"),
+        help="Destination path for the OpenAPI JSON (default: dist/openapi.json).",
+    )
+    parser.add_argument(
+        "--indent",
+        type=int,
+        default=2,
+        help="JSON indentation (default: 2).",
+    )
+    args = parser.parse_args()
+
+    output_path: Path = args.output
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    spec = app.openapi()
+    output_path.write_text(json.dumps(spec, indent=args.indent), encoding="utf-8")
+    logging.info("OpenAPI spec written to %s", output_path)
+    return 0
+
 
 if __name__ == "__main__":
-    out = Path("docs") / "openapi.json"
-    out.parent.mkdir(exist_ok=True)
-    export_openapi_to_file(app, out)
+    raise SystemExit(main())

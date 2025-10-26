@@ -64,7 +64,11 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         prog="s3-sync",
         description="Synchronise PDF markdown extracts from S3 into Redis.",
     )
-    parser.add_argument("--bucket", required=True, help="S3 bucket containing company folders.")
+    parser.add_argument(
+        "--bucket",
+        default=os.getenv("S3_BUCKET"),
+        help="S3 bucket containing company folders (defaults to S3_BUCKET env).",
+    )
     parser.add_argument(
         "--company",
         default="filynai.com",
@@ -146,6 +150,8 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 def main(argv: Sequence[str]) -> int:
     args = parse_args(argv)
+    if not args.bucket:
+        raise SystemExit("S3 bucket is required. Set --bucket or S3_BUCKET in environment/.env.local.")
     logging.basicConfig(level=args.log_level.upper())
 
     modules = _parse_modules(args.modules)
@@ -167,8 +173,10 @@ def main(argv: Sequence[str]) -> int:
         output_dir=Path(args.output_dir).resolve() if args.output_dir else None,
     )
 
+    enable_ai = args.ai_metadata or os.getenv("ENABLE_AI_METADATA", "false").lower() == "true"
+
     metadata_generator = None
-    if args.ai_metadata:
+    if enable_ai:
         try:
             from pdf_analysis.service.ai_metadata import OpenAIMetadataGenerator
 
