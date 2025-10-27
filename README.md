@@ -60,6 +60,28 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
 - Ensure your ECS task definition maps container port `8000` to your load balancer target group or service discovery endpoint.
 - Grant the execution role `AmazonECSTaskExecutionRolePolicy` and ECR read permissions so tasks can pull the image.
 
+### GitHub Actions CI/CD
+
+- A reusable workflow lives at `.github/workflows/deploy.yml`. It runs tests on every push/PR, builds and pushes the Docker image, and rolls the ECS service when changes land on `main` (or when manually triggered).
+- Add the following GitHub Secrets before enabling the deployment job:
+  - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+  - `AWS_ACCOUNT_ID`, `AWS_REGION`
+  - `ECR_REPOSITORY` (e.g. `pdf-analysis`)
+  - `ECS_CLUSTER`, `ECS_SERVICE`
+  - `ECS_TASK_DEFINITION` (family or full ARN of the task definition to clone)
+  - `ECS_CONTAINER_NAME` (container definition name to swap the image on)
+- The job pulls the current task definition, swaps the container image to `<account>.dkr.ecr.<region>.amazonaws.com/<repository>:<git-sha>`, registers a new revision, and updates the service. It waits for the service to stabilise before finishing.
+- Ensure the IAM user/role backing the access keys can call `ecr:*`, `ecs:DescribeTaskDefinition`, `ecs:RegisterTaskDefinition`, `ecs:UpdateService`, and `ecs:DescribeServices`.
+- Adjust the workflow to skip the test stage or to install optional extras (OCR, LLM) if your deployment pipeline requires them.
+
+### API Gateway Front Door
+
+- A Terraform module in `infra/terraform/api-gateway` provisions an API Gateway HTTP API that proxies traffic through a VPC link to the ECS service’s load balancer.
+- Supply the ALB listener ARN, subnet IDs, and security group IDs that allow connectivity from the VPC link to the ECS target.
+- Enable access logs (default) or configure a custom CloudWatch log group/format via module variables.
+- If you maintain a custom domain, create it separately and pass the name via `custom_domain_name`; the module will create the stage mapping.
+- See `infra/terraform/api-gateway/README.md` for a complete variable reference and an example usage block.
+
 ## Adaptive Extraction Pipeline
 
 - The orchestrator in `pdf_analysis.pipeline` runs text extraction, OCR, structured parsing, and optional LangChain post-processing with graceful fallbacks.

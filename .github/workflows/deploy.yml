@@ -1,0 +1,130 @@
+name: ci-cd
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.11"
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y ghostscript poppler-utils build-essential
+
+      - name: Install Poetry
+        run: python -m pip install --upgrade pip poetry
+
+      - name: Install dependencies
+        run: poetry install --with dev
+
+      - name: Run tests
+        run: poetry run pytest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    if: >
+      github.event_name != 'pull_request' &&
+      (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+      ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+      ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+      ECS_TASK_DEFINITION: ${{ secrets.ECS_TASK_DEFINITION }}
+      ECS_CONTAINER_NAME: ${{ secrets.ECS_CONTAINER_NAME }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ensure ECR repository exists
+        run: |
+          set -euo pipefail
+          if ! aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" --region "$AWS_REGION" >/dev/null 2>&1; then
+            aws ecr create-repository \
+              --repository-name "$ECR_REPOSITORY" \
+              --image-scanning-configuration scanOnPush=true \
+              --region "$AWS_REGION" \
+              >/dev/null
+          fi
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+
+      - name: Download existing task definition
+        run: |
+          set -euo pipefail
+          aws ecs describe-task-definition \
+            --task-definition "$ECS_TASK_DEFINITION" \
+            --query taskDefinition \
+            --output json > task-definition.json
+
+      - name: Render updated task definition
+        run: |
+          set -euo pipefail
+          IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)' task-definition.json > task-definition-stripped.json
+          jq --arg IMAGE "$IMAGE_URI" --arg NAME "$ECS_CONTAINER_NAME" '
+            .containerDefinitions = (.containerDefinitions | map(
+              if .name == $NAME then .image = $IMAGE | . else .
+            ))
+          ' task-definition-stripped.json > task-definition-updated.json
+
+      - name: Register new task definition revision
+        id: register-task
+        run: |
+          set -euo pipefail
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://task-definition-updated.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          echo "task_definition_arn=${TASK_DEF_ARN}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy new task definition
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --task-definition "${{ steps.register-task.outputs.task_definition_arn }}"
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE"
