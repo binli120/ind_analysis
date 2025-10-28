@@ -44,6 +44,12 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
 - API service: `poetry run uvicorn pdf_analysis.api.server:app --reload`
   - `POST /analyze` with a multipart `file` field (`pdf` engine optional parameters `engine`, `max_pages`, `ocr_fallback`)
   - Response includes page text, markdown, HTML, table rows, and quality findings.
+  - `POST /s3/upload-analyze` accepts the PDF, S3 destination info (`bucket`, `company`, `project`, optional `folder`), pushes the object to S3, runs extraction/labeling, and returns either the full analysis (when it finishes within `wait_timeout_seconds`, default 25s) or a `202 Accepted` payload with polling links.
+    - Synchronous responses include S3 identifiers, analysis output, generated metadata, and the `.analysis.json` artefact that mirrors the body.
+    - Asynchronous responses always persist artefacts to S3 (the PDF, `<key>.meta.json`, `<key>.analysis.json`). The payload surfaces `status_url` and `result_url` helpers:
+      - `GET /s3/analysis/status?bucket=...&key=...` → reports `pending` or `completed`.
+      - `GET /s3/analysis/result?bucket=...&key=...` → returns the stored analysis JSON once ready (404 while pending).
+    - Front-ends can poll the status endpoint, watch for S3 events (SNS/SQS), or subscribe to your own notification channel triggered off the `.analysis.json` upload.
 
 ## Next Steps
 

@@ -7,13 +7,14 @@ import asyncio
 import json
 import logging
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from pdf_analysis.ingest.pdf_text import extract_pages_text
@@ -170,6 +171,138 @@ def _upload_metadata_json_to_s3(
         logger.warning("Failed to upload metadata json for %s: %s", meta_key, exc)
 
 
+def _analysis_json_key(key: str) -> str:
+    return f"{key}.analysis.json"
+
+
+def _upload_analysis_json_to_s3(
+    s3_client: Any,
+    bucket: str,
+    key: str,
+    payload: Dict[str, Any],
+) -> str:
+    analysis_key = _analysis_json_key(key)
+    try:
+        s3_client.put_object(
+            Bucket=bucket,
+            Key=analysis_key,
+            Body=json.dumps(payload, indent=2).encode("utf-8"),
+            ContentType="application/json",
+        )
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning("Failed to upload analysis payload for %s: %s", analysis_key, exc)
+    return analysis_key
+
+
+def _split_path_segments(value: str) -> List[str]:
+    if not value:
+        return []
+    segments: List[str] = []
+    for part in value.split("/"):
+        candidate = part.strip()
+        if not candidate or candidate in {".", ".."}:
+            continue
+        segments.append(candidate)
+    return segments
+
+
+def _build_pdf_s3_key(company: str, project: str, folder: str, filename: str) -> str:
+    parts = _split_path_segments(company)
+    if not parts:
+        raise ValueError("company must be provided")
+    project_parts = _split_path_segments(project)
+    if not project_parts:
+        raise ValueError("project must be provided")
+    folder_parts = _split_path_segments(folder)
+    basename = Path(filename).name
+    if not basename.lower().endswith(".pdf"):
+        raise ValueError("filename must end with .pdf")
+
+    key_parts = parts + project_parts + folder_parts + [basename]
+    return "/".join(key_parts)
+
+
+def _process_pdf_and_store_analysis(
+    pdf_path: Path,
+    *,
+    filename: str,
+    bucket: str,
+    key: str,
+    version_id: Optional[str],
+    aws_region: Optional[str],
+    engine: str,
+    max_pages: Optional[int],
+    ocr_fallback: bool,
+    table_rows: Optional[int],
+    metadata_context: Dict[str, str],
+) -> Dict[str, Any]:
+    try:
+        import boto3  # type: ignore
+        from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
+    except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
+        raise RuntimeError("boto3 is required for S3 operations. Install the 'infra' extras.") from exc
+
+    s3_client = boto3.client("s3", region_name=aws_region)
+
+    try:
+        analysis_result = _run_pipeline_with_runner(
+            pdf_path,
+            filename,
+            max_pages,
+            engine,
+            ocr_fallback,
+            table_rows,
+        )
+    finally:
+        try:
+            pdf_path.unlink()
+        except Exception:
+            pass
+
+    metadata_fields: Dict[str, Any] = {}
+    if _metadata_generator and analysis_result.get("markdown"):
+        try:
+            metadata_fields = _metadata_generator(analysis_result["markdown"]) or {}
+        except Exception as exc:  # pragma: no cover - best effort
+            logger.warning("Metadata generation failed for %s: %s", key, exc)
+            metadata_fields = {}
+    metadata_fields.setdefault("analyzed", True)
+    for meta_key, meta_value in metadata_context.items():
+        if meta_value:
+            metadata_fields.setdefault(meta_key, meta_value)
+
+    generated_at = datetime.now(timezone.utc).isoformat()
+    meta_payload = {
+        "bucket": bucket,
+        "key": key,
+        "version_id": version_id,
+        "generated_at": generated_at,
+        "metadata": metadata_fields,
+    }
+
+    try:
+        _update_object_metadata(s3_client, bucket, key, version_id, metadata_fields)
+    except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
+        logger.warning("Failed to update metadata for %s: %s", key, exc)
+
+    _upload_metadata_json_to_s3(s3_client, bucket, key, meta_payload)
+
+    analysis_payload = {
+        "generated_at": generated_at,
+        "analysis": analysis_result,
+        "metadata": metadata_fields,
+        "s3": {
+            "bucket": bucket,
+            "key": key,
+            "version_id": version_id,
+            "metadata_key": _metadata_json_key(key),
+            "analysis_key": _analysis_json_key(key),
+        },
+    }
+    _upload_analysis_json_to_s3(s3_client, bucket, key, analysis_payload)
+    return analysis_payload
+
+
 @app.post("/analyze")
 async def analyze_pdf(
     file: UploadFile = File(...),
@@ -222,6 +355,193 @@ async def analyze_pdf(
             tmp_path.unlink()
         except Exception:
             pass
+
+
+@app.post("/s3/upload-analyze")
+async def upload_and_analyze_to_s3(
+    file: UploadFile = File(...),
+    bucket: str = Form(..., description="Destination S3 bucket for the uploaded PDF."),
+    company: str = Form(..., description="Top-level path segment (e.g. company domain)."),
+    project: str = Form(..., description="Project identifier used when building the S3 key."),
+    folder: str = Form(
+        "",
+        description="Optional nested folder (e.g. Module 1/Study Docs).",
+    ),
+    aws_region: Optional[str] = Form(
+        None,
+        description="AWS region for S3 operations; defaults to the SDK configuration.",
+    ),
+    wait_for_completion: bool = Form(
+        True,
+        description="Whether to wait for the analysis result (up to wait_timeout_seconds).",
+    ),
+    wait_timeout_seconds: float = Form(
+        25.0,
+        gt=0,
+        description="Maximum seconds to wait for analysis before returning a pending response.",
+    ),
+    engine: str = Form(
+        "pdfplumber",
+        description="Table extraction engine to use.",
+    ),
+    max_pages: Optional[int] = Form(
+        None,
+        ge=1,
+        description="Optional limit on pages processed during analysis.",
+    ),
+    ocr_fallback: bool = Form(
+        False,
+        description="Attempt OCR on pages with no extracted text.",
+    ),
+    table_rows: Optional[int] = Form(
+        200,
+        ge=1,
+        description="Maximum number of rows returned per table in the response.",
+    ),
+) -> Any:
+    """Upload a PDF to S3, trigger analysis, and return the results or an async handle."""
+    try:
+        import boto3  # type: ignore
+        from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
+    except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
+        raise HTTPException(
+            status_code=500,
+            detail="boto3 is required for S3 uploads. Install the 'infra' extras.",
+        ) from exc
+
+    if engine not in {"pdfplumber", "camelot", "tabula"}:
+        raise HTTPException(status_code=400, detail="Unsupported table extraction engine.")
+
+    filename = file.filename or "uploaded.pdf"
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+
+    folder_clean = "/".join(_split_path_segments(folder))
+    metadata_context = {
+        "company": company.strip(),
+        "project": project.strip(),
+        "folder": folder_clean,
+    }
+    metadata_context["path"] = "/".join(
+        filter(
+            None,
+            _split_path_segments(company)
+            + _split_path_segments(project)
+            + _split_path_segments(folder),
+        )
+    )
+
+    try:
+        object_key = _build_pdf_s3_key(company, project, folder, filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp_path = Path(tmp.name)
+        try:
+            shutil.copyfileobj(file.file, tmp)
+            tmp.flush()
+        finally:
+            file.file.close()
+
+    object_metadata = {
+        key: value for key, value in metadata_context.items() if key != "path" and value
+    }
+
+    s3_client = boto3.client("s3", region_name=aws_region)
+    try:
+        with tmp_path.open("rb") as payload:
+            put_response = s3_client.put_object(
+                Bucket=bucket,
+                Key=object_key,
+                Body=payload,
+                ContentType="application/pdf",
+                Metadata={k: str(v) for k, v in object_metadata.items()},
+            )
+    except (BotoCoreError, ClientError) as exc:
+        try:
+            tmp_path.unlink()
+        except Exception:
+            pass
+        raise HTTPException(status_code=502, detail=f"Failed to upload to S3: {exc}") from exc
+
+    version_id = put_response.get("VersionId")
+
+    loop = asyncio.get_running_loop()
+    try:
+        analysis_future = asyncio.ensure_future(
+            loop.run_in_executor(
+                None,
+                lambda: _process_pdf_and_store_analysis(
+                    tmp_path,
+                    filename=filename,
+                    bucket=bucket,
+                    key=object_key,
+                    version_id=version_id,
+                    aws_region=aws_region,
+                    engine=engine,
+                    max_pages=max_pages,
+                    ocr_fallback=ocr_fallback,
+                    table_rows=table_rows,
+                    metadata_context=metadata_context,
+                ),
+            )
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        try:
+            tmp_path.unlink()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Failed to schedule analysis: {exc}") from exc
+
+    def _log_async_failure(fut: asyncio.Future[Any]) -> None:
+        try:
+            fut.result()
+        except asyncio.CancelledError:
+            logger.warning("Analysis task for s3://%s/%s was cancelled", bucket, object_key)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error(
+                "Background analysis failed for s3://%s/%s: %s",
+                bucket,
+                object_key,
+                exc,
+                exc_info=exc,
+            )
+
+    analysis_future.add_done_callback(_log_async_failure)
+
+    # API Gateway enforces a 29s limit; keep some headroom.
+    effective_timeout = min(wait_timeout_seconds, 28.0)
+
+    if wait_for_completion:
+        try:
+            analysis_payload = await asyncio.wait_for(
+                asyncio.shield(analysis_future),
+                timeout=effective_timeout,
+            )
+            return {
+                "status": "completed",
+                **analysis_payload,
+            }
+        except asyncio.TimeoutError:
+            pass
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}") from exc
+
+    pending_payload = {
+        "status": "pending",
+        "s3": {
+            "bucket": bucket,
+            "key": object_key,
+            "version_id": version_id,
+            "metadata_key": _metadata_json_key(object_key),
+            "analysis_key": _analysis_json_key(object_key),
+        },
+        "message": "Analysis is running asynchronously. Poll the status or result endpoints.",
+        "status_url": f"/s3/analysis/status?bucket={bucket}&key={object_key}",
+        "result_url": f"/s3/analysis/result?bucket={bucket}&key={object_key}",
+    }
+    return JSONResponse(status_code=202, content=pending_payload)
 
 
 def _run_pipeline_with_runner(
@@ -437,6 +757,101 @@ async def save_s3_markdown(payload: S3MarkdownUploadRequest) -> Dict[str, Any]:
         return await asyncio.to_thread(worker)
     except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
         raise HTTPException(status_code=502, detail=f"Failed to upload markdown: {exc}") from exc
+
+
+@app.get("/s3/analysis/status")
+async def get_s3_analysis_status(
+    bucket: str,
+    key: str,
+    aws_region: Optional[str] = None,
+) -> Dict[str, Any]:
+    try:
+        import boto3  # type: ignore
+        from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
+    except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
+        raise HTTPException(
+            status_code=500,
+            detail="boto3 is required for S3 analysis status checks. Install the 'infra' extras.",
+        ) from exc
+
+    analysis_key = _analysis_json_key(key)
+
+    def worker() -> Dict[str, Any]:
+        s3_client = boto3.client("s3", region_name=aws_region)
+        try:
+            head = s3_client.head_object(Bucket=bucket, Key=analysis_key)
+        except ClientError as exc:
+            error_code = exc.response.get("Error", {}).get("Code")
+            if error_code in {"404", "NoSuchKey"}:
+                return {
+                    "status": "pending",
+                    "analysis_key": analysis_key,
+                }
+            raise
+
+        last_modified = head.get("LastModified")
+        last_modified_iso = (
+            last_modified.astimezone(timezone.utc).isoformat()
+            if isinstance(last_modified, datetime)
+            else None
+        )
+        return {
+            "status": "completed",
+            "analysis_key": analysis_key,
+            "last_modified": last_modified_iso,
+            "content_length": head.get("ContentLength"),
+        }
+
+    try:
+        return await asyncio.to_thread(worker)
+    except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
+        raise HTTPException(status_code=502, detail=f"Failed to check analysis status: {exc}") from exc
+
+
+@app.get("/s3/analysis/result")
+async def get_s3_analysis_result(
+    bucket: str,
+    key: str,
+    aws_region: Optional[str] = None,
+) -> Dict[str, Any]:
+    try:
+        import boto3  # type: ignore
+        from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
+    except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
+        raise HTTPException(
+            status_code=500,
+            detail="boto3 is required for S3 analysis retrieval. Install the 'infra' extras.",
+        ) from exc
+
+    analysis_key = _analysis_json_key(key)
+
+    def worker() -> Dict[str, Any]:
+        s3_client = boto3.client("s3", region_name=aws_region)
+        try:
+            response = s3_client.get_object(Bucket=bucket, Key=analysis_key)
+        except ClientError as exc:
+            error_code = exc.response.get("Error", {}).get("Code")
+            if error_code in {"404", "NoSuchKey"}:
+                raise HTTPException(status_code=404, detail="Analysis result not found.")
+            raise
+        body_stream = response["Body"]
+        try:
+            payload = body_stream.read()
+        finally:
+            body_stream.close()
+        try:
+            return json.loads(payload.decode("utf-8"))
+        except json.JSONDecodeError as exc:
+            raise HTTPException(
+                status_code=500, detail=f"Stored analysis payload is invalid JSON: {exc}"
+            ) from exc
+
+    try:
+        return await asyncio.to_thread(worker)
+    except HTTPException:
+        raise
+    except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
+        raise HTTPException(status_code=502, detail=f"Failed to download analysis result: {exc}") from exc
 
 def export_openapi_to_file(app: FastAPI, out_path: str | Path) -> None:
     """Write the OpenAPI spec to JSON (or YAML)."""
