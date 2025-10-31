@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  PYTHON_VERSION: "3.11"
+  PYTHON_VERSION: '3.11'
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
@@ -82,11 +82,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # ✅ FIXED: Added explicit platform for ECS (linux/amd64)
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
+          # Build for ECS-compatible architecture
+          platforms: linux/amd64
           tags: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
 
       - name: Download existing task definition

@@ -10,10 +10,10 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Sequence, cast
 
 import pandas as pd
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -71,6 +71,13 @@ def _build_table_manifest(
             }
         )
     return manifest
+
+
+class S3AnalyzeRequest(BaseModel):
+    bucket: str
+    key: str
+    version_id: Optional[str] = None
+    aws_region: Optional[str] = None
 
 
 class S3MarkdownRequest(BaseModel):
@@ -194,6 +201,51 @@ def _upload_analysis_json_to_s3(
     return analysis_key
 
 
+def _normalise_table_engines(
+    table_engine: str | Sequence[str] | None,
+) -> List[str]:
+    if table_engine is None:
+        return ["pdfplumber", "camelot", "tabula"]
+    if isinstance(table_engine, str):
+        candidate = table_engine.strip().lower()
+        if not candidate or candidate == "auto":
+            return ["pdfplumber", "camelot", "tabula"]
+        return [candidate]
+    engines: List[str] = []
+    for item in table_engine:
+        if not item:
+            continue
+        value = item.strip().lower()
+        if value and value not in engines:
+            engines.append(value)
+    return engines or ["pdfplumber", "camelot", "tabula"]
+
+
+def _extract_tables_with_candidates(
+    pdf_path: Path,
+    candidate_engines: Sequence[str],
+    max_pages: Optional[int],
+) -> tuple[List[Dict[str, Any]], str]:
+    best_tables: List[Dict[str, Any]] = []
+    best_engine: Optional[str] = None
+    best_count = -1
+    for engine in candidate_engines:
+        try:
+            tables = extract_tables_all(pdf_path, engine=engine, max_pages=max_pages)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Table extraction failed via %s: %s", engine, exc)
+            continue
+        count = len(tables)
+        if best_engine is None or count > best_count:
+            best_tables = tables
+            best_engine = engine
+            best_count = count
+    if best_engine is None:
+        # all attempts failed; return empty list but preserve first candidate for downstream metadata
+        best_engine = candidate_engines[0] if candidate_engines else "pdfplumber"
+    return best_tables, best_engine
+
+
 def _split_path_segments(value: str) -> List[str]:
     if not value:
         return []
@@ -291,6 +343,7 @@ def _process_pdf_and_store_analysis(
         "generated_at": generated_at,
         "analysis": analysis_result,
         "metadata": metadata_fields,
+        "markdown": analysis_result.get("markdown"),
         "s3": {
             "bucket": bucket,
             "key": key,
@@ -304,57 +357,109 @@ def _process_pdf_and_store_analysis(
 
 
 @app.post("/analyze")
-async def analyze_pdf(
-    file: UploadFile = File(...),
-    engine: str = Query(
-        "pdfplumber",
-        description="Table extraction engine to use.",
-        pattern="^(pdfplumber|camelot|tabula)$",
-    ),
-    max_pages: Optional[int] = Query(
-        None,
-        ge=1,
-        description="Limit the number of pages to process (useful for quick tests).",
-    ),
-    ocr_fallback: bool = Query(
-        False,
-        description="Attempt OCR on pages that yield no text (requires pytesseract/pdf2image).",
-    ),
-    table_rows: Optional[int] = Query(
-        200,
-        ge=1,
-        description="Maximum number of rows to include per table in the response (set to null for all rows).",
-    ),
-) -> Dict[str, Any]:
+async def analyze_pdf(payload: S3AnalyzeRequest) -> Dict[str, Any]:
     """
-    Analyze an uploaded PDF and return the extracted content and diagnostics.
+    Analyze a PDF located in S3 and return markdown plus metadata.
     """
-    filename = file.filename or "uploaded.pdf"
-    if not filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    try:  # Lazy import keeps base install lightweight.
+        import boto3  # type: ignore
+        from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
+    except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
+        raise HTTPException(
+            status_code=500,
+            detail="boto3 is required for S3 analysis. Install the 'infra' extras.",
+        ) from exc
 
-    with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        tmp_path = Path(tmp.name)
+    extra_args = {"VersionId": payload.version_id} if payload.version_id else None
+
+    def worker() -> Dict[str, Any]:
+        s3_client = boto3.client("s3", region_name=payload.aws_region)
+        with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp_path = Path(tmp.name)
+            try:
+                if extra_args:
+                    s3_client.download_fileobj(payload.bucket, payload.key, tmp, ExtraArgs=extra_args)
+                else:
+                    s3_client.download_fileobj(payload.bucket, payload.key, tmp)
+                tmp.flush()
+            finally:
+                tmp.close()
+
         try:
-            shutil.copyfileobj(file.file, tmp)
+            analysis = _run_pipeline_with_runner(
+                tmp_path,
+                Path(payload.key).name,
+                max_pages=None,
+                table_engine=None,
+                ocr_fallback=None,
+                table_rows=None,
+            )
         finally:
-            file.file.close()
+            try:
+                tmp_path.unlink()
+            except Exception:
+                pass
+
+        markdown = analysis.get("markdown")
+        metadata_fields: Dict[str, Any] = {}
+        if _metadata_generator and markdown:
+            try:
+                metadata_fields = _metadata_generator(markdown) or {}
+            except Exception as exc:  # pragma: no cover - best effort
+                logger.warning(
+                    "Metadata generation failed for %s: %s",
+                    payload.key,
+                    exc,
+                )
+                metadata_fields = {}
+        metadata_fields.setdefault("analyzed", True)
+
+        generated_at = datetime.now(timezone.utc).isoformat()
+        meta_payload = {
+            "bucket": payload.bucket,
+            "key": payload.key,
+            "version_id": payload.version_id,
+            "generated_at": generated_at,
+            "metadata": metadata_fields,
+        }
+
+        try:
+            _update_object_metadata(
+                s3_client,
+                payload.bucket,
+                payload.key,
+                payload.version_id,
+                metadata_fields,
+            )
+        except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
+            logger.warning("Failed to update metadata for %s: %s", payload.key, exc)
+
+        _upload_metadata_json_to_s3(
+            s3_client,
+            payload.bucket,
+            payload.key,
+            meta_payload,
+        )
+
+        response_payload = {
+            "markdown": markdown,
+            "metadata": metadata_fields,
+            "analysis": analysis,
+            "s3": {
+                "bucket": payload.bucket,
+                "key": payload.key,
+                "version_id": payload.version_id,
+                "metadata_key": _metadata_json_key(payload.key),
+            },
+        }
+        return response_payload
 
     try:
-        return await asyncio.to_thread(
-            _run_pipeline_with_runner,
-            tmp_path,
-            filename,
-            max_pages,
-            engine,
-            ocr_fallback,
-            table_rows,
-        )
-    finally:
-        try:
-            tmp_path.unlink()
-        except Exception:
-            pass
+        return await asyncio.to_thread(worker)
+    except HTTPException:
+        raise
+    except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
+        raise HTTPException(status_code=502, detail=f"Failed to download S3 object: {exc}") from exc
 
 
 @app.post("/s3/upload-analyze")
@@ -521,7 +626,11 @@ async def upload_and_analyze_to_s3(
             )
             return {
                 "status": "completed",
-                **analysis_payload,
+                "markdown": analysis_payload.get("markdown"),
+                "metadata": analysis_payload.get("metadata"),
+                "s3": analysis_payload.get("s3"),
+                "analysis": analysis_payload.get("analysis"),
+                "generated_at": analysis_payload.get("generated_at"),
             }
         except asyncio.TimeoutError:
             pass
@@ -537,6 +646,7 @@ async def upload_and_analyze_to_s3(
             "metadata_key": _metadata_json_key(object_key),
             "analysis_key": _analysis_json_key(object_key),
         },
+        "metadata": metadata_context,
         "message": "Analysis is running asynchronously. Poll the status or result endpoints.",
         "status_url": f"/s3/analysis/status?bucket={bucket}&key={object_key}",
         "result_url": f"/s3/analysis/result?bucket={bucket}&key={object_key}",
@@ -548,20 +658,34 @@ def _run_pipeline_with_runner(
     pdf_path: Path,
     filename: str,
     max_pages: Optional[int],
-    table_engine: str,
-    ocr_fallback: bool,
+    table_engine: str | Sequence[str] | None,
+    ocr_fallback: Optional[bool],
     table_rows: Optional[int],
 ) -> Dict[str, Any]:
+    candidate_engines = _normalise_table_engines(table_engine)
+
+    fallback_setting = bool(ocr_fallback) if ocr_fallback is not None else False
     pages = extract_pages_text(
         pdf_path,
-        ocr_fallback=ocr_fallback,
+        ocr_fallback=fallback_setting,
         max_pages=max_pages,
     )
 
-    tables = extract_tables_all(
+    used_ocr = fallback_setting
+    if ocr_fallback is None:
+        has_text = any((page.get("text") or "").strip() for page in pages)
+        if not has_text:
+            pages = extract_pages_text(
+                pdf_path,
+                ocr_fallback=True,
+                max_pages=max_pages,
+            )
+            used_ocr = True
+
+    tables, selected_engine = _extract_tables_with_candidates(
         pdf_path,
-        engine=table_engine,
-        max_pages=max_pages,
+        candidate_engines,
+        max_pages,
     )
 
     table_manifest = _build_table_manifest(tables)
@@ -587,9 +711,12 @@ def _run_pipeline_with_runner(
             {table["page_number"] for table in tables if table.get("page_number")}
         ),
         "ocr_pages": 0,
+        "ocr_enabled": used_ocr,
         "key_value_pairs": 0,
         "text_coverage": 0.0,
         "confidence": None,
+        "table_engine": selected_engine,
+        "table_engines_considered": candidate_engines,
     }
     total_pages = metrics_payload["total_pages"]
     if total_pages:
@@ -608,6 +735,7 @@ def _run_pipeline_with_runner(
         "quality": quality.get("json", {}) if quality else {},
         "quality_markdown": quality.get("markdown") if quality else None,
         "metrics": metrics_payload,
+        "selected_table_engine": selected_engine,
     }
 
 
@@ -676,6 +804,8 @@ async def fetch_s3_markdown(payload: S3MarkdownRequest) -> Dict[str, Any]:
             "tables": len(result.tables),
             "metadata": metadata_fields,
             "version_id": payload.version_id,
+            "bucket": payload.bucket,
+            "key": payload.key,
         }
 
     try:
@@ -751,6 +881,7 @@ async def save_s3_markdown(payload: S3MarkdownUploadRequest) -> Dict[str, Any]:
             "label": payload.label,
             "tags": payload.tags or {},
             "metadata": metadata,
+            "markdown": payload.markdown,
         }
 
     try:
