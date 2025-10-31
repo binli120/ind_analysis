@@ -13,9 +13,9 @@ from tempfile import NamedTemporaryFile
 from typing import Any, Dict, List, Optional, Sequence, cast
 
 import pandas as pd
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from pdf_analysis.ingest.pdf_text import extract_pages_text
 from pdf_analysis.ingest.tables import extract_tables_all
@@ -356,11 +356,37 @@ def _process_pdf_and_store_analysis(
     return analysis_payload
 
 
-@app.post("/analyze")
-async def analyze_pdf(payload: S3AnalyzeRequest) -> Dict[str, Any]:
-    """
-    Analyze a PDF located in S3 and return markdown plus metadata.
-    """
+async def _analyze_uploaded_pdf(upload: UploadFile) -> Dict[str, Any]:
+    filename = upload.filename or "uploaded.pdf"
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+
+    with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp_path = Path(tmp.name)
+        try:
+            shutil.copyfileobj(upload.file, tmp)
+            tmp.flush()
+        finally:
+            upload.file.close()
+
+    try:
+        return await asyncio.to_thread(
+            _run_pipeline_with_runner,
+            tmp_path,
+            Path(filename).name,
+            None,
+            None,
+            None,
+            None,
+        )
+    finally:
+        try:
+            tmp_path.unlink()
+        except Exception:
+            pass
+
+
+async def _analyze_s3_payload(payload: S3AnalyzeRequest) -> Dict[str, Any]:
     try:  # Lazy import keeps base install lightweight.
         import boto3  # type: ignore
         from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
@@ -460,6 +486,39 @@ async def analyze_pdf(payload: S3AnalyzeRequest) -> Dict[str, Any]:
         raise
     except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
         raise HTTPException(status_code=502, detail=f"Failed to download S3 object: {exc}") from exc
+
+
+@app.post("/analyze")
+async def analyze_pdf(request: Request) -> Dict[str, Any]:
+    """
+    Analyze a PDF from either a direct upload or an S3 location.
+    """
+    content_type = (request.headers.get("content-type") or "").lower()
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        upload = form.get("file")
+        if upload is None or not hasattr(upload, "file"):
+            raise HTTPException(
+                status_code=400,
+                detail="The request must include a 'file' field containing a PDF document.",
+            )
+        return await _analyze_uploaded_pdf(cast(UploadFile, upload))
+
+    if not content_type or "application/json" in content_type or "text/json" in content_type:
+        try:
+            data = await request.json()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload.") from exc
+        try:
+            payload = S3AnalyzeRequest.model_validate(data)
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        return await _analyze_s3_payload(payload)
+
+    raise HTTPException(
+        status_code=415,
+        detail="Unsupported media type. Use multipart/form-data for uploads or application/json for S3 analysis.",
+    )
 
 
 @app.post("/s3/upload-analyze")
