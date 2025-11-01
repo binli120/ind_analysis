@@ -137,6 +137,18 @@ def _update_object_metadata(
         new_metadata["keywords"] = ",".join(keywords)
     if language:
         new_metadata["language"] = str(language)
+    document_type = metadata_fields.get("ind_document_type")
+    section_number = metadata_fields.get("ind_section_number")
+    section_title = metadata_fields.get("ind_section_title")
+    classification_confidence = metadata_fields.get("ind_classification_confidence")
+    if document_type:
+        new_metadata["ind_document_type"] = str(document_type)
+    if section_number:
+        new_metadata["ind_section_number"] = str(section_number)
+    if section_title:
+        new_metadata["ind_section_title"] = str(section_title)
+    if classification_confidence is not None:
+        new_metadata["ind_classification_confidence"] = str(classification_confidence)
     new_metadata["analyzed"] = "true"
 
     copy_source: Dict[str, Any] = {"Bucket": bucket, "Key": key}
@@ -370,7 +382,7 @@ async def _analyze_uploaded_pdf(upload: UploadFile) -> Dict[str, Any]:
             upload.file.close()
 
     try:
-        return await asyncio.to_thread(
+        analysis = await asyncio.to_thread(
             _run_pipeline_with_runner,
             tmp_path,
             Path(filename).name,
@@ -379,11 +391,29 @@ async def _analyze_uploaded_pdf(upload: UploadFile) -> Dict[str, Any]:
             None,
             None,
         )
+    except HTTPException:
+        raise
     finally:
         try:
             tmp_path.unlink()
         except Exception:
             pass
+
+    markdown = analysis.get("markdown")
+    metadata_fields: Dict[str, Any] = {}
+    if _metadata_generator and markdown:
+        try:
+            metadata_fields = _metadata_generator(markdown) or {}
+        except Exception as exc:  # pragma: no cover - best effort
+            logger.warning("Metadata generation failed for %s: %s", filename, exc)
+            metadata_fields = {}
+    metadata_fields.setdefault("analyzed", True)
+
+    if metadata_fields:
+        analysis_with_metadata = dict(analysis)
+        analysis_with_metadata["metadata"] = metadata_fields
+        return analysis_with_metadata
+    return analysis
 
 
 async def _analyze_s3_payload(payload: S3AnalyzeRequest) -> Dict[str, Any]:

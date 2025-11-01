@@ -1,0 +1,39 @@
+{
+  "document": "lt3114-pha-001-r.pdf",
+  "ind_metadata": {
+    "ind_document_type": "clinical study report",
+    "ind_section_number": "5.3",
+    "ind_section_title": "clinical study reports",
+    "ind_classification_confidence": 0.9
+  },
+  "labels": [
+    "clinical study",
+    "nonclinical study",
+    "efficacy report"
+  ],
+  "keywords": [
+    "murine anti-LPA",
+    "type 1 diabetes",
+    "preliminary study",
+    "efficacy",
+    "report"
+  ],
+  "language": "en",
+  "metrics": {
+    "total_pages": 16,
+    "pages_with_text": 15,
+    "tables_total": 41,
+    "table_pages": 15,
+    "ocr_pages": 0,
+    "ocr_enabled": false,
+    "key_value_pairs": 0,
+    "text_coverage": 0.938,
+    "confidence": null,
+    "table_engine": "camelot",
+    "table_engines_considered": [
+      "pdfplumber",
+      "camelot",
+      "tabula"
+    ]
+  }
+}
