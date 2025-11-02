@@ -4046,7 +4046,7 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [extras]
 camelot = ["camelot-py"]
 cloud-ocr = ["boto3", "google-cloud-vision"]
-infra = ["boto3", "openai", "python-dotenv", "redis"]
+infra = ["boto3", "httpx", "openai", "python-dotenv", "redis"]
 llm = ["langchain-core", "langchain-openai", "langchain-text-splitters"]
 ocr = ["pdf2image", "pytesseract"]
 pdf-export = ["reportlab"]
@@ -4056,4 +4056,4 @@ tabula = ["tabula-py"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "f3f353e3cefed85cf7f0ff31bb291996e15ef9dcc7bff8e16d253bdd00725eee"
+content-hash = "d2bb7fdc84300f405ad04d8bfc94c07bea426f0f192fb4546a23f2b4923df33a"

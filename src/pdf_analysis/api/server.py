@@ -21,6 +21,11 @@ from pdf_analysis.ingest.pdf_text import extract_pages_text
 from pdf_analysis.ingest.tables import extract_tables_all
 from pdf_analysis.pipeline import PDFProcessingPipeline
 from pdf_analysis.service.ai_metadata import OpenAIMetadataGenerator
+
+try:
+    from pdf_analysis.service.embedding_store import SupabaseEmbeddingStore
+except Exception:  # pragma: no cover - optional dependency or missing extras
+    SupabaseEmbeddingStore = None  # type: ignore[misc,assignment]
 from pdf_analysis.transform.markdown_writer import (
     build_html_document,
     build_markdown_document,
@@ -102,6 +107,15 @@ try:
     _metadata_generator = OpenAIMetadataGenerator()
 except Exception:  # pragma: no cover - optional dependency or missing key
     _metadata_generator = None
+
+
+if SupabaseEmbeddingStore:
+    try:
+        _embedding_store = SupabaseEmbeddingStore()
+    except Exception:  # pragma: no cover - optional dependency or missing key
+        _embedding_store = None
+else:  # pragma: no cover - optional dependency missing
+    _embedding_store = None
 
 
 def _metadata_json_key(key: str) -> str:
@@ -211,6 +225,45 @@ def _upload_analysis_json_to_s3(
     except Exception as exc:  # pragma: no cover - best effort
         logger.warning("Failed to upload analysis payload for %s: %s", analysis_key, exc)
     return analysis_key
+
+
+def _parse_s3_context(key: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    segments = key.split("/")
+    company = segments[0] if len(segments) > 0 else None
+    project = segments[1] if len(segments) > 1 else None
+    module_label = segments[2] if len(segments) > 2 else None
+    return company, project, module_label
+
+
+def _store_embedding_for_document(
+    *,
+    bucket: str,
+    key: str,
+    version_id: Optional[str],
+    filename: str,
+    markdown: str,
+    metadata_fields: Dict[str, Any],
+) -> None:
+    if not _embedding_store or not markdown:
+        return
+    company, project, module_label = _parse_s3_context(key)
+    try:
+        _embedding_store.store_document(
+            s3_bucket=bucket,
+            s3_key=key,
+            version_id=version_id,
+            filename=filename,
+            markdown=markdown,
+            metadata=metadata_fields,
+            company=company,
+            project=project,
+            module_label=module_label,
+            labels=metadata_fields.get("labels"),
+            keywords=metadata_fields.get("keywords"),
+            language=metadata_fields.get("language"),
+        )
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning("Embedding storage failed for %s: %s", key, exc)
 
 
 def _normalise_table_engines(
@@ -334,6 +387,17 @@ def _process_pdf_and_store_analysis(
     for meta_key, meta_value in metadata_context.items():
         if meta_value:
             metadata_fields.setdefault(meta_key, meta_value)
+
+    markdown_text = analysis_result.get("markdown") or ""
+    if markdown_text:
+        _store_embedding_for_document(
+            bucket=bucket,
+            key=key,
+            version_id=version_id,
+            filename=filename,
+            markdown=markdown_text,
+            metadata_fields=metadata_fields,
+        )
 
     generated_at = datetime.now(timezone.utc).isoformat()
     meta_payload = {
@@ -469,6 +533,16 @@ async def _analyze_s3_payload(payload: S3AnalyzeRequest) -> Dict[str, Any]:
                 )
                 metadata_fields = {}
         metadata_fields.setdefault("analyzed", True)
+
+        if markdown:
+            _store_embedding_for_document(
+                bucket=payload.bucket,
+                key=payload.key,
+                version_id=payload.version_id,
+                filename=Path(payload.key).name,
+                markdown=markdown,
+                metadata_fields=metadata_fields,
+            )
 
         generated_at = datetime.now(timezone.utc).isoformat()
         meta_payload = {

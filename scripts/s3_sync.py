@@ -135,6 +135,21 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         help="OpenAI model to use when --ai-metadata is enabled (default: gpt-4o-mini).",
     )
     parser.add_argument(
+        "--ai-embeddings",
+        action="store_true",
+        help="Generate OpenAI embeddings and upsert them into Supabase (requires infra extras).",
+    )
+    parser.add_argument(
+        "--embedding-model",
+        default=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
+        help="Embedding model to use when --ai-embeddings is enabled (default: text-embedding-3-small).",
+    )
+    parser.add_argument(
+        "--supabase-on-conflict",
+        default=os.getenv("SUPABASE_ON_CONFLICT"),
+        help="Column(s) used for Supabase upsert conflict resolution (e.g., filename). Leave blank to always insert.",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=None,
@@ -174,6 +189,8 @@ def main(argv: Sequence[str]) -> int:
     )
 
     enable_ai = args.ai_metadata or os.getenv("ENABLE_AI_METADATA", "false").lower() == "true"
+    if not enable_ai and os.getenv("ENABLE_AI_META_DATA", "false").lower() == "true":
+        enable_ai = True
 
     metadata_generator = None
     if enable_ai:
@@ -184,7 +201,31 @@ def main(argv: Sequence[str]) -> int:
         except ModuleNotFoundError:
             logging.warning("OpenAI metadata generator unavailable. Install infra extras to enable it.")
 
-    service = S3RedisSyncService(config, metadata_generator=metadata_generator)
+    enable_embeddings = args.ai_embeddings or os.getenv("ENABLE_AI_EMBEDDINGS", "false").lower() == "true"
+
+    embedding_store = None
+    if enable_embeddings:
+        try:
+            from pdf_analysis.service.embedding_store import SupabaseEmbeddingStore
+
+            candidate_store = SupabaseEmbeddingStore(
+                embedding_model=args.embedding_model,
+                on_conflict=args.supabase_on_conflict,
+            )
+            if candidate_store.is_available():
+                embedding_store = candidate_store
+            else:
+                logging.warning(
+                    "Supabase embedding store not fully configured; embeddings will be skipped."
+                )
+        except ModuleNotFoundError:
+            logging.warning("Supabase embedding store unavailable. Install infra extras to enable it.")
+
+    service = S3RedisSyncService(
+        config,
+        metadata_generator=metadata_generator,
+        embedding_store=embedding_store,
+    )
     processed = service.run()
     logging.info("Processed %d documents.", processed)
     return 0

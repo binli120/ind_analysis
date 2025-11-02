@@ -3,13 +3,13 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from typing import Any, Iterable, Optional
+from typing import Any
 
 """
 configure logger level
 """
 
-DEFAULT_LOG_LEVEL = "INFO"
+DEFAULT_LOG_LEVEL = "DEBUG"
 LOG_ENV_VAR = "LOG_LEVEL"
 DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -32,7 +32,10 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 
-def _log(level: int, *args: Any, sep: str = " ", end: str = "\n", **kwargs: Any) -> None:
+
+def _log(
+    level: int, *args: Any, sep: str = " ", end: str = "\n", **kwargs: Any
+) -> None:
     """Internal helper that formats arguments exactly as print() does."""
 
     # Recreate the print output
@@ -45,6 +48,7 @@ def debug(*args: Any, **kwargs: Any) -> None:
     """Log at DEBUG level."""
     _log(logging.DEBUG, *args, **kwargs)
 
+
 def info(*args: Any, **kwargs: Any) -> None:
     """Log at INFO level."""
     _log(logging.INFO, *args, **kwargs)
@@ -53,6 +57,7 @@ def info(*args: Any, **kwargs: Any) -> None:
 def warning(*args: Any, **kwargs: Any) -> None:
     """Log at WARNING level."""
     _log(logging.WARNING, *args, **kwargs)
+
 
 def error(*args: Any, **kwargs: Any) -> None:
     """Log at ERROR level."""

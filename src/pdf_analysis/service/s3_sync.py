@@ -73,11 +73,13 @@ class S3RedisSyncService:
         *,
         pipeline_factory: Optional[Callable[[PipelineConfig], PDFProcessingPipeline]] = None,
         metadata_generator: Optional[Callable[[str], Dict[str, Any]]] = None,
+        embedding_store: Optional[Any] = None,
     ) -> None:
         self.config = config
         self._pipeline_factory = pipeline_factory or self._default_pipeline_factory
         self._redis_client: Any | None = None
         self._metadata_generator = metadata_generator
+        self._embedding_store = embedding_store
 
     # ------------------------------------------------------------------
     def run(self) -> int:
@@ -155,6 +157,9 @@ class S3RedisSyncService:
                 redis_client.expire(redis_key, int(self.config.redis_expire_seconds))
             logger.debug("Persisted markdown to redis key=%s version=%s", redis_key, document.version_id)
 
+            redis_snapshot = dict(redis_payload)
+            redis_snapshot.pop("markdown", None)
+
             meta_payload = {
                 "bucket": self.config.bucket,
                 "key": document.key,
@@ -163,12 +168,32 @@ class S3RedisSyncService:
                 "module": document.module_label,
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "metadata": metadata_fields,
-                "redis": redis_payload,
+                "redis": redis_snapshot,
             }
 
             if metadata_fields:
                 self._update_s3_metadata(s3_client, document, metadata_fields)
                 self._upload_metadata_json(s3_client, document, meta_payload)
+
+            if self._embedding_store:
+                try:
+                    self._embedding_store.store_document(
+                        s3_bucket=self.config.bucket,
+                        s3_key=document.key,
+                        version_id=document.version_id,
+                        filename=document.filename,
+                        markdown=markdown,
+                        metadata=metadata_fields,
+                        company=document.company,
+                        project=document.project,
+                        module_label=document.module_label,
+                        module_number=document.module_number,
+                        labels=metadata_fields.get("labels"),
+                        keywords=metadata_fields.get("keywords"),
+                        language=metadata_fields.get("language"),
+                    )
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.warning("Embedding storage failed for %s: %s", document.key, exc)
 
             if output_dir is not None:
                 self._persist_markdown_file(output_dir, document, markdown, meta_payload)
@@ -196,11 +221,37 @@ class S3RedisSyncService:
         markdown: str,
         meta_payload: Dict[str, Any],
     ) -> None:
-        md_path = base_dir / Path(*(f"{document.key}.md".split("/")))
-        meta_path = base_dir / Path(*(f"{document.key}.meta.json".split("/")))
+        relative = Path(document.key)
+        parent = relative.parent
+        safe_version = _safe_version(document.version_id) if document.version_id else None
+
+        filename = relative.name
+        if filename.lower().endswith(".pdf"):
+            stem = filename[:-4]
+            if safe_version:
+                md_filename = f"{stem}.{safe_version}.pdf.md"
+                meta_filename = f"{stem}.{safe_version}.pdf.meta.json"
+            else:
+                md_filename = f"{stem}.pdf.md"
+                meta_filename = f"{stem}.pdf.meta.json"
+        else:
+            if safe_version:
+                md_filename = f"{filename}.{safe_version}.md"
+                meta_filename = f"{filename}.{safe_version}.meta.json"
+            else:
+                md_filename = f"{filename}.md"
+                meta_filename = f"{filename}.meta.json"
+
+        rel_md_path = (parent / md_filename) if str(parent) != "." else Path(md_filename)
+        rel_meta_path = (parent / meta_filename) if str(parent) != "." else Path(meta_filename)
+
+        md_path = base_dir / rel_md_path
+        meta_path = base_dir / rel_meta_path
 
         md_path.parent.mkdir(parents=True, exist_ok=True)
         md_path.write_text(markdown, encoding="utf-8")
+        meta_payload = dict(meta_payload)
+        meta_payload["markdown_file"] = str(rel_md_path.as_posix())
         meta_path.write_text(json.dumps(meta_payload, indent=2), encoding="utf-8")
         logger.debug("Wrote markdown to %s and metadata to %s", md_path, meta_path)
 
@@ -410,6 +461,12 @@ def _slugify(value: str) -> str:
     lowered = value.strip().lower()
     slug = re.sub(r"[^a-z0-9]+", "-", lowered)
     return slug.strip("-") or "unknown"
+
+
+def _safe_version(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    return re.sub(r"[^A-Za-z0-9._-]", "-", value)
 
 
 @dataclass(slots=True)

@@ -107,6 +107,15 @@ class FakeS3Client:
         return {"VersionId": "meta-version"}
 
 
+class FakeEmbeddingStore:
+    def __init__(self) -> None:
+        self.calls: List[Dict[str, Any]] = []
+
+    def store_document(self, **payload: Any) -> bool:
+        self.calls.append(payload)
+        return True
+
+
 class DummyPipeline:
     def run(self, _: Path) -> types.SimpleNamespace:
         return types.SimpleNamespace(markdown="# mock\n\ncontent")
@@ -131,10 +140,12 @@ class S3RedisSyncServiceTests(unittest.TestCase):
                 "keywords": ["efficacy", "safety"],
                 "language": "en",
             }
+            fake_embedding_store = FakeEmbeddingStore()
             service = S3RedisSyncService(
                 config,
                 pipeline_factory=lambda _: DummyPipeline(),  # type: ignore[arg-type]
                 metadata_generator=metadata_stub,
+                embedding_store=fake_embedding_store,
             )
 
             fake_s3 = FakeS3Client()
@@ -160,26 +171,33 @@ class S3RedisSyncServiceTests(unittest.TestCase):
                 / "filynai.com"
                 / "LT1009"
                 / "Module 1.Quality"
-                / "report.pdf.md"
+                / "report.abc123.pdf.md"
             )
             meta_path = (
                 output_path
                 / "filynai.com"
                 / "LT1009"
                 / "Module 1.Quality"
-                / "report.pdf.meta.json"
+                / "report.abc123.pdf.meta.json"
             )
             self.assertTrue(markdown_path.exists())
             self.assertTrue(meta_path.exists())
             self.assertEqual(markdown_path.read_text(encoding="utf-8"), "# mock\n\ncontent")
             meta_payload = json.loads(meta_path.read_text(encoding="utf-8"))
             self.assertEqual(meta_payload["metadata"]["labels"], ["clinical", "efficacy"])
+            self.assertEqual(meta_payload["markdown_file"], "filynai.com/LT1009/Module 1.Quality/report.abc123.pdf.md")
+            self.assertNotIn("markdown", meta_payload["redis"])
 
             self.assertEqual(len(fake_s3.copies), 1)
             self.assertIn("Metadata", fake_s3.copies[0])
             self.assertEqual(fake_s3.copies[0]["Metadata"]["labels"], "clinical,efficacy")
             self.assertEqual(len(fake_s3.puts), 1)
             self.assertTrue(fake_s3.puts[0]["Key"].endswith("report.pdf.meta.json"))
+            self.assertEqual(len(fake_embedding_store.calls), 1)
+            self.assertEqual(
+                fake_embedding_store.calls[0]["s3_key"],
+                "filynai.com/LT1009/Module 1.Quality/report.pdf",
+            )
 
 
 if __name__ == "__main__":
