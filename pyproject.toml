@@ -70,7 +70,9 @@ infra = [
     "python-dotenv (>=1.0.1,<2.0.0)",
     "openai (>=1.45.0,<2.0.0)",
     "httpx (>=0.27.2,<0.28.0)",
+    "psycopg[binary] (>=3.2.12,<4.0.0)",
 ]
+
 
 
 
@@ -85,11 +87,13 @@ pdf2image = ">=1.17.0,<2.0.0"
 
 
 
+
 [tool.poetry.group.pymupdf]
 optional = true
 
 [tool.poetry.group.pymupdf.dependencies]
 pymupdf = ">=1.23.0,<2.0.0"
+
 
 
 
@@ -105,6 +109,7 @@ langchain-text-splitters = ">=0.3.0,<0.4.0"
 
 
 
+
 [tool.poetry.group.infra]
 optional = true
 
@@ -112,6 +117,8 @@ optional = true
 boto3 = ">=1.35.0,<2.0.0"
 redis = ">=5.2.0,<6.0.0"
 python-dotenv = ">=1.0.1,<2.0.0"
+psycopg = {extras = ["binary"], version = "^3.2.12"}
+
 
 
 

@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any, Dict, List, Optional, Sequence, cast
+from urllib.parse import urlencode
 
 import pandas as pd
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -1012,7 +1013,7 @@ async def save_s3_markdown(payload: S3MarkdownUploadRequest) -> Dict[str, Any]:
 
     tagging = ""
     if payload.tags:
-        tagging = "&".join(f"{k}={v}" for k, v in payload.tags.items())
+        tagging = urlencode(payload.tags)
 
     def worker() -> Dict[str, Any]:
         s3_client = boto3.client("s3", region_name=payload.aws_region)

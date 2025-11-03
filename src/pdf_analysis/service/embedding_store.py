@@ -5,7 +5,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 try:
     import httpx  # type: ignore
@@ -16,6 +16,13 @@ try:
     from openai import OpenAI
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
     OpenAI = None  # type: ignore[misc]
+
+try:
+    import psycopg  # type: ignore
+    from psycopg import sql  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    psycopg = None  # type: ignore
+    sql = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +102,15 @@ class SupabaseEmbeddingStore:
                 timeout=self.timeout_seconds,
             )
 
+        self.db_dsn = (
+            os.getenv("SUPABASE_DB_URL")
+            or os.getenv("SUPABASE_DB_CONNECTION")
+            or os.getenv("SUPABASE_CONNECTION_STRING")
+        )
+        if self.db_dsn and psycopg is None:  # pragma: no cover - optional dependency
+            logger.warning("psycopg is not installed; similarity search will be unavailable.")
+            self.db_dsn = None
+
     @staticmethod
     def _resolve_dotenv():
         try:
@@ -167,8 +183,82 @@ class SupabaseEmbeddingStore:
                 version_id=version_id,
                 content=text,
             ),
-        )
+            )
         return self._upsert(row)
+
+    # ------------------------------------------------------------------
+    def search_similar_text(
+        self,
+        text: str,
+        *,
+        top_k: int = 5,
+    ) -> List[Dict[str, Any]]:
+        if not text.strip():
+            return []
+        embedding = self._generate_embedding(text[: self.max_chars])
+        if not embedding:
+            return []
+        return self.search_similar_embedding(embedding, top_k=top_k)
+
+    def search_similar_embedding(
+        self,
+        embedding: Sequence[float],
+        *,
+        top_k: int = 5,
+    ) -> List[Dict[str, Any]]:
+        if not self.db_dsn:
+            logger.warning("Supabase DB connection not configured; skipping similarity search.")
+            return []
+        if psycopg is None or sql is None:  # pragma: no cover - optional dependency
+            return []
+        vector_literal = _vector_literal(embedding)
+        try:
+            with psycopg.connect(self.db_dsn, connect_timeout=5) as conn:
+                with conn.cursor() as cur:
+                    query = sql.SQL(
+                        """
+                        SELECT
+                            id,
+                            company,
+                            filename,
+                            section,
+                            content,
+                            metadata,
+                            embedding_1536 <=> %s::vector AS distance
+                        FROM {table}
+                        ORDER BY embedding_1536 <=> %s::vector
+                        LIMIT %s
+                        """
+                    ).format(table=psycopg.sql.Identifier(self.table))
+                    cur.execute(query, (vector_literal, vector_literal, top_k))
+                    records = cur.fetchall()
+        except Exception as exc:  # pragma: no cover - network/db failure
+            logger.warning("Similarity search failed: %s", exc)
+            return []
+
+        results: List[Dict[str, Any]] = []
+        for row in records:
+            (
+                doc_id,
+                company,
+                filename,
+                section,
+                content,
+                metadata,
+                distance,
+            ) = row
+            results.append(
+                {
+                    "id": doc_id,
+                    "company": company,
+                    "filename": filename,
+                    "section": section,
+                    "content": content,
+                    "metadata": metadata,
+                    "distance": float(distance) if distance is not None else None,
+                }
+            )
+        return results
 
     # ------------------------------------------------------------------
     def _generate_embedding(self, text: str) -> Optional[List[float]]:
@@ -347,3 +437,7 @@ def _compute_document_hash(
     hasher.update(b":")
     hasher.update(content.encode("utf-8"))
     return hasher.hexdigest()
+
+
+def _vector_literal(values: Sequence[float]) -> str:
+    return "[" + ",".join(f"{float(v):.8f}" for v in values) + "]"
