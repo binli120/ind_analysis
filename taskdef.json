@@ -1,0 +1,26 @@
+{
+  "family": "pdf-analysis-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::977684304019:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "pdf-analysis-service",
+      "image": "977684304019.dkr.ecr.us-east-1.amazonaws.com/pdf-analysis-service:latest",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 8080, "hostPort": 8080, "protocol": "tcp" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/pdf-analysis-service",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
