@@ -294,7 +294,7 @@ Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and r
   poetry run python scripts/s3_sync.py --bucket doc-repository-dev  --company filynai.com --projects LT1009 --modules 1,2 --redis-url redis://localhost:6379/0 --ai-metadata --ai-embeddings
   poetry run python scripts/s3_sync.py --bucket doc-repository-dev  --company filynai.com --projects LT1009 --modules 1,2 --redis-url redis://localhost:6379/0 --ai-metadata --ai-embeddings --force
   ```
-  Test for generate the summary
+ - Test for generate the summary
   ```poetry run python scripts/s3_sync.py \
     --bucket doc-repository-dev \
     --company filynai.com \
@@ -306,3 +306,8 @@ Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and r
     --ai-metadata \
     --output-dir ./synced-markdown-preview
   ```
+## run api
+```
+poetry run uvicorn pdf_analysis.api.server:app --reload
+```
+
