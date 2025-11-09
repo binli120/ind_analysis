@@ -65,7 +65,7 @@ variable "memory" {
 variable "schedule_expression" {
   description = "CloudWatch cron/rate expression controlling when the sync runs."
   type        = string
-  default     = "cron(0 9 * * ? *)"
+  default     = "cron(0 0 * * ? *)"
 }
 
 variable "platform_version" {

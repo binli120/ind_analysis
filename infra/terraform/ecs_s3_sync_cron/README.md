@@ -61,6 +61,7 @@ module "s3_sync_cron" {
 }
 ```
 
-Change `schedule_expression` to any valid EventBridge cron/rate expression. If the
-task needs internet egress (for S3, Redis, or OpenAI) be sure the subnets and security
-groups you pass can reach those endpoints (via NAT, VPC endpoints, etc.).
+Change `schedule_expression` to any valid EventBridge cron/rate expression (the module
+defaults to `cron(0 0 * * ? *)`, i.e. midnight UTC). If the task needs internet
+egress (for S3, Redis, or OpenAI) be sure the subnets and security groups you pass can
+reach those endpoints (via NAT, VPC endpoints, etc.).

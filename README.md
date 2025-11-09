@@ -203,6 +203,7 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
   The path parser expects keys shaped like `filynai.com/<Project>/Module N.<description>/...`. Module numbers are inferred automatically; pass `--modules` with integers (e.g. `--modules 1,2`) if you want to limit the scrape, otherwise omit the flag to index every module it encounters.
 
 - Keys in Redis take the form `company:module:filename` and a hash payload with `markdown`, `s3_version`, `last_modified`, etc. The S3 document hierarchy is preserved, which makes it easy for downstream systems to correlate entries back to their source objects.
+- During each run the service checks for matching `<key>.pdf.md` + `<key>.pdf.meta.json` artefacts whose `version_id` equals the current S3 object; when both exist it skips reprocessing that PDF to keep runtimes down.
 
 ### Scheduling the sync on ECS
 
@@ -212,6 +213,8 @@ If this repository is deployed to ECS/Fargate you can keep the markdown pipeline
 - An EventBridge cron rule that triggers the task on whatever cadence you need.
 
 Pass in the cluster ARN, task/execution roles, VPC subnet/security-group IDs, and any secrets (e.g. `OPENAI_API_KEY`, Supabase keys) via `container_environment`. See the module README for a complete example.
+By default the schedule runs nightly at midnight UTC (`cron(0 0 * * ? *)`); adjust `schedule_expression`
+if you need a different cadence.
 
 ### Local Redis Quickstart
 

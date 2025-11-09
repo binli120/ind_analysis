@@ -96,6 +96,14 @@ class S3RedisSyncService:
             if self.config.maximum_documents and processed >= self.config.maximum_documents:
                 break
 
+            if self._should_skip_document(s3_client, document):
+                logger.debug(
+                    "Skipping %s@%s (existing markdown/meta sidecars detected)",
+                    document.key,
+                    document.version_id,
+                )
+                continue
+
             try:
                 markdown = self._process_document(pipeline, s3_client, document)
             except Exception as exc:  # pragma: no cover - defensive
@@ -479,6 +487,54 @@ class S3RedisSyncService:
         except Exception as exc:  # pragma: no cover - best effort
             logger.warning("Failed to upload metadata json for %s: %s", meta_key, exc)
 
+    def _should_skip_document(self, s3_client: Any, document: S3Document) -> bool:
+        if not document.version_id:
+            return False
+        meta_payload = self._get_existing_metadata_payload(s3_client, document)
+        if not meta_payload:
+            return False
+        if meta_payload.get("version_id") != document.version_id:
+            return False
+        markdown_key = meta_payload.get("markdown_key")
+        if not markdown_key:
+            return False
+        return self._object_exists(s3_client, markdown_key)
+
+    def _get_existing_metadata_payload(
+        self,
+        s3_client: Any,
+        document: S3Document,
+    ) -> Optional[Dict[str, Any]]:
+        meta_key = f"{document.key}.meta.json"
+        try:
+            response = s3_client.get_object(Bucket=self.config.bucket, Key=meta_key)
+        except Exception as exc:  # pragma: no cover - best effort
+            if _is_not_found_error(exc):
+                return None
+            logger.debug("Unable to fetch metadata json for %s: %s", meta_key, exc)
+            return None
+
+        body = response.get("Body")
+        if body is None:
+            return None
+        try:
+            raw = body.read()
+            payload = json.loads(raw.decode("utf-8"))
+        except Exception as exc:  # pragma: no cover - malformed payload
+            logger.debug("Failed to parse metadata json for %s: %s", meta_key, exc)
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def _object_exists(self, s3_client: Any, key: str) -> bool:
+        try:
+            s3_client.head_object(Bucket=self.config.bucket, Key=key)
+            return True
+        except Exception as exc:  # pragma: no cover - best effort
+            if _is_not_found_error(exc):
+                return False
+            logger.debug("Unable to confirm existence of %s: %s", key, exc)
+            return False
+
 
 _MODULE_PATTERN = re.compile(r"^module\s*(?P<number>\d+)(?:[\s._-].*)?$", re.IGNORECASE)
 
@@ -509,3 +565,21 @@ def _stringify(value: Any) -> str:
     if isinstance(value, (dict, list, tuple, set)):
         return json.dumps(value)
     return str(value)
+
+
+def _is_not_found_error(exc: Exception) -> bool:
+    if isinstance(exc, FileNotFoundError):
+        return True
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        code = (
+            response.get("Error", {}).get("Code")
+            if isinstance(response.get("Error"), dict)
+            else None
+        )
+        if code in {"404", "NoSuchKey", "NotFound"}:
+            return True
+        status = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        if status == 404:
+            return True
+    return False
