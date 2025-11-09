@@ -1,0 +1,597 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PDF Analysis API",
+    "description": "Upload a PDF study report and receive extracted content, structured tables, and quality analysis.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/analyze": {
+      "post": {
+        "summary": "Analyze Pdf",
+        "description": "Analyze a PDF from either a direct upload or an S3 location.",
+        "operationId": "analyze_pdf_analyze_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Analyze Pdf Analyze Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/s3/upload-analyze": {
+      "post": {
+        "summary": "Upload And Analyze To S3",
+        "description": "Upload a PDF to S3, trigger analysis, and return the results or an async handle.",
+        "operationId": "upload_and_analyze_to_s3_s3_upload_analyze_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_and_analyze_to_s3_s3_upload_analyze_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Upload And Analyze To S3 S3 Upload Analyze Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/s3/markdown": {
+      "post": {
+        "summary": "Fetch S3 Markdown",
+        "description": "Extract markdown directly from an S3 object and persist refreshed metadata.",
+        "operationId": "fetch_s3_markdown_s3_markdown_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/S3MarkdownRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Fetch S3 Markdown S3 Markdown Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/s3/markdown/summary": {
+      "post": {
+        "summary": "Fetch S3 Markdown With Summary",
+        "description": "Return markdown plus an OpenAI-generated summary/topic listing for an S3 object.",
+        "operationId": "fetch_s3_markdown_with_summary_s3_markdown_summary_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/S3MarkdownRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Fetch S3 Markdown With Summary S3 Markdown Summary Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/s3/markdown/save": {
+      "post": {
+        "summary": "Save S3 Markdown",
+        "description": "Save a markdown document to S3 while capturing metadata/tag sidecars.",
+        "operationId": "save_s3_markdown_s3_markdown_save_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/S3MarkdownUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Save S3 Markdown S3 Markdown Save Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/s3/analysis/status": {
+      "get": {
+        "summary": "Get S3 Analysis Status",
+        "description": "Check whether the async analysis payload has been written back to S3.",
+        "operationId": "get_s3_analysis_status_s3_analysis_status_get",
+        "parameters": [
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bucket"
+            }
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "aws_region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Aws Region"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get S3 Analysis Status S3 Analysis Status Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/s3/analysis/result": {
+      "get": {
+        "summary": "Get S3 Analysis Result",
+        "description": "Retrieve the persisted analysis JSON produced by the pipeline.",
+        "operationId": "get_s3_analysis_result_s3_analysis_result_get",
+        "parameters": [
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bucket"
+            }
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "aws_region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Aws Region"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get S3 Analysis Result S3 Analysis Result Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Body_upload_and_analyze_to_s3_s3_upload_analyze_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          },
+          "bucket": {
+            "type": "string",
+            "title": "Bucket",
+            "description": "Destination S3 bucket for the uploaded PDF."
+          },
+          "company": {
+            "type": "string",
+            "title": "Company",
+            "description": "Top-level path segment (e.g. company domain)."
+          },
+          "project": {
+            "type": "string",
+            "title": "Project",
+            "description": "Project identifier used when building the S3 key."
+          },
+          "folder": {
+            "type": "string",
+            "title": "Folder",
+            "description": "Optional nested folder (e.g. Module 1/Study Docs).",
+            "default": ""
+          },
+          "aws_region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aws Region",
+            "description": "AWS region for S3 operations; defaults to the SDK configuration."
+          },
+          "wait_for_completion": {
+            "type": "boolean",
+            "title": "Wait For Completion",
+            "description": "Whether to wait for the analysis result (up to wait_timeout_seconds).",
+            "default": true
+          },
+          "wait_timeout_seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Wait Timeout Seconds",
+            "description": "Maximum seconds to wait for analysis before returning a pending response.",
+            "default": 25.0
+          },
+          "engine": {
+            "type": "string",
+            "title": "Engine",
+            "description": "Table extraction engine to use.",
+            "default": "pdfplumber"
+          },
+          "max_pages": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Pages",
+            "description": "Optional limit on pages processed during analysis."
+          },
+          "ocr_fallback": {
+            "type": "boolean",
+            "title": "Ocr Fallback",
+            "description": "Attempt OCR on pages with no extracted text.",
+            "default": false
+          },
+          "table_rows": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Rows",
+            "description": "Maximum number of rows returned per table in the response.",
+            "default": 200
+          }
+        },
+        "type": "object",
+        "required": [
+          "file",
+          "bucket",
+          "company",
+          "project"
+        ],
+        "title": "Body_upload_and_analyze_to_s3_s3_upload_analyze_post"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "S3MarkdownRequest": {
+        "properties": {
+          "bucket": {
+            "type": "string",
+            "title": "Bucket"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          },
+          "aws_region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aws Region"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bucket",
+          "key"
+        ],
+        "title": "S3MarkdownRequest"
+      },
+      "S3MarkdownUploadRequest": {
+        "properties": {
+          "bucket": {
+            "type": "string",
+            "title": "Bucket"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "markdown": {
+            "type": "string",
+            "title": "Markdown"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          },
+          "aws_region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aws Region"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bucket",
+          "path",
+          "filename",
+          "markdown"
+        ],
+        "title": "S3MarkdownUploadRequest"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

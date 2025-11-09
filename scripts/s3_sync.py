@@ -146,6 +146,11 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         help="Generate OpenAI embeddings and upsert them into Supabase (requires infra extras).",
     )
     parser.add_argument(
+        "--ai-summary",
+        action="store_true",
+        help="Generate document summaries and topic anchors via OpenAI.",
+    )
+    parser.add_argument(
         "--embedding-model",
         default=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
         help="Embedding model to use when --ai-embeddings is enabled (default: text-embedding-3-small).",
@@ -170,6 +175,11 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         "--log-level",
         default=os.getenv("LOG_LEVEL", "INFO"),
         help="Logging level (DEBUG, INFO, ...).",
+    )
+    parser.add_argument(
+        "--summary-model",
+        default=os.getenv("OPENAI_SUMMARY_MODEL", "gpt-4o-mini"),
+        help="OpenAI model to use when --ai-summary is enabled (default: gpt-4o-mini).",
     )
     return parser.parse_args(argv)
 
@@ -234,10 +244,24 @@ def main(argv: Sequence[str]) -> int:
         except ModuleNotFoundError:
             logging.warning("Supabase embedding store unavailable. Install infra extras to enable it.")
 
+    enable_summary = args.ai_summary or os.getenv("ENABLE_AI_SUMMARY", "false").lower() == "true"
+    summary_generator = None
+    if enable_summary:
+        try:
+            from pdf_analysis.service.document_summarizer import OpenAIDocumentSummarizer
+
+            summary_generator = OpenAIDocumentSummarizer(model=args.summary_model)
+            if not summary_generator.is_available():
+                logging.warning("Document summarizer is not available; summary generation skipped.")
+                summary_generator = None
+        except ModuleNotFoundError:
+            logging.warning("Document summarizer unavailable. Install infra extras to enable it.")
+
     service = S3RedisSyncService(
         config,
         metadata_generator=metadata_generator,
         embedding_store=embedding_store,
+        summarizer=summary_generator,
     )
     processed = service.run()
     logging.info("Processed %d documents.", processed)

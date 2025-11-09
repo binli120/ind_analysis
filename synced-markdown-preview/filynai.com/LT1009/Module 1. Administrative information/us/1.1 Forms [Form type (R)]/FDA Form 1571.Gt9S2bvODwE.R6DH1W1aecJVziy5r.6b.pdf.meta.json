@@ -1,0 +1,50 @@
+{
+  "bucket": "doc-repository-dev",
+  "key": "filynai.com/LT1009/Module 1. Administrative information/us/1.1 Forms [Form type (R)]/FDA Form 1571.pdf",
+  "version_id": "Gt9S2bvODwE.R6DH1W1aecJVziy5r.6b",
+  "project": "LT1009",
+  "module": "Module 1. Administrative information",
+  "generated_at": "2025-11-09T03:29:37.838935+00:00",
+  "metadata": {
+    "labels": [
+      "administrative",
+      "submission",
+      "contact"
+    ],
+    "keywords": [
+      "IND",
+      "submission",
+      "sponsor",
+      "contact",
+      "serial number"
+    ],
+    "language": "en",
+    "ind_document_type": "forms",
+    "ind_section_number": "1.1",
+    "ind_section_title": "Forms",
+    "ind_classification_confidence": 0.9,
+    "analyzed": true
+  },
+  "redis": {
+    "s3_bucket": "doc-repository-dev",
+    "s3_key": "filynai.com/LT1009/Module 1. Administrative information/us/1.1 Forms [Form type (R)]/FDA Form 1571.pdf",
+    "s3_version": "Gt9S2bvODwE.R6DH1W1aecJVziy5r.6b",
+    "last_modified": "2025-11-09T00:12:15+00:00",
+    "company": "filynai.com",
+    "project": "LT1009",
+    "module_label": "Module 1. Administrative information",
+    "module_number": "1",
+    "module_slug": "module-1-administrative-information",
+    "project_slug": "lt1009",
+    "filename": "FDA Form 1571.pdf",
+    "labels": "administrative,submission,contact",
+    "keywords": "IND,submission,sponsor,contact,serial number",
+    "language": "en",
+    "metadata_json": "{\"labels\": [\"administrative\", \"submission\", \"contact\"], \"keywords\": [\"IND\", \"submission\", \"sponsor\", \"contact\", \"serial number\"], \"language\": \"en\", \"ind_document_type\": \"forms\", \"ind_section_number\": \"1.1\", \"ind_section_title\": \"Forms\", \"ind_classification_confidence\": 0.9, \"analyzed\": true}",
+    "summary_text": "Document Summary\n=================\nThis document outlines the requirements for submitting an Investigational New Drug Application (IND) to the FDA, as per Title 21 CFR Part 312. It specifies that no drug may be shipped or clinical investigations commenced until an IND is in effect. The application must include detailed information about the drug, the sponsor, and the intended clinical investigation phases. Additionally, it mandates that submissions be numbered consecutively and provides guidelines for various types of submissions, including amendments and safety reports. The document also notes the expiration date of the form and includes a statement regarding the OMB approval.\n\nKey Topics\n----------\n- [Application Requirements](#application-requirements) \u2014 The IND application must contain comprehensive details about the drug, including its name, sponsor information, and the phases of clinical investigation planned. This ensures that the FDA has all necessary information to evaluate the application.\n- [Submission Protocol](#submission-protocol) \u2014 Submissions must be numbered consecutively, starting with 'Serial number: 0000' for the initial IND. This protocol helps maintain an organized record of submissions and amendments.\n- [Regulatory Compliance](#regulatory-compliance) \u2014 The document emphasizes compliance with Title 21 CFR Part 312, which outlines the legal framework for IND submissions. It highlights the importance of adhering to these regulations to avoid delays in drug development.\n- [Prohibition on Drug Shipment](#prohibition-on-drug-shipment) \u2014 A critical point in the document is the prohibition against shipping any drug or starting clinical investigations until an IND is officially in effect, ensuring patient safety and regulatory adherence.\n- [Types of Submissions](#types-of-submissions) \u2014 The application can include various types of submissions such as initial applications, amendments, and safety reports. Each type has specific requirements and must be clearly indicated in the submission.\n- [Expiration Information](#expiration-information) \u2014 The document notes that the form is approved under OMB No. 0910-0014 and has an expiration date of May 31, 2009, indicating the need for timely submissions using the current version of the form.\n- [Contact Information](#contact-information) \u2014 The application requires the inclusion of the sponsor's contact information, including address and telephone number, to facilitate communication between the FDA and the sponsor.\n- [FDA Use Only](#fda-use-only) \u2014 A section is dedicated to FDA use, where the agency can assign an IND number and provide additional internal documentation related to the application process."
+  },
+  "summary_key": "filynai.com/LT1009/Module 1. Administrative information/us/1.1 Forms [Form type (R)]/FDA Form 1571.pdf.summary.txt",
+  "markdown_key": "filynai.com/LT1009/Module 1. Administrative information/us/1.1 Forms [Form type (R)]/FDA Form 1571.pdf.md",
+  "markdown_file": "filynai.com/LT1009/Module 1. Administrative information/us/1.1 Forms [Form type (R)]/FDA Form 1571.Gt9S2bvODwE.R6DH1W1aecJVziy5r.6b.pdf.md",
+  "summary_file": "filynai.com/LT1009/Module 1. Administrative information/us/1.1 Forms [Form type (R)]/FDA Form 1571.Gt9S2bvODwE.R6DH1W1aecJVziy5r.6b.pdf.summary.txt"
+}

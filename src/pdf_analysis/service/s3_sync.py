@@ -16,6 +16,12 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Iterator, Optional, Sequence
 
 from pdf_analysis.pipeline import PDFProcessingPipeline, PipelineConfig
+from pdf_analysis.service.document_summarizer import (
+    OpenAIDocumentSummarizer,
+    TopicSummaryResult,
+    embed_topics_into_markdown,
+    format_summary_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,12 +83,14 @@ class S3RedisSyncService:
         pipeline_factory: Optional[Callable[[PipelineConfig], PDFProcessingPipeline]] = None,
         metadata_generator: Optional[Callable[[str], Dict[str, Any]]] = None,
         embedding_store: Optional[Any] = None,
+        summarizer: Optional[OpenAIDocumentSummarizer] = None,
     ) -> None:
         self.config = config
         self._pipeline_factory = pipeline_factory or self._default_pipeline_factory
         self._redis_client: Any | None = None
         self._metadata_generator = metadata_generator
         self._embedding_store = embedding_store
+        self._summarizer = summarizer
 
     # ------------------------------------------------------------------
     def run(self) -> int:
@@ -116,6 +124,18 @@ class S3RedisSyncService:
             if not markdown:
                 logger.debug("Skipping %s (no markdown produced)", document.key)
                 continue
+
+            summary_text: Optional[str] = None
+            summary_result: Optional[TopicSummaryResult] = None
+            if self._summarizer:
+                try:
+                    summary_result = self._summarizer(markdown)
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.warning("Summary generation failed for %s: %s", document.key, exc)
+                    summary_result = None
+                if summary_result:
+                    summary_text = format_summary_text(summary_result)
+                    markdown = embed_topics_into_markdown(markdown, summary_result.topics)
 
             metadata_fields: Dict[str, Any] = {}
             if self._metadata_generator:
@@ -161,6 +181,8 @@ class S3RedisSyncService:
             if language:
                 payload["language"] = language
             payload["metadata_json"] = json.dumps(metadata_fields)
+            if summary_text:
+                payload["summary_text"] = summary_text
 
             redis_payload = {key: _stringify(value) for key, value in payload.items()}
             redis_client.hset(redis_key, mapping=redis_payload)
@@ -182,13 +204,20 @@ class S3RedisSyncService:
                 "metadata": metadata_fields,
                 "redis": redis_snapshot,
             }
+            summary_key = None
+            if summary_text:
+                summary_key = self._upload_summary_document(s3_client, document, summary_text)
+                if summary_key:
+                    meta_payload["summary_key"] = summary_key
 
             markdown_key = self._upload_markdown_document(s3_client, document, markdown)
             if markdown_key:
                 meta_payload["markdown_key"] = markdown_key
 
+            should_upload_meta = bool(metadata_fields or summary_key)
             if metadata_fields:
                 self._update_s3_metadata(s3_client, document, metadata_fields)
+            if should_upload_meta:
                 self._upload_metadata_json(s3_client, document, meta_payload)
 
             if self._embedding_store:
@@ -212,7 +241,13 @@ class S3RedisSyncService:
                     logger.warning("Embedding storage failed for %s: %s", document.key, exc)
 
             if output_dir is not None:
-                self._persist_markdown_file(output_dir, document, markdown, meta_payload)
+                self._persist_markdown_file(
+                    output_dir,
+                    document,
+                    markdown,
+                    meta_payload,
+                    summary_text=summary_text,
+                )
 
             processed += 1
 
@@ -236,6 +271,7 @@ class S3RedisSyncService:
         document: S3Document,
         markdown: str,
         meta_payload: Dict[str, Any],
+        summary_text: Optional[str] = None,
     ) -> None:
         relative = Path(document.key)
         parent = relative.parent
@@ -247,29 +283,42 @@ class S3RedisSyncService:
             if safe_version:
                 md_filename = f"{stem}.{safe_version}.pdf.md"
                 meta_filename = f"{stem}.{safe_version}.pdf.meta.json"
+                summary_filename = f"{stem}.{safe_version}.pdf.summary.txt"
             else:
                 md_filename = f"{stem}.pdf.md"
                 meta_filename = f"{stem}.pdf.meta.json"
+                summary_filename = f"{stem}.pdf.summary.txt"
         else:
             if safe_version:
                 md_filename = f"{filename}.{safe_version}.md"
                 meta_filename = f"{filename}.{safe_version}.meta.json"
+                summary_filename = f"{filename}.{safe_version}.summary.txt"
             else:
                 md_filename = f"{filename}.md"
                 meta_filename = f"{filename}.meta.json"
+                summary_filename = f"{filename}.summary.txt"
 
         rel_md_path = (parent / md_filename) if str(parent) != "." else Path(md_filename)
         rel_meta_path = (parent / meta_filename) if str(parent) != "." else Path(meta_filename)
+        rel_summary_path = (
+            (parent / summary_filename) if str(parent) != "." else Path(summary_filename)
+        )
 
         md_path = base_dir / rel_md_path
         meta_path = base_dir / rel_meta_path
+        summary_path = base_dir / rel_summary_path
 
         md_path.parent.mkdir(parents=True, exist_ok=True)
         md_path.write_text(markdown, encoding="utf-8")
         meta_payload = dict(meta_payload)
         meta_payload["markdown_file"] = str(rel_md_path.as_posix())
+        if summary_text:
+            summary_path.write_text(summary_text, encoding="utf-8")
+            meta_payload["summary_file"] = str(rel_summary_path.as_posix())
         meta_path.write_text(json.dumps(meta_payload, indent=2), encoding="utf-8")
         logger.debug("Wrote markdown to %s and metadata to %s", md_path, meta_path)
+        if summary_text:
+            logger.debug("Wrote summary to %s", summary_path)
 
     @contextlib.contextmanager
     def _download_to_tempfile(self, s3_client: Any, document: S3Document) -> Iterator[Path]:
@@ -471,6 +520,27 @@ class S3RedisSyncService:
             return md_key
         except Exception as exc:  # pragma: no cover - best effort
             logger.warning("Failed to upload markdown file for %s: %s", md_key, exc)
+            return None
+
+    def _upload_summary_document(
+        self,
+        s3_client: Any,
+        document: S3Document,
+        summary_text: str,
+    ) -> Optional[str]:
+        if not summary_text:
+            return None
+        summary_key = f"{document.key}.summary.txt"
+        try:
+            s3_client.put_object(
+                Bucket=self.config.bucket,
+                Key=summary_key,
+                Body=summary_text.encode("utf-8"),
+                ContentType="text/plain",
+            )
+            return summary_key
+        except Exception as exc:  # pragma: no cover - best effort
+            logger.warning("Failed to upload summary file for %s: %s", summary_key, exc)
             return None
 
     def _upload_metadata_json(

@@ -24,6 +24,7 @@ from pdf_analysis.pipeline import (
     PipelineConfig,
     RedisStreamingConfig,
 )
+from pdf_analysis.service.document_summarizer import TopicSection, TopicSummaryResult
 from pdf_analysis.transform.markdown_writer import build_markdown_document
 from pdf_analysis.validate import generate_quality_report
 
@@ -325,6 +326,79 @@ class ApiEndpointTests(unittest.TestCase):
         self.assertEqual(fake_s3_client.copy_calls[0]["Metadata"]["labels"], "pharmacology")
         self.assertEqual(len(fake_s3_client.put_calls), 1)
         self.assertTrue(fake_s3_client.put_calls[0]["Key"].endswith("report.pdf.meta.json"))
+
+    def test_fetch_s3_markdown_summary_endpoint(self) -> None:
+        client = TestClient(server.app)
+
+        class FakeS3Client:
+            def __init__(self) -> None:
+                self.download_calls: List[tuple] = []
+
+            def download_fileobj(self, bucket, key, fileobj, ExtraArgs=None):
+                self.download_calls.append((bucket, key, ExtraArgs))
+                fileobj.write(b"%PDF-1.5 mock")
+
+        fake_s3_client = FakeS3Client()
+        fake_pipeline_result = types.SimpleNamespace(
+            markdown="# sample markdown",
+            text_engine="pdfminer",
+            ocr_strategy=None,
+            tables=[{"page_number": 1}],
+        )
+
+        class FakeSummarizer:
+            def __init__(self) -> None:
+                self._available = True
+
+            def is_available(self) -> bool:
+                return self._available
+
+            def __call__(self, markdown: str) -> TopicSummaryResult:
+                assert markdown == "# sample markdown"
+                return TopicSummaryResult(
+                    summary="Overall study summary.",
+                    topics=[
+                        TopicSection(title="Introduction", description="Context", anchor="introduction"),
+                        TopicSection(title="Findings", description="Key outcomes", anchor="findings"),
+                    ],
+                )
+
+        summary_backup = server._summary_generator
+        server._summary_generator = FakeSummarizer()
+
+        with patch.object(server, "PDFProcessingPipeline") as mock_pipeline:
+            mock_pipeline.return_value.run.return_value = fake_pipeline_result
+
+            fake_exceptions = types.SimpleNamespace(BotoCoreError=Exception, ClientError=Exception)
+            fake_botocore = types.ModuleType("botocore")
+            fake_botocore.exceptions = fake_exceptions
+            with patch.dict(
+                sys.modules,
+                {
+                    "boto3": types.SimpleNamespace(client=lambda *args, **kwargs: fake_s3_client),
+                    "botocore": fake_botocore,
+                    "botocore.exceptions": fake_exceptions,
+                },
+            ):
+                response = client.post(
+                    "/s3/markdown/summary",
+                    json={
+                        "bucket": "demo-bucket",
+                        "key": "LT1009/Module 1.Quality/report.pdf",
+                        "version_id": "abc123",
+                        "aws_region": "us-east-1",
+                    },
+                )
+
+        server._summary_generator = summary_backup
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("## Key Topics", data["markdown"])
+        self.assertTrue(data["summary_text"].startswith("Document Summary"))
+        self.assertEqual(len(data["topics"]), 2)
+        self.assertEqual(data["topics"][0]["anchor"], "introduction")
+        self.assertEqual(len(fake_s3_client.download_calls), 1)
 
     def test_save_s3_markdown_endpoint(self) -> None:
         client = TestClient(server.app)

@@ -47,7 +47,7 @@ module "s3_sync_cron" {
   projects            = ["LT1009"]
   modules             = [1, 2, 3, 4, 5]
   redis_url           = "redis://cache.internal:6379/0"
-  # command_additional_args = ["--force"]  # uncomment to reprocess even when sidecars exist
+  # command_additional_args = ["--force", "--ai-summary"]  # enable forced reprocessing + summaries
 
   container_environment = {
     OPENAI_API_KEY         = var.openai_api_key
@@ -65,4 +65,6 @@ module "s3_sync_cron" {
 Change `schedule_expression` to any valid EventBridge cron/rate expression (the module
 defaults to `cron(0 0 * * ? *)`, i.e. midnight UTC). If the task needs internet
 egress (for S3, Redis, or OpenAI) be sure the subnets and security groups you pass can
-reach those endpoints (via NAT, VPC endpoints, etc.).
+reach those endpoints (via NAT, VPC endpoints, etc.). Add `--ai-summary` to
+`command_additional_args` when you want the cron job to refresh the new `.summary.txt`
+artefacts alongside the markdown.
