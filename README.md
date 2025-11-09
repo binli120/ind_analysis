@@ -291,4 +291,5 @@ Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and r
 
   ```shell
   poetry run python scripts/pipeline.py data/42-stud-rep/421-pharmacol/4211-prim-pd/lt3114-pha-001-r/lt3114-pha-001-r.pdf
+  poetry run python scripts/s3_sync.py --bucket doc-repository-dev  --company filynai.com --projects LT1009 --modules 1,2 --redis-url redis://localhost:6379/0 --ai-metadata --ai-embeddings
   ```
