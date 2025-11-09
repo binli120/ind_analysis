@@ -186,13 +186,15 @@ class S3RedisSyncServiceTests(unittest.TestCase):
             meta_payload = json.loads(meta_path.read_text(encoding="utf-8"))
             self.assertEqual(meta_payload["metadata"]["labels"], ["clinical", "efficacy"])
             self.assertEqual(meta_payload["markdown_file"], "filynai.com/LT1009/Module 1.Quality/report.abc123.pdf.md")
+            self.assertEqual(meta_payload["markdown_key"], "filynai.com/LT1009/Module 1.Quality/report.pdf.md")
             self.assertNotIn("markdown", meta_payload["redis"])
 
             self.assertEqual(len(fake_s3.copies), 1)
             self.assertIn("Metadata", fake_s3.copies[0])
             self.assertEqual(fake_s3.copies[0]["Metadata"]["labels"], "clinical,efficacy")
-            self.assertEqual(len(fake_s3.puts), 1)
-            self.assertTrue(fake_s3.puts[0]["Key"].endswith("report.pdf.meta.json"))
+            self.assertEqual(len(fake_s3.puts), 2)
+            self.assertTrue(any(entry["Key"].endswith("report.pdf.md") for entry in fake_s3.puts))
+            self.assertTrue(any(entry["Key"].endswith("report.pdf.meta.json") for entry in fake_s3.puts))
             self.assertEqual(len(fake_embedding_store.calls), 1)
             self.assertEqual(
                 fake_embedding_store.calls[0]["s3_key"],

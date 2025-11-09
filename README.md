@@ -198,11 +198,20 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
 
   The script honours `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_REGION` environment variables, so credentials can be injected via your secrets manager instead of CLI flags.
   On startup it automatically loads variables from `.env` and `.env.local` (if present) using `python-dotenv`.
-  When `--output-dir` is set, the service mirrors the S3 hierarchy locally, writing `<output>/<company>/<Project>/<Module N.*>/<filename>.pdf.md` and a companion `<filename>.pdf.meta.json` alongside the source PDF structure.
+  When `--output-dir` is set, the service mirrors the S3 hierarchy locally, writing `<output>/<company>/<Project>/<Module N.*>/<filename>.pdf.md` and a companion `<filename>.pdf.meta.json` alongside the source PDF structure. Each processed document also receives an uploaded S3 object at `<original-key>.md`, and the metadata JSON references both the S3 key and local path so downstream consumers never need to parse markdown embedded in JSON.
   Add `--ai-metadata` (and set `OPENAI_API_KEY`) to label each document via OpenAI, generating up to three labels and five keywords. The results are written back to Redis, uploaded to the bucket via `copy_object` as object metadata, and stored in the `.meta.json` artefact.
   The path parser expects keys shaped like `filynai.com/<Project>/Module N.<description>/...`. Module numbers are inferred automatically; pass `--modules` with integers (e.g. `--modules 1,2`) if you want to limit the scrape, otherwise omit the flag to index every module it encounters.
 
 - Keys in Redis take the form `company:module:filename` and a hash payload with `markdown`, `s3_version`, `last_modified`, etc. The S3 document hierarchy is preserved, which makes it easy for downstream systems to correlate entries back to their source objects.
+
+### Scheduling the sync on ECS
+
+If this repository is deployed to ECS/Fargate you can keep the markdown pipeline fresh by running it as a scheduled task. A Terraform module lives at `infra/terraform/ecs_s3_sync_cron` that wires up:
+
+- An ECS task definition that runs `poetry run python scripts/s3_sync.py --bucket doc-repository-dev --company filynai.com --projects LT1009 --modules 1,2,3,4,5 --redis-url redis://localhost:6379/0 --ai-metadata --ai-embeddings`
+- An EventBridge cron rule that triggers the task on whatever cadence you need.
+
+Pass in the cluster ARN, task/execution roles, VPC subnet/security-group IDs, and any secrets (e.g. `OPENAI_API_KEY`, Supabase keys) via `container_environment`. See the module README for a complete example.
 
 ### Local Redis Quickstart
 

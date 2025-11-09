@@ -22,7 +22,10 @@ dependencies = [
 ]
 
 [tool.poetry]
-packages = [{ include = "pdf_analysis", from = "src" }]
+packages = [
+    { include = "pdf_analysis", from = "src" },
+    { include = "ind_pipeline", from = "src" },
+]
 
 
 [tool.poetry.group.dev.dependencies]

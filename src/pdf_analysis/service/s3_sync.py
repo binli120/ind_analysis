@@ -157,8 +157,9 @@ class S3RedisSyncService:
                 redis_client.expire(redis_key, int(self.config.redis_expire_seconds))
             logger.debug("Persisted markdown to redis key=%s version=%s", redis_key, document.version_id)
 
-            redis_snapshot = dict(redis_payload)
-            redis_snapshot.pop("markdown", None)
+            redis_snapshot = {
+                key: value for key, value in redis_payload.items() if key != "markdown"
+            }
 
             meta_payload = {
                 "bucket": self.config.bucket,
@@ -170,6 +171,10 @@ class S3RedisSyncService:
                 "metadata": metadata_fields,
                 "redis": redis_snapshot,
             }
+
+            markdown_key = self._upload_markdown_document(s3_client, document, markdown)
+            if markdown_key:
+                meta_payload["markdown_key"] = markdown_key
 
             if metadata_fields:
                 self._update_s3_metadata(s3_client, document, metadata_fields)
@@ -435,6 +440,27 @@ class S3RedisSyncService:
             s3_client.copy_object(**copy_kwargs)
         except Exception as exc:  # pragma: no cover - best effort
             logger.warning("Failed to persist metadata for %s: %s", document.key, exc)
+
+    def _upload_markdown_document(
+        self,
+        s3_client: Any,
+        document: S3Document,
+        markdown: str,
+    ) -> Optional[str]:
+        if not markdown:
+            return None
+        md_key = f"{document.key}.md"
+        try:
+            s3_client.put_object(
+                Bucket=self.config.bucket,
+                Key=md_key,
+                Body=markdown.encode("utf-8"),
+                ContentType="text/markdown",
+            )
+            return md_key
+        except Exception as exc:  # pragma: no cover - best effort
+            logger.warning("Failed to upload markdown file for %s: %s", md_key, exc)
+            return None
 
     def _upload_metadata_json(
         self,
