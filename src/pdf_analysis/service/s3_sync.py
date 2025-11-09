@@ -59,6 +59,7 @@ class S3SyncConfig:
     redis_expire_seconds: Optional[int] = None
     maximum_documents: Optional[int] = None
     output_dir: Path | None = None
+    force: bool = False
 
 
 class S3RedisSyncService:
@@ -96,7 +97,7 @@ class S3RedisSyncService:
             if self.config.maximum_documents and processed >= self.config.maximum_documents:
                 break
 
-            if self._should_skip_document(s3_client, document):
+            if not self.config.force and self._should_skip_document(s3_client, document):
                 logger.debug(
                     "Skipping %s@%s (existing markdown/meta sidecars detected)",
                     document.key,

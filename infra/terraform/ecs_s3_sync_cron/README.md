@@ -47,6 +47,7 @@ module "s3_sync_cron" {
   projects            = ["LT1009"]
   modules             = [1, 2, 3, 4, 5]
   redis_url           = "redis://cache.internal:6379/0"
+  # command_additional_args = ["--force"]  # uncomment to reprocess even when sidecars exist
 
   container_environment = {
     OPENAI_API_KEY         = var.openai_api_key

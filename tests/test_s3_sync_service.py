@@ -267,5 +267,52 @@ class S3RedisSyncServiceTests(unittest.TestCase):
         self.assertEqual(fake_redis.store, {})
         self.assertEqual(len(fake_s3.puts), 2)  # seeded objects only
 
+    def test_force_reprocesses_even_when_sidecars_exist(self) -> None:
+        fake_redis = FakeRedis()
+        config = S3SyncConfig(
+            bucket="demo-bucket",
+            company="filynai.com",
+            projects=("LT1009",),
+            module_filters=(1,),
+            redis_client=fake_redis,
+            pipeline_config=PipelineConfig(),
+            force=True,
+        )
+
+        class CountingPipeline:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def run(self, _: Path) -> types.SimpleNamespace:
+                self.calls += 1
+                return types.SimpleNamespace(markdown="# mock\n\ncontent")
+
+        pipeline = CountingPipeline()
+        service = S3RedisSyncService(
+            config,
+            pipeline_factory=lambda _: pipeline,  # type: ignore[arg-type]
+        )
+
+        fake_s3 = FakeS3Client()
+        meta_key = "filynai.com/LT1009/Module 1.Quality/report.pdf.meta.json"
+        md_key = "filynai.com/LT1009/Module 1.Quality/report.pdf.md"
+        existing_meta = {
+            "bucket": "demo-bucket",
+            "key": "filynai.com/LT1009/Module 1.Quality/report.pdf",
+            "version_id": "abc123",
+            "metadata": {"analyzed": True},
+            "markdown_key": md_key,
+        }
+        fake_s3.put_object(Bucket="demo-bucket", Key=meta_key, Body=json.dumps(existing_meta))
+        fake_s3.put_object(Bucket="demo-bucket", Key=md_key, Body=b"# existing\n")
+
+        with patch.object(S3RedisSyncService, "_build_s3_client", return_value=fake_s3):
+            processed = service.run()
+
+        self.assertEqual(processed, 1)
+        self.assertEqual(pipeline.calls, 1)
+        self.assertIn("filynai.com:lt1009:module-1-quality:report.pdf", fake_redis.store)
+        self.assertGreater(len(fake_s3.puts), 2)  # new uploads appended
+
 if __name__ == "__main__":
     unittest.main()

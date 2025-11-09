@@ -204,6 +204,7 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
 
 - Keys in Redis take the form `company:module:filename` and a hash payload with `markdown`, `s3_version`, `last_modified`, etc. The S3 document hierarchy is preserved, which makes it easy for downstream systems to correlate entries back to their source objects.
 - During each run the service checks for matching `<key>.pdf.md` + `<key>.pdf.meta.json` artefacts whose `version_id` equals the current S3 object; when both exist it skips reprocessing that PDF to keep runtimes down.
+- Pass `--force` to `s3_sync.py` when you need to reprocess everything even if the sidecars already exist (handy after updating the pipeline or metadata generator).
 
 ### Scheduling the sync on ECS
 
@@ -215,6 +216,8 @@ If this repository is deployed to ECS/Fargate you can keep the markdown pipeline
 Pass in the cluster ARN, task/execution roles, VPC subnet/security-group IDs, and any secrets (e.g. `OPENAI_API_KEY`, Supabase keys) via `container_environment`. See the module README for a complete example.
 By default the schedule runs nightly at midnight UTC (`cron(0 0 * * ? *)`); adjust `schedule_expression`
 if you need a different cadence.
+Set `command_additional_args = ["--force"]` in the module inputs if you want the nightly run to
+reprocess every PDF regardless of existing sidecars.
 
 ### Local Redis Quickstart
 

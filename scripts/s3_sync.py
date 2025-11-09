@@ -156,6 +156,11 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         help="Maximum number of documents to process in this run.",
     )
     parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Reprocess documents even if markdown/meta sidecars already exist.",
+    )
+    parser.add_argument(
         "--log-level",
         default=os.getenv("LOG_LEVEL", "INFO"),
         help="Logging level (DEBUG, INFO, ...).",
@@ -186,6 +191,7 @@ def main(argv: Sequence[str]) -> int:
         redis_expire_seconds=args.redis_expire,
         maximum_documents=args.limit,
         output_dir=Path(args.output_dir).resolve() if args.output_dir else None,
+        force=args.force,
     )
 
     enable_ai = args.ai_metadata or os.getenv("ENABLE_AI_METADATA", "false").lower() == "true"
