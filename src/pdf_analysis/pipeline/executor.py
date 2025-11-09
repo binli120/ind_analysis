@@ -1,3 +1,5 @@
+"""Helpers for running pipeline jobs concurrently across multiple PDFs."""
+
 from __future__ import annotations
 
 import logging
@@ -42,10 +44,11 @@ class PipelineRunner:
         self._pipeline_factory = pipeline_factory or self._default_factory
 
     def _default_factory(self) -> PDFProcessingPipeline:
-        # Each invocation gets its own pipeline instance for thread-safety.
+        """Instantiate a pipeline per worker to preserve thread-safety."""
         return PDFProcessingPipeline(config=self._config)
 
     def run_many(self, pdf_paths: Iterable[Path]) -> List[PipelineTaskResult]:
+        """Process many PDFs concurrently and return their results."""
         paths: List[Path] = [Path(p) for p in pdf_paths]
         if not paths:
             return []
@@ -82,6 +85,7 @@ class PipelineRunner:
         return results
 
     def _run_single(self, pdf_path: Path) -> PipelineTaskResult:
+        """Execute the pipeline for a single PDF and capture timing/errors."""
         start = time.perf_counter()
         pipeline = self._pipeline_factory()
         try:

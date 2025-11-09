@@ -1,1 +1,1 @@
-# Package marker for lambda functions.
+"""Top-level package for Lambda entry points and helpers."""

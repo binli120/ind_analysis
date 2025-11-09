@@ -1,3 +1,5 @@
+"""Embedding store integrations for Supabase/pgvector and OpenAI generation."""
+
 from __future__ import annotations
 
 import hashlib
@@ -5,7 +7,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 try:
     import httpx  # type: ignore

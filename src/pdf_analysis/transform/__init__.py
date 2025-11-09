@@ -1,3 +1,1 @@
-# @author: Bin Lee
-# @email: blee@filynai.com
-
+"""Transform helpers for pdf_analysis."""

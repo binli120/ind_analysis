@@ -1,3 +1,5 @@
+"""Placeholder module representing validation and scoring of outputs."""
+
 from __future__ import annotations
 
 from typing import Dict
@@ -6,6 +8,7 @@ from ind_pipeline.stage_common import SimpleStageModule, StageModuleSpec
 
 
 def _workload(payload: Dict[str, object]) -> Dict[str, object]:
+    """Summarise what validation checks were requested."""
     return {
         "notes": "Placeholder validation and scoring stage.",
         "checks_requested": payload.get("checks"),
@@ -24,10 +27,12 @@ _MODULE = SimpleStageModule(
 
 
 def handle_message(payload: Dict[str, object]) -> Dict[str, object]:
+    """Expose the handler used by the shared consumer."""
     return _MODULE.handler(payload)
 
 
 def run() -> None:
+    """Start the consumer loop for validation and scoring."""
     _MODULE.run()
 
 

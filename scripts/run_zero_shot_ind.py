@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""Ad-hoc tool for running zero-shot IND classification from the CLI."""
+
 from __future__ import annotations
 
 import argparse
@@ -13,6 +15,7 @@ SRC_DIR = REPO_ROOT / "src"
 
 
 def _load_env_files() -> None:
+    """Load .env files so that local API keys are available."""
     env_files = [REPO_ROOT / ".env.local", REPO_ROOT / ".env"]
     for env_file in env_files:
         if not env_file.exists():
@@ -31,14 +34,14 @@ def _load_env_files() -> None:
 
 _load_env_files()
 
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
-from pdf_analysis.api.server import _run_pipeline_with_runner  # type: ignore[attr-defined]
-from pdf_analysis.service.ai_metadata import OpenAIMetadataGenerator
+def _ensure_src_on_path() -> None:
+    """Guarantee that the src directory is importable at runtime."""
+    if str(SRC_DIR) not in sys.path:
+        sys.path.insert(0, str(SRC_DIR))
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
+    """Define CLI arguments for the zero-shot classification helper."""
     parser = argparse.ArgumentParser(
         description="Run zero-shot IND section classification on a PDF using the OpenAI metadata generator.",
     )
@@ -79,7 +82,8 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _ensure_client(generator: OpenAIMetadataGenerator) -> None:
+def _ensure_client(generator: Any) -> None:
+    """Exit early with a helpful message when the OpenAI client is not ready."""
     if getattr(generator, "_client", None) is None:
         sys.stderr.write(
             "OpenAI client is not configured. Ensure OPENAI_API_KEY is set in the environment.\n"
@@ -95,6 +99,10 @@ def _run_analysis(
     ocr_fallback: bool,
     table_rows: Optional[int],
 ) -> Dict[str, Any]:
+    """Execute the server pipeline runner to obtain markdown/metrics for a PDF."""
+    _ensure_src_on_path()
+    from pdf_analysis.api.server import _run_pipeline_with_runner  # type: ignore[attr-defined]
+
     return _run_pipeline_with_runner(
         pdf_path,
         pdf_path.name,
@@ -106,6 +114,7 @@ def _run_analysis(
 
 
 def main() -> None:
+    """CLI entrypoint that produces zero-shot classification metadata."""
     parser = _build_arg_parser()
     args = parser.parse_args()
 
@@ -124,6 +133,9 @@ def main() -> None:
     )
 
     _load_env_files()
+    _ensure_src_on_path()
+    from pdf_analysis.service.ai_metadata import OpenAIMetadataGenerator
+
     generator = OpenAIMetadataGenerator(model=args.model)
     _ensure_client(generator)
 

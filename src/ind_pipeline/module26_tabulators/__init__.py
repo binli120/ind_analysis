@@ -1,3 +1,5 @@
+"""Placeholder implementation for Module 2.6 tabulation processing."""
+
 from __future__ import annotations
 
 from typing import Dict
@@ -6,6 +8,7 @@ from ind_pipeline.stage_common import SimpleStageModule, StageModuleSpec
 
 
 def _workload(payload: Dict[str, object]) -> Dict[str, object]:
+    """Compute simple metrics for incoming tabulation payloads."""
     table_templates = payload.get("tables")
     table_count = len(table_templates) if isinstance(table_templates, list) else 0
     return {
@@ -26,10 +29,12 @@ _MODULE = SimpleStageModule(
 
 
 def handle_message(payload: Dict[str, object]) -> Dict[str, object]:
+    """Bridge function for the stage consumer."""
     return _MODULE.handler(payload)
 
 
 def run() -> None:
+    """Start the module's NotificationConsumer loop."""
     _MODULE.run()
 
 

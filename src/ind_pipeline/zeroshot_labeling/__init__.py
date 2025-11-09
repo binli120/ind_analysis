@@ -1,3 +1,5 @@
+"""Zero-shot labeling stage that enriches extracted markdown with OpenAI metadata."""
+
 from __future__ import annotations
 
 import json
@@ -23,6 +25,7 @@ _sns_client = boto3.client("sns")
 
 
 def _resolve_env(name: str, default: Optional[str] = None) -> str:
+    """Read an environment variable, raising when missing and no default is set."""
     value = os.getenv(name, default)
     if value is None or not value.strip():
         raise RuntimeError(f"Environment variable {name} is required for the {MODULE_NAME} module")
@@ -30,6 +33,7 @@ def _resolve_env(name: str, default: Optional[str] = None) -> str:
 
 
 def _get_generator() -> OpenAIMetadataGenerator:
+    """Instantiate (and cache) the OpenAI metadata generator."""
     global _generator
     if _generator is None:
         model = os.getenv("ZEROSHOT_OPENAI_MODEL", "gpt-4o-mini")
@@ -42,6 +46,7 @@ def _get_generator() -> OpenAIMetadataGenerator:
 
 
 def _load_analysis_document(analysis_s3_uri: str) -> Tuple[Dict[str, Any], str, str]:
+    """Fetch and parse the analysis JSON produced by the extraction module."""
     bucket, key = parse_s3_uri(analysis_s3_uri)
     try:
         response = _s3_client.get_object(Bucket=bucket, Key=key)
@@ -56,6 +61,7 @@ def _load_analysis_document(analysis_s3_uri: str) -> Tuple[Dict[str, Any], str, 
 
 
 def _store_metadata(bucket: str, object_key: str, document: Dict[str, Any]) -> str:
+    """Write the classification metadata JSON back to S3."""
     metadata_key = build_metadata_key(object_key, "classification.json")
     try:
         _s3_client.put_object(
@@ -70,6 +76,7 @@ def _store_metadata(bucket: str, object_key: str, document: Dict[str, Any]) -> s
 
 
 def _iter_next_topic_arns() -> List[str]:
+    """Return downstream topic ARNs configured for this module."""
     topics: List[str] = []
     raw_list = os.getenv("ZEROSHOT_NEXT_TOPIC_ARNS")
     if raw_list:
@@ -87,6 +94,7 @@ def _iter_next_topic_arns() -> List[str]:
 
 
 def _publish_next_events(request_payload: Dict[str, Any], result_payload: Dict[str, Any]) -> None:
+    """Send completion events to all configured downstream topics."""
     topics = _iter_next_topic_arns()
     if not topics:
         return
@@ -109,6 +117,7 @@ def _publish_next_events(request_payload: Dict[str, Any], result_payload: Dict[s
 
 
 def zeroshot_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Process a notification payload and emit zero-shot classification metadata."""
     analysis_document: Dict[str, Any] = {}
     analysis_bucket: Optional[str] = None
     analysis_key: Optional[str] = None
@@ -192,6 +201,7 @@ def zeroshot_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def run() -> None:
+    """Start the NotificationConsumer loop for zero-shot labeling."""
     topic_arn = _resolve_env("ZEROSHOT_TOPIC_ARN", os.getenv("SNS_TOPIC_ARN"))
     queue_name = _resolve_env("ZEROSHOT_QUEUE_NAME", "zeroshot-labeling-queue")
     completion_topic_arn = os.getenv("ZEROSHOT_COMPLETION_TOPIC_ARN")

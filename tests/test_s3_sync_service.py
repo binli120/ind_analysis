@@ -1,3 +1,5 @@
+"""Tests for S3 to Redis sync service and its supporting utilities."""
+
 # author: Bin Lee
 # email: blee@filynai.com
 
@@ -155,11 +157,12 @@ class S3RedisSyncServiceTests(unittest.TestCase):
                 pipeline_config=PipelineConfig(),
                 output_dir=output_path,
             )
-            metadata_stub = lambda text: {
-                "labels": ["clinical", "efficacy"],
-                "keywords": ["efficacy", "safety"],
-                "language": "en",
-            }
+            def metadata_stub(_: str) -> Dict[str, Any]:
+                return {
+                    "labels": ["clinical", "efficacy"],
+                    "keywords": ["efficacy", "safety"],
+                    "language": "en",
+                }
             fake_embedding_store = FakeEmbeddingStore()
             service = S3RedisSyncService(
                 config,
@@ -313,6 +316,7 @@ class S3RedisSyncServiceTests(unittest.TestCase):
         self.assertEqual(pipeline.calls, 1)
         self.assertIn("filynai.com:lt1009:module-1-quality:report.pdf", fake_redis.store)
         self.assertGreater(len(fake_s3.puts), 2)  # new uploads appended
+
 
 if __name__ == "__main__":
     unittest.main()

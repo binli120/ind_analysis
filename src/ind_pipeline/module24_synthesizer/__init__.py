@@ -1,3 +1,5 @@
+"""Placeholder implementation for Module 2.4 synthesis."""
+
 from __future__ import annotations
 
 from typing import Dict
@@ -6,6 +8,7 @@ from ind_pipeline.stage_common import SimpleStageModule, StageModuleSpec
 
 
 def _workload(payload: Dict[str, object]) -> Dict[str, object]:
+    """Record whether narrative/table inputs were present."""
     has_narratives = bool(payload.get("narratives"))
     has_tables = bool(payload.get("tables"))
     return {
@@ -27,10 +30,12 @@ _MODULE = SimpleStageModule(
 
 
 def handle_message(payload: Dict[str, object]) -> Dict[str, object]:
+    """Expose the handler for external invocation."""
     return _MODULE.handler(payload)
 
 
 def run() -> None:
+    """Start the SimpleStageModule consumer loop."""
     _MODULE.run()
 
 

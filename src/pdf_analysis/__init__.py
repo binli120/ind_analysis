@@ -1,3 +1,1 @@
-# @author: Bin Lee
-# @email: blee@filynai.com
-
+"""pdf_analysis package initialisation."""

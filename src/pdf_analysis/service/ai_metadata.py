@@ -1,3 +1,5 @@
+"""LLM-powered metadata generation utilities for IND document classification."""
+
 # author: Bin Lee
 # email: blee@filynai.com
 

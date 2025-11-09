@@ -1,3 +1,5 @@
+"""IND pipeline package that wires stage modules into the central registry."""
+
 # ind_pipeline package initialiser.
 #
 # Importing modules here ensures they self-register with the central registry.

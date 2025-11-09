@@ -1,3 +1,5 @@
+"""Pipeline stage that downloads PDFs from S3, runs extraction, and publishes results."""
+
 from __future__ import annotations
 
 import json
@@ -25,6 +27,7 @@ _sns_client = boto3.client("sns")
 
 
 def _resolve_env(name: str, default: Optional[str] = None) -> str:
+    """Read an environment variable, raising if it is missing and no default is provided."""
     value = os.getenv(name, default)
     if value is None or not value.strip():
         raise RuntimeError(f"Environment variable {name} is required for the {MODULE_NAME} module")
@@ -32,6 +35,7 @@ def _resolve_env(name: str, default: Optional[str] = None) -> str:
 
 
 def _extract_context(payload: Dict[str, Any]) -> Tuple[str, str, str, Dict[str, Any]]:
+    """Validate and extract company/project/file metadata from the SNS payload."""
     company = str(payload.get("company") or "").strip()
     project = str(payload.get("project") or "").strip()
     file_name = str(payload.get("file") or "").strip()
@@ -50,6 +54,7 @@ def _extract_context(payload: Dict[str, Any]) -> Tuple[str, str, str, Dict[str, 
 
 
 def _download_pdf(bucket: str, key: str, version_id: Optional[str]) -> Path:
+    """Download the PDF to a temporary path, respecting optional version IDs."""
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp_path = Path(tmp.name)
     extra_args = {"VersionId": version_id} if version_id else None
@@ -65,6 +70,7 @@ def _download_pdf(bucket: str, key: str, version_id: Optional[str]) -> Path:
 
 
 def _store_analysis(bucket: str, key: str, document: Dict[str, Any]) -> str:
+    """Persist the analysis JSON next to the source document and return its key."""
     analysis_key = build_analysis_key(key, "analysis.json")
     try:
         _s3_client.put_object(
@@ -79,11 +85,13 @@ def _store_analysis(bucket: str, key: str, document: Dict[str, Any]) -> str:
 
 
 def _run_pipeline(temp_pdf: Path) -> Any:
+    """Execute the PDFProcessingPipeline on the downloaded file."""
     pipeline = PDFProcessingPipeline()
     return pipeline.run(temp_pdf)
 
 
 def _iter_next_topic_arns() -> List[str]:
+    """Return downstream topic ARNs configured for this module."""
     topics: List[str] = []
     raw_list = os.getenv("PDF_EXTRACT_NEXT_TOPIC_ARNS")
     if raw_list:
@@ -101,6 +109,7 @@ def _iter_next_topic_arns() -> List[str]:
 
 
 def _publish_next_events(request_payload: Dict[str, Any], result_payload: Dict[str, Any]) -> None:
+    """Broadcast completion events so the next stages can begin processing."""
     topics = _iter_next_topic_arns()
     if not topics:
         return
@@ -123,6 +132,7 @@ def _publish_next_events(request_payload: Dict[str, Any], result_payload: Dict[s
 
 
 def pdf_extraction_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Entry point invoked by NotificationConsumer for each document payload."""
     company, project, file_name, metadata = _extract_context(payload)
     s3_uri = metadata.get("s3_uri")
     if not s3_uri:
@@ -193,6 +203,7 @@ def pdf_extraction_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def run() -> None:
+    """Start the NotificationConsumer loop for the pdf-extraction module."""
     topic_arn = _resolve_env("PDF_EXTRACT_TOPIC_ARN", os.getenv("SNS_TOPIC_ARN"))
     queue_name = _resolve_env("PDF_EXTRACT_QUEUE_NAME", "pdf-extraction-queue")
     completion_topic_arn = os.getenv("PDF_EXTRACT_COMPLETION_TOPIC_ARN")

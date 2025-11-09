@@ -1,3 +1,5 @@
+"""Best-effort conversion from markdown text back into a PDF draft."""
+
 # @author: Bin Lee
 # @email: blee@filynai.com
 

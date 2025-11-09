@@ -1,6 +1,6 @@
-from __future__ import annotations
+"""Tests for the Supabase embedding integration helpers."""
 
-import os
+from __future__ import annotations
 
 from pdf_analysis.service.embedding_store import SupabaseEmbeddingStore
 

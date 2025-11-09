@@ -1,3 +1,5 @@
+"""Tests for the pipeline orchestrator Lambda event handling."""
+
 from __future__ import annotations
 
 import json

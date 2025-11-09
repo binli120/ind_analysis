@@ -1,3 +1,5 @@
+"""Shared helpers for defining lightweight IND pipeline stages."""
+
 from __future__ import annotations
 
 import json

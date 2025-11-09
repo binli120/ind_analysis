@@ -1,13 +1,11 @@
+"""Centralised logging helpers shared across scripts and services."""
+
 from __future__ import annotations
 
 import logging
 import os
 import sys
 from typing import Any
-
-"""
-configure logger level
-"""
 
 DEFAULT_LOG_LEVEL = "DEBUG"
 LOG_ENV_VAR = "LOG_LEVEL"

@@ -1,3 +1,5 @@
+"""Tests covering placeholder IND pipeline modules and registry wiring."""
+
 from __future__ import annotations
 
 import json
@@ -249,8 +251,15 @@ def test_zeroshot_publishes_next_topic(monkeypatch: pytest.MonkeyPatch) -> None:
         },
     }
 
-    monkeypatch.setattr(zeroshot_module, "_load_analysis_document", lambda _: (analysis_doc, "analysis-bucket", "analysis/docs/proposal.analysis.json"))
-    monkeypatch.setattr(zeroshot_module, "_store_metadata", lambda bucket, key, doc: "metadata/docs/proposal.classification.json")
+    def fake_load_analysis(_: str) -> tuple[Dict[str, Any], str, str]:
+        return (analysis_doc, "analysis-bucket", "analysis/docs/proposal.analysis.json")
+
+    def fake_store_metadata(bucket: str, key: str, doc: Dict[str, Any]) -> str:
+        _ = (bucket, key, doc)
+        return "metadata/docs/proposal.classification.json"
+
+    monkeypatch.setattr(zeroshot_module, "_load_analysis_document", fake_load_analysis)
+    monkeypatch.setattr(zeroshot_module, "_store_metadata", fake_store_metadata)
 
     class FakeGenerator:
         def __init__(self) -> None:

@@ -1,3 +1,5 @@
+"""Utility script for exporting the API's OpenAPI document."""
+
 # author: Bin Lee
 # email: blee@filynai.com
 
@@ -12,6 +14,7 @@ from pdf_analysis.api.server import app
 
 
 def main() -> int:
+    """Render the FastAPI OpenAPI schema to disk."""
     parser = argparse.ArgumentParser(
         description="Generate the OpenAPI specification for the PDF Analysis API.",
     )

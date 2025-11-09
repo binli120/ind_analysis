@@ -1,3 +1,5 @@
+"""Integration-style tests for markdown writer, pipeline, and API workflows."""
+
 # @author: Bin Lee
 # @email: blee@filynai.com
 

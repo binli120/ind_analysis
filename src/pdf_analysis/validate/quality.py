@@ -1,6 +1,7 @@
+"""Quality scoring and issue detection for extracted documents."""
+
 # @author: Bin Lee
 # @email: blee@filynai.com
-# this module caculate the quality of pdf-service.
 
 from __future__ import annotations
 
@@ -8,7 +9,7 @@ import re
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 

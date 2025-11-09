@@ -1,3 +1,5 @@
+"""Command-line interface for PDF extraction and quality reporting."""
+
 # @author: Bin Lee
 # @email: blee@filynai.com
 
@@ -18,6 +20,7 @@ from utils.log import info
 
 
 def main():
+    """Parse CLI arguments and orchestrate the PDF extraction workflow."""
     ap = argparse.ArgumentParser(
         prog="ind-x", description="PDF → Editable Markdown + Tables"
     )

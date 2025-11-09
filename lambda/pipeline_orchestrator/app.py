@@ -1,3 +1,5 @@
+"""Lambda entry point that records ingest events and tracks pipeline progress."""
+
 from __future__ import annotations
 
 import json
@@ -17,11 +19,11 @@ sns = boto3.client("sns")
 _TABLE_NAME = os.getenv("PIPELINE_STATUS_TABLE", "")
 if not _TABLE_NAME:
     logger.warning(
-        "PIPELINE_STATUS_TABLE is not set; handler will raise on first invocation."
+        ("PIPELINE_STATUS_TABLE is not set; handler will raise on first invocation.")
     )
 
-_DEFAULT_COMPANY = os.getenv("DEFAULT_COMPANY", "unknown-company")
-_DEFAULT_PROJECT = os.getenv("DEFAULT_PROJECT", "default-project")
+_DEFAULT_COMPANY = os.getenv("DEFAULT_COMPANY", "filynai.com")
+_DEFAULT_PROJECT = os.getenv("DEFAULT_PROJECT", "LT1009")
 _ALLOWED_EXTENSIONS = {
     ext.strip().lower()
     for ext in os.getenv("ALLOWED_EXTENSIONS", "pdf,doc,docx").split(",")
@@ -48,6 +50,7 @@ _KNOWN_STAGES = [
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """Process S3 and SNS events to keep document pipeline status in sync."""
     logger.debug("Received event: %s", json.dumps(event))
     if "Records" not in event:
         logger.info("Event has no Records; returning no-op response.")
@@ -72,6 +75,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
 
 def _handle_s3_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    """Persist ingest metadata for a new S3 object and send completion notice."""
     s3_info = record.get("s3", {})
     bucket = s3_info.get("bucket", {}).get("name")
     object_info = s3_info.get("object", {})
@@ -136,6 +140,7 @@ def _handle_s3_record(record: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _handle_sns_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    """Update pipeline stage state in DynamoDB based on SNS callbacks."""
     sns_payload = record.get("Sns", {})
     message_str = sns_payload.get("Message", "")
     try:
@@ -195,17 +200,20 @@ def _handle_sns_record(record: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _get_table():
+    """Return the configured DynamoDB table resource."""
     if not _TABLE_NAME:
         raise RuntimeError("PIPELINE_STATUS_TABLE environment variable is required")
     return dynamodb.Table(_TABLE_NAME)
 
 
 def _is_allowed_extension(key: str) -> bool:
+    """Return True when the uploaded key matches an allowed file extension."""
     _, _, suffix = key.rpartition(".")
     return suffix.lower() in _ALLOWED_EXTENSIONS
 
 
 def _build_document_id(bucket: str, key: str, version_id: Optional[str]) -> str:
+    """Create a stable document identifier from bucket/key/version."""
     base = f"{bucket}/{key}"
     if version_id:
         return f"{base}#{version_id}"
@@ -213,6 +221,7 @@ def _build_document_id(bucket: str, key: str, version_id: Optional[str]) -> str:
 
 
 def _extract_event_time(record: Dict[str, Any]) -> str:
+    """Extract the ingest timestamp from the record or fall back to now."""
     timestamp = record.get("eventTime")
     if timestamp:
         return timestamp
@@ -220,12 +229,14 @@ def _extract_event_time(record: Dict[str, Any]) -> str:
 
 
 def _utc_now() -> str:
+    """Return the current UTC timestamp in ISO-8601 format."""
     return datetime.now(timezone.utc).isoformat()
 
 
 def _extract_document_attributes(
     message: Dict[str, Any],
 ) -> Tuple[Optional[str], Dict[str, Any]]:
+    """Extract document identifiers and metadata from a pipeline message."""
     attrs: Dict[str, Any] = {}
     doc_id = None
 
