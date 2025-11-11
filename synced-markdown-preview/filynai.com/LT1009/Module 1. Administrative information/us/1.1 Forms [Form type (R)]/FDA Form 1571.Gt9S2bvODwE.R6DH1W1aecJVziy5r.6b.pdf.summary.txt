@@ -1,0 +1,14 @@
+Document Summary
+=================
+This document outlines the requirements for submitting an Investigational New Drug Application (IND) to the FDA, as per Title 21 CFR Part 312. It specifies that no drug may be shipped or clinical investigations commenced until an IND is in effect. The application must include detailed information about the drug, the sponsor, and the intended clinical investigation phases. Additionally, it mandates that submissions be numbered consecutively and provides guidelines for various types of submissions, including amendments and safety reports. The document also notes the expiration date of the form and includes a statement regarding the OMB approval.
+
+Key Topics
+----------
+- [Application Requirements](#application-requirements) — The IND application must contain comprehensive details about the drug, including its name, sponsor information, and the phases of clinical investigation planned. This ensures that the FDA has all necessary information to evaluate the application.
+- [Submission Protocol](#submission-protocol) — Submissions must be numbered consecutively, starting with 'Serial number: 0000' for the initial IND. This protocol helps maintain an organized record of submissions and amendments.
+- [Regulatory Compliance](#regulatory-compliance) — The document emphasizes compliance with Title 21 CFR Part 312, which outlines the legal framework for IND submissions. It highlights the importance of adhering to these regulations to avoid delays in drug development.
+- [Prohibition on Drug Shipment](#prohibition-on-drug-shipment) — A critical point in the document is the prohibition against shipping any drug or starting clinical investigations until an IND is officially in effect, ensuring patient safety and regulatory adherence.
+- [Types of Submissions](#types-of-submissions) — The application can include various types of submissions such as initial applications, amendments, and safety reports. Each type has specific requirements and must be clearly indicated in the submission.
+- [Expiration Information](#expiration-information) — The document notes that the form is approved under OMB No. 0910-0014 and has an expiration date of May 31, 2009, indicating the need for timely submissions using the current version of the form.
+- [Contact Information](#contact-information) — The application requires the inclusion of the sponsor's contact information, including address and telephone number, to facilitate communication between the FDA and the sponsor.
+- [FDA Use Only](#fda-use-only) — A section is dedicated to FDA use, where the agency can assign an IND number and provide additional internal documentation related to the application process.

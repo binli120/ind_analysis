@@ -24,6 +24,11 @@ from pdf_analysis.ingest.pdf_text import extract_pages_text
 from pdf_analysis.ingest.tables import extract_tables_all
 from pdf_analysis.pipeline import PDFProcessingPipeline
 from pdf_analysis.service.ai_metadata import OpenAIMetadataGenerator
+from pdf_analysis.service.document_summarizer import (
+    OpenAIDocumentSummarizer,
+    embed_topics_into_markdown,
+    format_summary_text,
+)
 
 try:
     from pdf_analysis.service.embedding_store import SupabaseEmbeddingStore
@@ -112,6 +117,11 @@ try:
     _metadata_generator = OpenAIMetadataGenerator()
 except Exception:  # pragma: no cover - optional dependency or missing key
     _metadata_generator = None
+
+try:
+    _summary_generator = OpenAIDocumentSummarizer()
+except Exception:  # pragma: no cover - optional dependency or missing key
+    _summary_generator = None
 
 
 if SupabaseEmbeddingStore:
@@ -987,6 +997,85 @@ async def fetch_s3_markdown(payload: S3MarkdownRequest) -> Dict[str, Any]:
             "ocr_strategy": result.ocr_strategy,
             "tables": len(result.tables),
             "metadata": metadata_fields,
+            "version_id": payload.version_id,
+            "bucket": payload.bucket,
+            "key": payload.key,
+        }
+
+    try:
+        return await asyncio.to_thread(worker)
+    except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
+        raise HTTPException(status_code=502, detail=f"Failed to download S3 object: {exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/s3/markdown/summary")
+async def fetch_s3_markdown_with_summary(payload: S3MarkdownRequest) -> Dict[str, Any]:
+    """Return markdown plus an OpenAI-generated summary/topic listing for an S3 object."""
+    if not _summary_generator or not _summary_generator.is_available():
+        raise HTTPException(
+            status_code=503,
+            detail="OpenAI summary generator is not configured. Install infra extras and set OPENAI_API_KEY.",
+        )
+    try:
+        import boto3  # type: ignore
+        from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
+    except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
+        raise HTTPException(
+            status_code=500,
+            detail="boto3 is required for S3 summary extraction. Install the 'infra' extras.",
+        ) from exc
+
+    extra_args = {"VersionId": payload.version_id} if payload.version_id else None
+
+    def worker() -> Dict[str, Any]:
+        pipeline = PDFProcessingPipeline()
+        s3_client = boto3.client("s3", region_name=payload.aws_region)
+        with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp_path = Path(tmp.name)
+            try:
+                if extra_args:
+                    s3_client.download_fileobj(payload.bucket, payload.key, tmp, ExtraArgs=extra_args)
+                else:
+                    s3_client.download_fileobj(payload.bucket, payload.key, tmp)
+                tmp.flush()
+            finally:
+                tmp.close()
+
+        try:
+            result = pipeline.run(tmp_path)
+        finally:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+        if not result.markdown:
+            raise RuntimeError("Markdown extraction failed for the specified object")
+
+        summary_result = _summary_generator(result.markdown)
+        if not summary_result:
+            raise RuntimeError("Summary generation failed for the specified object")
+
+        summary_text = format_summary_text(summary_result)
+        markdown_with_topics = embed_topics_into_markdown(result.markdown, summary_result.topics)
+        topics_payload = [
+            {
+                "title": topic.title,
+                "description": topic.description,
+                "anchor": topic.anchor,
+            }
+            for topic in summary_result.topics
+        ]
+
+        return {
+            "markdown": markdown_with_topics,
+            "summary_text": summary_text,
+            "topics": topics_payload,
+            "text_engine": result.text_engine,
+            "ocr_strategy": result.ocr_strategy,
+            "tables": len(result.tables),
             "version_id": payload.version_id,
             "bucket": payload.bucket,
             "key": payload.key,

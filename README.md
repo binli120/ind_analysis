@@ -200,6 +200,9 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
   On startup it automatically loads variables from `.env` and `.env.local` (if present) using `python-dotenv`.
   When `--output-dir` is set, the service mirrors the S3 hierarchy locally, writing `<output>/<company>/<Project>/<Module N.*>/<filename>.pdf.md` and a companion `<filename>.pdf.meta.json` alongside the source PDF structure. Each processed document also receives an uploaded S3 object at `<original-key>.md`, and the metadata JSON references both the S3 key and local path so downstream consumers never need to parse markdown embedded in JSON.
   Add `--ai-metadata` (and set `OPENAI_API_KEY`) to label each document via OpenAI, generating up to three labels and five keywords. The results are written back to Redis, uploaded to the bucket via `copy_object` as object metadata, and stored in the `.meta.json` artefact.
+  Add `--ai-summary` to call OpenAI once per document and produce:
+  - `<original-key>.summary.txt` containing an executive summary plus topic-level links
+  - link-aware markdown (anchors inserted inline) so clicking a topic link jumps to the related section in the `.md` artefact
   The path parser expects keys shaped like `filynai.com/<Project>/Module N.<description>/...`. Module numbers are inferred automatically; pass `--modules` with integers (e.g. `--modules 1,2`) if you want to limit the scrape, otherwise omit the flag to index every module it encounters.
 
 - Keys in Redis take the form `company:module:filename` and a hash payload with `markdown`, `s3_version`, `last_modified`, etc. The S3 document hierarchy is preserved, which makes it easy for downstream systems to correlate entries back to their source objects.
@@ -218,6 +221,7 @@ By default the schedule runs nightly at midnight UTC (`cron(0 0 * * ? *)`); adju
 if you need a different cadence.
 Set `command_additional_args = ["--force"]` in the module inputs if you want the nightly run to
 reprocess every PDF regardless of existing sidecars.
+Add `--ai-summary` (and optionally `--ai-metadata`) to `command_additional_args` when you want ECS runs to keep the summary + topic artefacts fresh. Ensure `OPENAI_API_KEY` is set in `container_environment`.
 
 ### Local Redis Quickstart
 
@@ -259,6 +263,22 @@ Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and r
   ```
 
   The service downloads the object (using the environment AWS credentials), runs the pipeline, derives labels/keywords when `OPENAI_API_KEY` is present, and returns `{ "markdown": "...", "text_engine": "...", "tables": <count>, "metadata": {...} }`. Install the `infra` extras so boto3 and OpenAI are available on the API host.
+
+- When you also need the generated summary and topic links without running the full sync, call:
+
+  ```http
+  POST /s3/markdown/summary
+  Content-Type: application/json
+
+  {
+    "bucket": "YOUR_BUCKET",
+    "key": "filynai.com/LT1009/Module 1.Quality/report.pdf",
+    "version_id": "optional-version",
+    "aws_region": "us-east-1"
+  }
+  ```
+
+  Response shape: `{ "markdown": "<with key topics + anchors>", "summary_text": "...", "topics": [{"title": "...", "anchor": "..."}], ... }`. Enable this by setting `OPENAI_API_KEY` and installing the `infra` extras so the new `OpenAIDocumentSummarizer` can run.
 
 - To upload edited markdown back to S3 (creating a new object version) send:
 

@@ -16,6 +16,7 @@ from typing import Any, Dict, Iterable, List
 from unittest.mock import patch
 
 from pdf_analysis.pipeline import PipelineConfig
+from pdf_analysis.service.document_summarizer import TopicSection, TopicSummaryResult
 from pdf_analysis.service.s3_sync import S3RedisSyncService, S3SyncConfig
 
 
@@ -163,12 +164,37 @@ class S3RedisSyncServiceTests(unittest.TestCase):
                     "keywords": ["efficacy", "safety"],
                     "language": "en",
                 }
+
+            class FakeSummarizer:
+                def __init__(self) -> None:
+                    self.calls = 0
+
+                def __call__(self, _: str) -> TopicSummaryResult:
+                    self.calls += 1
+                    return TopicSummaryResult(
+                        summary="Overall summary text.",
+                        topics=[
+                            TopicSection(
+                                title="Clinical Outcomes",
+                                description="Efficacy measurements and endpoints.",
+                                anchor="clinical-outcomes",
+                            ),
+                            TopicSection(
+                                title="Safety Monitoring",
+                                description="Adverse events and monitoring plans.",
+                                anchor="safety-monitoring",
+                            ),
+                        ],
+                    )
+
             fake_embedding_store = FakeEmbeddingStore()
+            fake_summarizer = FakeSummarizer()
             service = S3RedisSyncService(
                 config,
                 pipeline_factory=lambda _: DummyPipeline(),  # type: ignore[arg-type]
                 metadata_generator=metadata_stub,
                 embedding_store=fake_embedding_store,
+                summarizer=fake_summarizer,
             )
 
             fake_s3 = FakeS3Client()
@@ -181,13 +207,15 @@ class S3RedisSyncServiceTests(unittest.TestCase):
             payload = fake_redis.store[key]
             self.assertEqual(payload["s3_bucket"], "demo-bucket")
             self.assertEqual(payload["s3_version"], "abc123")
-            self.assertTrue(payload["markdown"].startswith("# mock"))
+            self.assertIn("# mock", payload["markdown"])
+            self.assertIn("## Key Topics", payload["markdown"])
             self.assertEqual(payload["project"], "LT1009")
             self.assertEqual(payload["module_number"], "1")
             self.assertEqual(payload["labels"], "clinical,efficacy")
             self.assertEqual(payload["keywords"], "efficacy,safety")
             metadata_json = json.loads(payload["metadata_json"])
             self.assertTrue(metadata_json["analyzed"])
+            self.assertIn("summary_text", payload)
 
             markdown_path = (
                 output_path
@@ -203,26 +231,41 @@ class S3RedisSyncServiceTests(unittest.TestCase):
                 / "Module 1.Quality"
                 / "report.abc123.pdf.meta.json"
             )
+            summary_path = (
+                output_path
+                / "filynai.com"
+                / "LT1009"
+                / "Module 1.Quality"
+                / "report.abc123.pdf.summary.txt"
+            )
             self.assertTrue(markdown_path.exists())
             self.assertTrue(meta_path.exists())
-            self.assertEqual(markdown_path.read_text(encoding="utf-8"), "# mock\n\ncontent")
+            self.assertTrue(summary_path.exists())
+            markdown_contents = markdown_path.read_text(encoding="utf-8")
+            self.assertIn("# mock", markdown_contents)
+            self.assertIn("## Key Topics", markdown_contents)
             meta_payload = json.loads(meta_path.read_text(encoding="utf-8"))
             self.assertEqual(meta_payload["metadata"]["labels"], ["clinical", "efficacy"])
             self.assertEqual(meta_payload["markdown_file"], "filynai.com/LT1009/Module 1.Quality/report.abc123.pdf.md")
             self.assertEqual(meta_payload["markdown_key"], "filynai.com/LT1009/Module 1.Quality/report.pdf.md")
+            self.assertEqual(meta_payload["summary_file"], "filynai.com/LT1009/Module 1.Quality/report.abc123.pdf.summary.txt")
+            self.assertEqual(meta_payload["summary_key"], "filynai.com/LT1009/Module 1.Quality/report.pdf.summary.txt")
             self.assertNotIn("markdown", meta_payload["redis"])
+            self.assertIn("Key Topics", summary_path.read_text(encoding="utf-8"))
 
             self.assertEqual(len(fake_s3.copies), 1)
             self.assertIn("Metadata", fake_s3.copies[0])
             self.assertEqual(fake_s3.copies[0]["Metadata"]["labels"], "clinical,efficacy")
-            self.assertEqual(len(fake_s3.puts), 2)
+            self.assertEqual(len(fake_s3.puts), 3)
             self.assertTrue(any(entry["Key"].endswith("report.pdf.md") for entry in fake_s3.puts))
             self.assertTrue(any(entry["Key"].endswith("report.pdf.meta.json") for entry in fake_s3.puts))
+            self.assertTrue(any(entry["Key"].endswith("report.pdf.summary.txt") for entry in fake_s3.puts))
             self.assertEqual(len(fake_embedding_store.calls), 1)
             self.assertEqual(
                 fake_embedding_store.calls[0]["s3_key"],
                 "filynai.com/LT1009/Module 1.Quality/report.pdf",
             )
+            self.assertEqual(fake_summarizer.calls, 1)
 
     def test_skips_documents_when_sidecars_exist(self) -> None:
         fake_redis = FakeRedis()
