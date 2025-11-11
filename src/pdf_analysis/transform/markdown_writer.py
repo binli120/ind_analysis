@@ -1,3 +1,5 @@
+"""Utilities for rendering markdown and HTML representations of extraction results."""
+
 # @author: Bin Lee
 # @email: blee@filynai.com
 

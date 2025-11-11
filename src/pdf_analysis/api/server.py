@@ -1,3 +1,5 @@
+"""FastAPI service that powers PDF analysis, uploads, and downstream tooling."""
+
 # @author: Bin Lee
 # @email: blee@filynai.com
 
@@ -45,6 +47,7 @@ logger = logging.getLogger(__name__)
 def _table_to_payload(
     table: Dict[str, Any], *, max_rows: Optional[int] = None
 ) -> Dict[str, Any]:
+    """Transform a dataframe-backed table entry into a JSON-safe payload."""
     df: pd.DataFrame = table["dataframe"].fillna("").astype(str)
     if max_rows is not None:
         df_preview = df.head(max_rows)
@@ -63,6 +66,7 @@ def _table_to_payload(
 def _build_table_manifest(
     tables: List[Dict[str, Any]], preview_rows: int = 10
 ) -> List[Dict[str, Any]]:
+    """Build lightweight manifest entries used by markdown rendering."""
     manifest: List[Dict[str, Any]] = []
     for table in tables:
         df: pd.DataFrame = table["dataframe"].fillna("").astype(str)
@@ -120,6 +124,7 @@ else:  # pragma: no cover - optional dependency missing
 
 
 def _metadata_json_key(key: str) -> str:
+    """Return the metadata sidecar key for a given S3 object key."""
     return f"{key}.meta.json"
 
 
@@ -130,6 +135,7 @@ def _update_object_metadata(
     version_id: Optional[str],
     metadata_fields: Dict[str, Any],
 ) -> None:
+    """Merge generated metadata back onto the original S3 object."""
     try:
         head_kwargs: Dict[str, Any] = {"Bucket": bucket, "Key": key}
         if version_id:
@@ -193,6 +199,7 @@ def _upload_metadata_json_to_s3(
     key: str,
     payload: Dict[str, Any],
 ) -> None:
+    """Persist a JSON metadata sidecar next to the original object."""
     meta_key = _metadata_json_key(key)
     try:
         s3_client.put_object(
@@ -206,6 +213,7 @@ def _upload_metadata_json_to_s3(
 
 
 def _analysis_json_key(key: str) -> str:
+    """Return the analysis sidecar key for a given S3 object key."""
     return f"{key}.analysis.json"
 
 
@@ -215,6 +223,7 @@ def _upload_analysis_json_to_s3(
     key: str,
     payload: Dict[str, Any],
 ) -> str:
+    """Persist the richer analysis payload adjacent to the PDF."""
     analysis_key = _analysis_json_key(key)
     try:
         s3_client.put_object(
@@ -229,6 +238,7 @@ def _upload_analysis_json_to_s3(
 
 
 def _parse_s3_context(key: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """Best-effort attempt to infer company/project/module from a key path."""
     segments = key.split("/")
     company = segments[0] if len(segments) > 0 else None
     project = segments[1] if len(segments) > 1 else None
@@ -245,6 +255,7 @@ def _store_embedding_for_document(
     markdown: str,
     metadata_fields: Dict[str, Any],
 ) -> None:
+    """Optionally persist embeddings for markdown output if the store is configured."""
     if not _embedding_store or not markdown:
         return
     company, project, module_label = _parse_s3_context(key)
@@ -270,6 +281,7 @@ def _store_embedding_for_document(
 def _normalise_table_engines(
     table_engine: str | Sequence[str] | None,
 ) -> List[str]:
+    """Normalise user input into a list of table engine identifiers."""
     if table_engine is None:
         return ["pdfplumber", "camelot", "tabula"]
     if isinstance(table_engine, str):
@@ -292,6 +304,7 @@ def _extract_tables_with_candidates(
     candidate_engines: Sequence[str],
     max_pages: Optional[int],
 ) -> tuple[List[Dict[str, Any]], str]:
+    """Run table extraction across engines and return the most productive result."""
     best_tables: List[Dict[str, Any]] = []
     best_engine: Optional[str] = None
     best_count = -1
@@ -313,6 +326,7 @@ def _extract_tables_with_candidates(
 
 
 def _split_path_segments(value: str) -> List[str]:
+    """Split a path-like string while removing unsafe/empty segments."""
     if not value:
         return []
     segments: List[str] = []
@@ -325,6 +339,7 @@ def _split_path_segments(value: str) -> List[str]:
 
 
 def _build_pdf_s3_key(company: str, project: str, folder: str, filename: str) -> str:
+    """Construct a canonical S3 key based on company/project/folder information."""
     parts = _split_path_segments(company)
     if not parts:
         raise ValueError("company must be provided")
@@ -354,6 +369,7 @@ def _process_pdf_and_store_analysis(
     table_rows: Optional[int],
     metadata_context: Dict[str, str],
 ) -> Dict[str, Any]:
+    """Run the full analysis pipeline and persist metadata/analysis sidecars."""
     try:
         import boto3  # type: ignore
         from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
@@ -434,6 +450,7 @@ def _process_pdf_and_store_analysis(
 
 
 async def _analyze_uploaded_pdf(upload: UploadFile) -> Dict[str, Any]:
+    """Analyze an uploaded PDF file entirely in memory."""
     filename = upload.filename or "uploaded.pdf"
     if not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
@@ -482,6 +499,7 @@ async def _analyze_uploaded_pdf(upload: UploadFile) -> Dict[str, Any]:
 
 
 async def _analyze_s3_payload(payload: S3AnalyzeRequest) -> Dict[str, Any]:
+    """Download a PDF from S3, run the pipeline, and return the analysis payload."""
     try:  # Lazy import keeps base install lightweight.
         import boto3  # type: ignore
         from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
@@ -826,6 +844,7 @@ def _run_pipeline_with_runner(
     ocr_fallback: Optional[bool],
     table_rows: Optional[int],
 ) -> Dict[str, Any]:
+    """Execute the core extraction pipeline and return serialisable artefacts."""
     candidate_engines = _normalise_table_engines(table_engine)
 
     fallback_setting = bool(ocr_fallback) if ocr_fallback is not None else False
@@ -905,6 +924,7 @@ def _run_pipeline_with_runner(
 
 @app.post("/s3/markdown")
 async def fetch_s3_markdown(payload: S3MarkdownRequest) -> Dict[str, Any]:
+    """Extract markdown directly from an S3 object and persist refreshed metadata."""
     try:  # Lazy import so API works without S3 extras.
         import boto3  # type: ignore
         from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
@@ -981,6 +1001,7 @@ async def fetch_s3_markdown(payload: S3MarkdownRequest) -> Dict[str, Any]:
 
 
 def _build_markdown_key(path: str, filename: str) -> str:
+    """Construct an S3 key for storing markdown drafts."""
     clean_path = path.strip("/")
     base_name = filename.strip()
     if not base_name:
@@ -993,6 +1014,7 @@ def _build_markdown_key(path: str, filename: str) -> str:
 
 @app.post("/s3/markdown/save")
 async def save_s3_markdown(payload: S3MarkdownUploadRequest) -> Dict[str, Any]:
+    """Save a markdown document to S3 while capturing metadata/tag sidecars."""
     try:
         import boto3  # type: ignore
         from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
@@ -1060,6 +1082,7 @@ async def get_s3_analysis_status(
     key: str,
     aws_region: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Check whether the async analysis payload has been written back to S3."""
     try:
         import boto3  # type: ignore
         from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
@@ -1109,6 +1132,7 @@ async def get_s3_analysis_result(
     key: str,
     aws_region: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Retrieve the persisted analysis JSON produced by the pipeline."""
     try:
         import boto3  # type: ignore
         from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
@@ -1147,6 +1171,7 @@ async def get_s3_analysis_result(
         raise
     except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
         raise HTTPException(status_code=502, detail=f"Failed to download analysis result: {exc}") from exc
+
 
 def export_openapi_to_file(app: FastAPI, out_path: str | Path) -> None:
     """Write the OpenAPI spec to JSON (or YAML)."""

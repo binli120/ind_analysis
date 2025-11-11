@@ -1,8 +1,11 @@
+"""Tests for S3 to Redis sync service and its supporting utilities."""
+
 # author: Bin Lee
 # email: blee@filynai.com
 
 from __future__ import annotations
 
+import io
 import json
 import tempfile
 import types
@@ -46,6 +49,7 @@ class FakeS3Client:
         self.copies: List[Dict[str, Any]] = []
         self.puts: List[Dict[str, Any]] = []
         self.metadata_store: Dict[tuple[str, str], Dict[str, str]] = {}
+        self.object_store: Dict[tuple[str, str], bytes] = {}
         self._paginator = FakePaginator(
             [
                 {
@@ -91,10 +95,17 @@ class FakeS3Client:
         self, Bucket: str, Key: str, VersionId: str | None = None
     ) -> Dict[str, Any]:  # type: ignore[override]
         _ = VersionId
-        return {
-            "Metadata": self.metadata_store.get((Bucket, Key), {}),
-            "ContentType": "application/pdf",
-        }
+        if (Bucket, Key) in self.object_store:
+            return {
+                "Metadata": self.metadata_store.get((Bucket, Key), {}),
+                "ContentType": "text/plain",
+            }
+        if Key.endswith(".pdf"):
+            return {
+                "Metadata": self.metadata_store.get((Bucket, Key), {}),
+                "ContentType": "application/pdf",
+            }
+        raise KeyError(f"{Key} not found")
 
     def copy_object(self, **kwargs: Any) -> Dict[str, Any]:
         self.copies.append(kwargs)
@@ -104,7 +115,18 @@ class FakeS3Client:
 
     def put_object(self, **kwargs: Any) -> Dict[str, Any]:
         self.puts.append(kwargs)
+        body = kwargs.get("Body", b"")
+        if isinstance(body, str):
+            body = body.encode("utf-8")
+        self.object_store[(kwargs["Bucket"], kwargs["Key"])] = body
         return {"VersionId": "meta-version"}
+
+    def get_object(self, Bucket: str, Key: str) -> Dict[str, Any]:
+        try:
+            body = self.object_store[(Bucket, Key)]
+        except KeyError as exc:
+            raise KeyError(f"{Key} not found") from exc
+        return {"Body": io.BytesIO(body)}
 
 
 class FakeEmbeddingStore:
@@ -135,11 +157,12 @@ class S3RedisSyncServiceTests(unittest.TestCase):
                 pipeline_config=PipelineConfig(),
                 output_dir=output_path,
             )
-            metadata_stub = lambda text: {
-                "labels": ["clinical", "efficacy"],
-                "keywords": ["efficacy", "safety"],
-                "language": "en",
-            }
+            def metadata_stub(_: str) -> Dict[str, Any]:
+                return {
+                    "labels": ["clinical", "efficacy"],
+                    "keywords": ["efficacy", "safety"],
+                    "language": "en",
+                }
             fake_embedding_store = FakeEmbeddingStore()
             service = S3RedisSyncService(
                 config,
@@ -186,18 +209,113 @@ class S3RedisSyncServiceTests(unittest.TestCase):
             meta_payload = json.loads(meta_path.read_text(encoding="utf-8"))
             self.assertEqual(meta_payload["metadata"]["labels"], ["clinical", "efficacy"])
             self.assertEqual(meta_payload["markdown_file"], "filynai.com/LT1009/Module 1.Quality/report.abc123.pdf.md")
+            self.assertEqual(meta_payload["markdown_key"], "filynai.com/LT1009/Module 1.Quality/report.pdf.md")
             self.assertNotIn("markdown", meta_payload["redis"])
 
             self.assertEqual(len(fake_s3.copies), 1)
             self.assertIn("Metadata", fake_s3.copies[0])
             self.assertEqual(fake_s3.copies[0]["Metadata"]["labels"], "clinical,efficacy")
-            self.assertEqual(len(fake_s3.puts), 1)
-            self.assertTrue(fake_s3.puts[0]["Key"].endswith("report.pdf.meta.json"))
+            self.assertEqual(len(fake_s3.puts), 2)
+            self.assertTrue(any(entry["Key"].endswith("report.pdf.md") for entry in fake_s3.puts))
+            self.assertTrue(any(entry["Key"].endswith("report.pdf.meta.json") for entry in fake_s3.puts))
             self.assertEqual(len(fake_embedding_store.calls), 1)
             self.assertEqual(
                 fake_embedding_store.calls[0]["s3_key"],
                 "filynai.com/LT1009/Module 1.Quality/report.pdf",
             )
+
+    def test_skips_documents_when_sidecars_exist(self) -> None:
+        fake_redis = FakeRedis()
+        config = S3SyncConfig(
+            bucket="demo-bucket",
+            company="filynai.com",
+            projects=("LT1009",),
+            module_filters=(1,),
+            redis_client=fake_redis,
+            pipeline_config=PipelineConfig(),
+        )
+
+        class CountingPipeline:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def run(self, _: Path) -> types.SimpleNamespace:
+                self.calls += 1
+                return types.SimpleNamespace(markdown="# mock\n\ncontent")
+
+        pipeline = CountingPipeline()
+        service = S3RedisSyncService(
+            config,
+            pipeline_factory=lambda _: pipeline,  # type: ignore[arg-type]
+        )
+
+        fake_s3 = FakeS3Client()
+        meta_key = "filynai.com/LT1009/Module 1.Quality/report.pdf.meta.json"
+        md_key = "filynai.com/LT1009/Module 1.Quality/report.pdf.md"
+        existing_meta = {
+            "bucket": "demo-bucket",
+            "key": "filynai.com/LT1009/Module 1.Quality/report.pdf",
+            "version_id": "abc123",
+            "metadata": {"analyzed": True},
+            "markdown_key": md_key,
+        }
+        fake_s3.put_object(Bucket="demo-bucket", Key=meta_key, Body=json.dumps(existing_meta))
+        fake_s3.put_object(Bucket="demo-bucket", Key=md_key, Body=b"# existing\n")
+
+        with patch.object(S3RedisSyncService, "_build_s3_client", return_value=fake_s3):
+            processed = service.run()
+
+        self.assertEqual(processed, 0)
+        self.assertEqual(pipeline.calls, 0)
+        self.assertEqual(fake_redis.store, {})
+        self.assertEqual(len(fake_s3.puts), 2)  # seeded objects only
+
+    def test_force_reprocesses_even_when_sidecars_exist(self) -> None:
+        fake_redis = FakeRedis()
+        config = S3SyncConfig(
+            bucket="demo-bucket",
+            company="filynai.com",
+            projects=("LT1009",),
+            module_filters=(1,),
+            redis_client=fake_redis,
+            pipeline_config=PipelineConfig(),
+            force=True,
+        )
+
+        class CountingPipeline:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def run(self, _: Path) -> types.SimpleNamespace:
+                self.calls += 1
+                return types.SimpleNamespace(markdown="# mock\n\ncontent")
+
+        pipeline = CountingPipeline()
+        service = S3RedisSyncService(
+            config,
+            pipeline_factory=lambda _: pipeline,  # type: ignore[arg-type]
+        )
+
+        fake_s3 = FakeS3Client()
+        meta_key = "filynai.com/LT1009/Module 1.Quality/report.pdf.meta.json"
+        md_key = "filynai.com/LT1009/Module 1.Quality/report.pdf.md"
+        existing_meta = {
+            "bucket": "demo-bucket",
+            "key": "filynai.com/LT1009/Module 1.Quality/report.pdf",
+            "version_id": "abc123",
+            "metadata": {"analyzed": True},
+            "markdown_key": md_key,
+        }
+        fake_s3.put_object(Bucket="demo-bucket", Key=meta_key, Body=json.dumps(existing_meta))
+        fake_s3.put_object(Bucket="demo-bucket", Key=md_key, Body=b"# existing\n")
+
+        with patch.object(S3RedisSyncService, "_build_s3_client", return_value=fake_s3):
+            processed = service.run()
+
+        self.assertEqual(processed, 1)
+        self.assertEqual(pipeline.calls, 1)
+        self.assertIn("filynai.com:lt1009:module-1-quality:report.pdf", fake_redis.store)
+        self.assertGreater(len(fake_s3.puts), 2)  # new uploads appended
 
 
 if __name__ == "__main__":

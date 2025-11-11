@@ -1,3 +1,5 @@
+"""Optional OCR fallbacks leveraging pytesseract/pdf2image."""
+
 # @author: Bin Lee
 # @email: blee@filynai.com
 

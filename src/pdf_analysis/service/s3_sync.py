@@ -1,3 +1,5 @@
+"""Services for mirroring S3 PDF extracts into Redis (and optional metadata stores)."""
+
 # author: Bin Lee
 # email: blee@filynai.com
 
@@ -59,6 +61,7 @@ class S3SyncConfig:
     redis_expire_seconds: Optional[int] = None
     maximum_documents: Optional[int] = None
     output_dir: Path | None = None
+    force: bool = False
 
 
 class S3RedisSyncService:
@@ -95,6 +98,14 @@ class S3RedisSyncService:
         for document in self._iter_latest_documents(s3_client):
             if self.config.maximum_documents and processed >= self.config.maximum_documents:
                 break
+
+            if not self.config.force and self._should_skip_document(s3_client, document):
+                logger.debug(
+                    "Skipping %s@%s (existing markdown/meta sidecars detected)",
+                    document.key,
+                    document.version_id,
+                )
+                continue
 
             try:
                 markdown = self._process_document(pipeline, s3_client, document)
@@ -157,8 +168,9 @@ class S3RedisSyncService:
                 redis_client.expire(redis_key, int(self.config.redis_expire_seconds))
             logger.debug("Persisted markdown to redis key=%s version=%s", redis_key, document.version_id)
 
-            redis_snapshot = dict(redis_payload)
-            redis_snapshot.pop("markdown", None)
+            redis_snapshot = {
+                key: value for key, value in redis_payload.items() if key != "markdown"
+            }
 
             meta_payload = {
                 "bucket": self.config.bucket,
@@ -170,6 +182,10 @@ class S3RedisSyncService:
                 "metadata": metadata_fields,
                 "redis": redis_snapshot,
             }
+
+            markdown_key = self._upload_markdown_document(s3_client, document, markdown)
+            if markdown_key:
+                meta_payload["markdown_key"] = markdown_key
 
             if metadata_fields:
                 self._update_s3_metadata(s3_client, document, metadata_fields)
@@ -436,6 +452,27 @@ class S3RedisSyncService:
         except Exception as exc:  # pragma: no cover - best effort
             logger.warning("Failed to persist metadata for %s: %s", document.key, exc)
 
+    def _upload_markdown_document(
+        self,
+        s3_client: Any,
+        document: S3Document,
+        markdown: str,
+    ) -> Optional[str]:
+        if not markdown:
+            return None
+        md_key = f"{document.key}.md"
+        try:
+            s3_client.put_object(
+                Bucket=self.config.bucket,
+                Key=md_key,
+                Body=markdown.encode("utf-8"),
+                ContentType="text/markdown",
+            )
+            return md_key
+        except Exception as exc:  # pragma: no cover - best effort
+            logger.warning("Failed to upload markdown file for %s: %s", md_key, exc)
+            return None
+
     def _upload_metadata_json(
         self,
         s3_client: Any,
@@ -452,6 +489,54 @@ class S3RedisSyncService:
             )
         except Exception as exc:  # pragma: no cover - best effort
             logger.warning("Failed to upload metadata json for %s: %s", meta_key, exc)
+
+    def _should_skip_document(self, s3_client: Any, document: S3Document) -> bool:
+        if not document.version_id:
+            return False
+        meta_payload = self._get_existing_metadata_payload(s3_client, document)
+        if not meta_payload:
+            return False
+        if meta_payload.get("version_id") != document.version_id:
+            return False
+        markdown_key = meta_payload.get("markdown_key")
+        if not markdown_key:
+            return False
+        return self._object_exists(s3_client, markdown_key)
+
+    def _get_existing_metadata_payload(
+        self,
+        s3_client: Any,
+        document: S3Document,
+    ) -> Optional[Dict[str, Any]]:
+        meta_key = f"{document.key}.meta.json"
+        try:
+            response = s3_client.get_object(Bucket=self.config.bucket, Key=meta_key)
+        except Exception as exc:  # pragma: no cover - best effort
+            if _is_not_found_error(exc):
+                return None
+            logger.debug("Unable to fetch metadata json for %s: %s", meta_key, exc)
+            return None
+
+        body = response.get("Body")
+        if body is None:
+            return None
+        try:
+            raw = body.read()
+            payload = json.loads(raw.decode("utf-8"))
+        except Exception as exc:  # pragma: no cover - malformed payload
+            logger.debug("Failed to parse metadata json for %s: %s", meta_key, exc)
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def _object_exists(self, s3_client: Any, key: str) -> bool:
+        try:
+            s3_client.head_object(Bucket=self.config.bucket, Key=key)
+            return True
+        except Exception as exc:  # pragma: no cover - best effort
+            if _is_not_found_error(exc):
+                return False
+            logger.debug("Unable to confirm existence of %s: %s", key, exc)
+            return False
 
 
 _MODULE_PATTERN = re.compile(r"^module\s*(?P<number>\d+)(?:[\s._-].*)?$", re.IGNORECASE)
@@ -483,3 +568,21 @@ def _stringify(value: Any) -> str:
     if isinstance(value, (dict, list, tuple, set)):
         return json.dumps(value)
     return str(value)
+
+
+def _is_not_found_error(exc: Exception) -> bool:
+    if isinstance(exc, FileNotFoundError):
+        return True
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        code = (
+            response.get("Error", {}).get("Code")
+            if isinstance(response.get("Error"), dict)
+            else None
+        )
+        if code in {"404", "NoSuchKey", "NotFound"}:
+            return True
+        status = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        if status == 404:
+            return True
+    return False

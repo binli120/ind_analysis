@@ -1,6 +1,8 @@
 # @author: Bin Lee
 # @email: blee@filynai.com
 
+"""Robust table extraction helpers that wrap pdfplumber, camelot, and tabula."""
+
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 

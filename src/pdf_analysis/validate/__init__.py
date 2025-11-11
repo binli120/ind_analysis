@@ -1,3 +1,5 @@
+"""Validation helpers for sanity-checking extraction quality."""
+
 # @author: Bin Lee
 # @email: blee@filynai.com
 

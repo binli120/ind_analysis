@@ -1,3 +1,5 @@
+"""Simple build helper that installs deps and runs type/tests via Poetry."""
+
 # author: Bin Lee
 # email: blee@filynai.com
 
@@ -15,11 +17,13 @@ ROOT = HERE.parent
 
 
 def run(cmd: Sequence[str], *, cwd: Path = ROOT) -> None:
+    """Execute a subprocess while logging the command."""
     logging.debug("Running: %s", " ".join(cmd))
     subprocess.run(cmd, cwd=str(cwd), check=True)
 
 
 def main(argv: Sequence[str]) -> int:
+    """Orchestrate the local CI flow (install, type-check, tests)."""
     parser = argparse.ArgumentParser(
         prog="build",
         description="Install dependencies, run formatting checks if available, and execute pytest.",

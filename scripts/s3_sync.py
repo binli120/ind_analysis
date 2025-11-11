@@ -1,3 +1,5 @@
+"""CLI helper that mirrors S3 extracts into Redis (and optional AI metadata)."""
+
 # author: Bin Lee
 # email: blee@filynai.com
 
@@ -20,6 +22,7 @@ except ModuleNotFoundError:  # pragma: no cover - handled gracefully at runtime
 
 
 def _load_env_files() -> None:
+    """Read optional dotenv files so users can store AWS/Redis credentials locally."""
     env_paths = [Path(".env"), Path(".env.local")]
     existing = [path for path in env_paths if path.is_file()]
     if not existing:
@@ -38,6 +41,7 @@ _load_env_files()
 
 
 def _parse_modules(raw: str | None) -> Sequence[int]:
+    """Convert a comma-separated module list into integers."""
     if not raw:
         return ()
     items = []
@@ -54,12 +58,14 @@ def _parse_modules(raw: str | None) -> Sequence[int]:
 
 
 def _parse_projects(raw: str | None) -> Sequence[str]:
+    """Convert a comma-separated project list into clean strings."""
     if not raw:
         return ()
     return tuple(entry.strip() for entry in raw.split(",") if entry.strip())
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
+    """Build and parse the CLI arguments for the sync utility."""
     parser = argparse.ArgumentParser(
         prog="s3-sync",
         description="Synchronise PDF markdown extracts from S3 into Redis.",
@@ -156,6 +162,11 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         help="Maximum number of documents to process in this run.",
     )
     parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Reprocess documents even if markdown/meta sidecars already exist.",
+    )
+    parser.add_argument(
         "--log-level",
         default=os.getenv("LOG_LEVEL", "INFO"),
         help="Logging level (DEBUG, INFO, ...).",
@@ -164,6 +175,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str]) -> int:
+    """Entrypoint for syncing documents from S3 into Redis and optional backends."""
     args = parse_args(argv)
     if not args.bucket:
         raise SystemExit("S3 bucket is required. Set --bucket or S3_BUCKET in environment/.env.local.")
@@ -186,6 +198,7 @@ def main(argv: Sequence[str]) -> int:
         redis_expire_seconds=args.redis_expire,
         maximum_documents=args.limit,
         output_dir=Path(args.output_dir).resolve() if args.output_dir else None,
+        force=args.force,
     )
 
     enable_ai = args.ai_metadata or os.getenv("ENABLE_AI_METADATA", "false").lower() == "true"

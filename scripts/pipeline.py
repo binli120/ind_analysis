@@ -1,5 +1,7 @@
-# @author: Bin Lee
-# @email: blee@filynai.com
+"""Standalone entry point for invoking the PDF processing pipeline."""
+
+# author: Bin Lee
+# email: blee@filynai.com
 
 import argparse
 import csv
@@ -94,6 +96,7 @@ def _persist_outputs(
 
 
 def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    """Parse CLI arguments for the lightweight pipeline wrapper."""
     parser = argparse.ArgumentParser(
         prog="pipeline",
         description="Run the PDF processing pipeline and optionally persist artefacts.",
@@ -109,6 +112,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 
 def main(pdf_path: Path, outdir: Optional[Path] = None) -> None:
+    """Run the pipeline against a PDF and emit logs/persistent artefacts."""
     logging.basicConfig(level=logging.DEBUG)
     pipeline = PDFProcessingPipeline(PipelineConfig())
     result = pipeline.run(pdf_path)

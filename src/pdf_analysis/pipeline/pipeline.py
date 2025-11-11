@@ -1,6 +1,8 @@
 # @author: Bin Lee
 # @email: blee@filynai.com
 
+"""Core PDF processing pipeline that orchestrates extraction, OCR, and QA."""
+
 from __future__ import annotations
 
 import itertools
@@ -10,7 +12,7 @@ import re
 from dataclasses import dataclass, field
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple
 
 from pdf_analysis.ingest.pdf_text import extract_pages_text, iter_pages_text
 from pdf_analysis.ingest.tables import extract_tables, extract_tables_all

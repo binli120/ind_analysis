@@ -1,3 +1,5 @@
+"""PDF text extraction utilities with optional OCR fallback."""
+
 # @author: Bin Lee
 # @email: blee@filynai.com
 

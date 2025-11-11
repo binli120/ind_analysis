@@ -1,3 +1,5 @@
+"""Utility helpers for persisting extracted artefacts to disk."""
+
 # @author: Bin Lee
 # @email: blee@filynai.com
 
@@ -8,6 +10,7 @@ import pandas as pd
 
 
 def write_text(path: Path, text: str) -> None:
+    """Persist plain text to disk using UTF-8 encoding."""
     path.write_text(text, encoding="utf-8")
 
 

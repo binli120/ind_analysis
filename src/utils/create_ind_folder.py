@@ -1,3 +1,5 @@
+"""Utility script to scaffold IND project folders in S3 from a template."""
+
 import argparse
 import json
 from pathlib import Path
@@ -41,6 +43,7 @@ def create_structure(
 
 # @author: Bin Lee
 # @email: blee@filynai.com
+
 
 def create_new_project(
     bucket: str, root_prefix: str, project_name: str, template_file: Path

@@ -1,3 +1,1 @@
-# @author: Bin Lee
-# @email: blee@filynai.com
-
+"""Test suite package for pdf_analysis."""

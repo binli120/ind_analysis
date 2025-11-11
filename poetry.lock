@@ -2247,7 +2247,7 @@ version = "3.2.12"
 description = "PostgreSQL database adapter for Python"
 optional = false
 python-versions = ">=3.8"
-groups = ["infra"]
+groups = ["main", "infra"]
 files = [
     {file = "psycopg-3.2.12-py3-none-any.whl", hash = "sha256:8a1611a2d4c16ae37eada46438be9029a35bb959bb50b3d0e1e93c0f3d54c9ee"},
     {file = "psycopg-3.2.12.tar.gz", hash = "sha256:85c08d6f6e2a897b16280e0ff6406bef29b1327c045db06d21f364d7cd5da90b"},
@@ -2272,7 +2272,7 @@ version = "3.2.12"
 description = "PostgreSQL database adapter for Python -- C optimisation distribution"
 optional = false
 python-versions = ">=3.8"
-groups = ["infra"]
+groups = ["main", "infra"]
 markers = "implementation_name != \"pypy\""
 files = [
     {file = "psycopg_binary-3.2.12-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:13cd057f406d2c8063ae8b489395b089a7f23c39aff223b5ea39f0c4dd640550"},
@@ -4146,7 +4146,7 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [extras]
 camelot = ["camelot-py"]
 cloud-ocr = ["boto3", "google-cloud-vision"]
-infra = ["boto3", "httpx", "openai", "python-dotenv", "redis"]
+infra = ["boto3", "httpx", "openai", "psycopg", "python-dotenv", "redis"]
 llm = ["langchain-core", "langchain-openai", "langchain-text-splitters"]
 ocr = ["pdf2image", "pytesseract"]
 pdf-export = ["reportlab"]
@@ -4156,4 +4156,4 @@ tabula = ["tabula-py"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "80fa7f3a8f1f96cf29c91563752b16c4ae80454f97d2e3f60690b2b0d4b73b1a"
+content-hash = "fe29a8e8887c57900568351f1b3be9e8e94bf0d9e82cf08a3dd64d0142d2c66d"
