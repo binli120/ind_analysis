@@ -20,11 +20,22 @@ resource "aws_cloudwatch_log_group" "api_gateway" {
   tags              = var.tags
 }
 
+locals {
+  openapi_body = templatefile("${path.module}/openapi-proxy.json.tpl", {
+    api_name               = jsonencode(var.api_name)
+    api_description        = jsonencode(var.api_description)
+    connection_id          = aws_apigatewayv2_vpc_link.this.id
+    integration_uri        = var.alb_listener_arn
+    integration_timeout_ms = var.integration_timeout_ms
+  })
+}
+
 resource "aws_apigatewayv2_api" "this" {
-  name          = var.api_name
+  name        = var.api_name
+  description = var.api_description
   protocol_type = var.protocol_type
-  description   = var.api_description
-  tags          = var.tags
+  body        = local.openapi_body
+  tags        = var.tags
 }
 
 resource "aws_apigatewayv2_vpc_link" "this" {
@@ -32,24 +43,6 @@ resource "aws_apigatewayv2_vpc_link" "this" {
   subnet_ids         = var.vpc_link_subnet_ids
   security_group_ids = var.vpc_link_security_group_ids
   tags               = var.tags
-}
-
-resource "aws_apigatewayv2_integration" "ecs" {
-  api_id                 = aws_apigatewayv2_api.this.id
-  connection_type        = "VPC_LINK"
-  connection_id          = aws_apigatewayv2_vpc_link.this.id
-  integration_type       = "HTTP_PROXY"
-  integration_method     = "ANY"
-  integration_uri        = var.alb_listener_arn
-  payload_format_version = "1.0"
-  timeout_milliseconds   = var.integration_timeout_ms
-  description            = "Proxy to ECS service behind ALB listener"
-}
-
-resource "aws_apigatewayv2_route" "default" {
-  api_id    = aws_apigatewayv2_api.this.id
-  route_key = "$default"
-  target    = "integrations/${aws_apigatewayv2_integration.ecs.id}"
 }
 
 resource "aws_apigatewayv2_stage" "this" {

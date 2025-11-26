@@ -67,17 +67,7 @@ variable "access_log_retention_days" {
 variable "access_log_format" {
   description = "JSON format string for API Gateway access logs."
   type        = string
-  default     = jsonencode({
-    requestId      = "$context.requestId"
-    requestTime    = "$context.requestTime"
-    httpMethod     = "$context.httpMethod"
-    path           = "$context.path"
-    status         = "$context.status"
-    integration    = "$context.integrationErrorMessage"
-    responseLatency = "$context.responseLatency"
-    ip             = "$context.identity.sourceIp"
-    userAgent      = "$context.identity.userAgent"
-  })
+  default     = "{\"requestId\":\"$context.requestId\",\"requestTime\":\"$context.requestTime\",\"httpMethod\":\"$context.httpMethod\",\"path\":\"$context.path\",\"status\":\"$context.status\",\"integration\":\"$context.integrationErrorMessage\",\"responseLatency\":\"$context.responseLatency\",\"ip\":\"$context.identity.sourceIp\",\"userAgent\":\"$context.identity.userAgent\"}"
 }
 
 variable "custom_domain_name" {

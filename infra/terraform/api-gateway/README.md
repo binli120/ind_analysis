@@ -1,12 +1,14 @@
 # API Gateway HTTP Proxy for ECS
 
-This Terraform module provisions an API Gateway HTTP API that forwards traffic to the pdf-analysis service running on ECS behind an Application Load Balancer listener. It creates:
+This Terraform module provisions an API Gateway HTTP API based on the local
+OpenAPI document (`openapi-proxy.json.tpl`). Each path in the spec maps to the
+FastAPI endpoints exposed by the pdf-analysis service. The API proxy is wired to
+your ECS service via a VPC Link and ALB/NLB listener ARN. Terraform creates:
 
-- An `aws_apigatewayv2_api` (HTTP) with a `$default` route.
-- A `aws_apigatewayv2_vpc_link` wired to the provided subnets and security groups.
-- A proxy `aws_apigatewayv2_integration` targeting the ALB listener ARN.
-- A stage with optional CloudWatch access logs.
-- An optional API mapping for an existing custom domain.
+- A VPC link connected to the provided subnets + security groups.
+- An HTTP API imported from the OpenAPI definition (with `x-amazon-apigateway-integration`
+  blocks already pointing to the listener ARN).
+- A stage (with optional access logs) and optional domain mapping.
 
 ## Usage
 
@@ -49,7 +51,11 @@ module "pdf_analysis_api_gateway" {
 
 ## Deployment Notes
 
-1. Ensure the ALB listener security group allows traffic from the VPC link security group on port 8000 (or whichever port the ECS service exposes).
-2. The VPC link subnets must reside in the same VPC as the ALB and have private routing to it.
-3. If you need to attach a custom domain, create the domain separately (`aws_apigatewayv2_domain_name`) and pass its name via `custom_domain_name`.
-4. Update DNS (Route53, etc.) to point to the API Gateway domain once the mapping is provisioned.
+1. Ensure the ECS service is fronted by an ALB/NLB listener ARN and that the listener’s security group allows traffic from the VPC link security group on the service port.
+2. The VPC link subnets must reside in the same VPC as the load balancer and have routes to it.
+3. If you need to attach a custom domain, create it separately (`aws_apigatewayv2_domain_name`) and pass the name via `custom_domain_name`.
+4. The imported OpenAPI spec currently includes the endpoints `/analyze`, `/s3/upload-analyze`,
+   `/s3/markdown`, `/s3/markdown/summary`, `/s3/markdown/save`, `/s3/analysis/status`, and
+   `/s3/analysis/result`. Regenerate `openapi.json` (see repo root instructions) and update
+   `openapi-proxy.json.tpl` if new endpoints are added.
+5. After `terraform apply`, update DNS (Route53, etc.) to point to the API Gateway domain or custom domain mapping.
