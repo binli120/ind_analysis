@@ -1,0 +1,351 @@
+{
+    "model": "gpt-4-turbo-preview",
+    "temperature": 0.3,
+    "response_format": {
+        "type": "json_object"
+    },
+    "messages": [
+        {
+            "role": "system",
+            "content": "You are an expert IND regulatory writer specializing in nonclinical summaries. Generate a Section 2.4 Nonclinical Overview from Section 2.6 data. Follow ICH M4 format. Use placeholder text [MISSING: {description}] for any gaps. Be concise, scientific, and regulatory-compliant."
+        },
+        {
+            "role": "user",
+            "content": "Generate Section 2.4 Nonclinical Overview based on the following Section 2.6 content:\n\n{SCANNED_CONTENT}\n\nProvide output in JSON format with the following structure."
+        }
+    ],
+    "functions": [
+        {
+            "name": "generate_ind_2_4_summary",
+            "description": "Generate IND Section 2.4 Nonclinical Overview with gap analysis",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "document_metadata": {
+                        "type": "object",
+                        "properties": {
+                            "drug_name": {
+                                "type": "string"
+                            },
+                            "indication": {
+                                "type": "string"
+                            },
+                            "generation_date": {
+                                "type": "string"
+                            },
+                            "completeness_score": {
+                                "type": "number",
+                                "description": "Percentage of required content found (0-100)"
+                            }
+                        },
+                        "required": [
+                            "drug_name",
+                            "completeness_score"
+                        ]
+                    },
+                    "gap_analysis": {
+                        "type": "object",
+                        "properties": {
+                            "missing_sections": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "section_number": {
+                                            "type": "string"
+                                        },
+                                        "section_name": {
+                                            "type": "string"
+                                        },
+                                        "severity": {
+                                            "type": "string",
+                                            "enum": [
+                                                "CRITICAL",
+                                                "MAJOR",
+                                                "MINOR"
+                                            ]
+                                        },
+                                        "description": {
+                                            "type": "string"
+                                        },
+                                        "regulatory_impact": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            },
+                            "incomplete_sections": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "section_number": {
+                                            "type": "string"
+                                        },
+                                        "missing_elements": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "recommendation": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "section_2_4_content": {
+                        "type": "object",
+                        "properties": {
+                            "2.4.1_introduction": {
+                                "type": "object",
+                                "properties": {
+                                    "text": {
+                                        "type": "string"
+                                    },
+                                    "has_gaps": {
+                                        "type": "boolean"
+                                    },
+                                    "source_sections": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            },
+                            "2.4.2_pharmacology_summary": {
+                                "type": "object",
+                                "properties": {
+                                    "primary_pharmacology": {
+                                        "type": "object",
+                                        "properties": {
+                                            "text": {
+                                                "type": "string"
+                                            },
+                                            "key_findings": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "has_gaps": {
+                                                "type": "boolean"
+                                            }
+                                        }
+                                    },
+                                    "safety_pharmacology": {
+                                        "type": "object",
+                                        "properties": {
+                                            "cardiovascular": {
+                                                "type": "string"
+                                            },
+                                            "cns": {
+                                                "type": "string"
+                                            },
+                                            "respiratory": {
+                                                "type": "string"
+                                            },
+                                            "has_gaps": {
+                                                "type": "boolean"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "2.4.3_pharmacokinetics_summary": {
+                                "type": "object",
+                                "properties": {
+                                    "adme_overview": {
+                                        "type": "string"
+                                    },
+                                    "species_comparison": {
+                                        "type": "string"
+                                    },
+                                    "exposure_multiples": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "species": {
+                                                    "type": "string"
+                                                },
+                                                "exposure_multiple": {
+                                                    "type": "string"
+                                                },
+                                                "basis": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "has_gaps": {
+                                        "type": "boolean"
+                                    }
+                                }
+                            },
+                            "2.4.4_toxicology_summary": {
+                                "type": "object",
+                                "properties": {
+                                    "repeat_dose_toxicity": {
+                                        "type": "object",
+                                        "properties": {
+                                            "text": {
+                                                "type": "string"
+                                            },
+                                            "noael_summary": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "species": {
+                                                            "type": "string"
+                                                        },
+                                                        "duration": {
+                                                            "type": "string"
+                                                        },
+                                                        "noael": {
+                                                            "type": "string"
+                                                        },
+                                                        "target_organs": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "type": "string"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "has_gaps": {
+                                                "type": "boolean"
+                                            }
+                                        }
+                                    },
+                                    "genotoxicity": {
+                                        "type": "object",
+                                        "properties": {
+                                            "text": {
+                                                "type": "string"
+                                            },
+                                            "battery_complete": {
+                                                "type": "boolean"
+                                            },
+                                            "conclusion": {
+                                                "type": "string"
+                                            },
+                                            "has_gaps": {
+                                                "type": "boolean"
+                                            }
+                                        }
+                                    },
+                                    "reproductive_toxicity": {
+                                        "type": "object",
+                                        "properties": {
+                                            "fertility": {
+                                                "type": "string"
+                                            },
+                                            "embryofetal": {
+                                                "type": "string"
+                                            },
+                                            "pre_postnatal": {
+                                                "type": "string"
+                                            },
+                                            "has_gaps": {
+                                                "type": "boolean"
+                                            }
+                                        }
+                                    },
+                                    "carcinogenicity": {
+                                        "type": "object",
+                                        "properties": {
+                                            "text": {
+                                                "type": "string"
+                                            },
+                                            "applicable": {
+                                                "type": "boolean"
+                                            },
+                                            "has_gaps": {
+                                                "type": "boolean"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "2.4.5_integrated_risk_assessment": {
+                                "type": "object",
+                                "properties": {
+                                    "clinical_trial_support": {
+                                        "type": "string"
+                                    },
+                                    "starting_dose_justification": {
+                                        "type": "object",
+                                        "properties": {
+                                            "proposed_starting_dose": {
+                                                "type": "string"
+                                            },
+                                            "hsd_calculation": {
+                                                "type": "string"
+                                            },
+                                            "safety_margin": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    },
+                                    "monitoring_recommendations": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "has_gaps": {
+                                        "type": "boolean"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "summary_statistics": {
+                        "type": "object",
+                        "properties": {
+                            "total_sections_required": {
+                                "type": "integer"
+                            },
+                            "sections_found": {
+                                "type": "integer"
+                            },
+                            "critical_gaps": {
+                                "type": "integer"
+                            },
+                            "major_gaps": {
+                                "type": "integer"
+                            },
+                            "minor_gaps": {
+                                "type": "integer"
+                            },
+                            "regulatory_readiness": {
+                                "type": "string",
+                                "enum": [
+                                    "READY",
+                                    "NEEDS_MINOR_UPDATES",
+                                    "NEEDS_MAJOR_UPDATES",
+                                    "NOT_READY"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "required": [
+                    "document_metadata",
+                    "gap_analysis",
+                    "section_2_4_content",
+                    "summary_statistics"
+                ]
+            }
+        }
+    ],
+    "function_call": {
+        "name": "generate_ind_2_4_summary"
+    }
+}
