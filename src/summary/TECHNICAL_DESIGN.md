@@ -11,32 +11,39 @@ Automate IND 2.4 (Nonclinical Overview) generation from Section 2.6 source conte
 2) **Chunking & summarization (map phase)**
    - `_chunk_markdown` splits markdown by headings with token/segment limits (`max_gap_tokens_per_chunk`, `max_chunks`), overflowing into the last chunk to avoid loss.
    - `summarize_chunks` produces concise per-chunk summaries (OpenAI chat).
+   - Fetch reference 2.4 summaries (if present) for few-shot cues; truncated and passed into final summary generation.
 3) **Gap analysis (map + merge)**
    - `run_gap_analysis_chunked` runs OpenAI gap analysis per chunk with timeouts.
    - `_merge_gap_structured` + `_validate_gap_structured` dedupe/normalize missing & incomplete sections.
+   - `_score_gap_validation` produces confidence + issues based on gap counts/chunk coverage.
 4) **Auto-generate missing sections**
    - If gaps exist, `generate_missing_sections` asks OpenAI to draft short prose (or placeholders) for each missing item using condensed context.
    - Stored as `auto_generated_sections` in gap results.
 5) **2.4 assembly (reduce phase)**
    - `_build_condensed_summary_input` joins chunk summaries.
-   - `generate_summary` feeds condensed input + gap payload into `ind_2_4_generation_template.json` to get final 2.4 JSON, then rendered to Markdown.
+   - `generate_summary` feeds condensed input + gap payload + reference summaries into `ind_2_4_generation_template.json` to get final 2.4 JSON, then rendered to Markdown.
+   - `_score_summary_validation` checks required 2.4 sections, placeholder count, and completeness_score (if present) to assign confidence + issues.
 6) **Persist outputs**
    - `section_2_6_combined.md`
    - `section_2_6_gap_analysis.md` (text only, includes auto-generated drafts)
-   - `section_2_6_gap_analysis.json` (structured payload + auto-generated sections)
+   - `section_2_6_gap_analysis.json` (structured payload + auto-generated sections + validation)
    - `section_2_4_summary.md`
+   - `section_2_4_summary.json` (structured payload + validation)
 
 ## Key Components
 - `IND24GenerationConfig`
   - Chunk controls: `max_chunks` (default 12), `max_gap_tokens_per_chunk`, `max_summary_tokens_per_chunk`
   - Timeouts: `llm_timeout` (default 120s)
-  - Output keys: `output_gap_key`, `output_gap_json_key`, `output_summary_key`, `output_combined_markdown_key`
+  - Output keys: `output_gap_key`, `output_gap_json_key`, `output_summary_key`, `output_summary_json_key`, `output_combined_markdown_key`
+  - Reference summaries: `reference_summary_prefix` (optional override), `max_reference_summaries` (default 2), `reference_summary_token_limit`
 - `Section26MarkdownCollector`
   - S3 + Redis fetch; PDF-to-markdown fallback; optional write-back of generated `.md`.
 - `IND24LLMClient`
   - Chunk summaries, chunked gap analysis, missing-section auto-generation, final 2.4 generation.
+  - Few-shot conditioning using existing 2.4 summaries (when found).
 - Formatting helpers
   - Markdown renderers for gap/summary; JSON persisted separately.
+  - Validation helpers: `validate_gap_payload`, `validate_summary_payload` (local or S3 via validator CLI).
 
 ## Error/Limit Handling
 - Token-aware chunking with max chunk count; overflow appended to last chunk.
@@ -54,6 +61,7 @@ Automate IND 2.4 (Nonclinical Overview) generation from Section 2.6 source conte
   - `section_2_6_gap_analysis.md`
   - `section_2_6_gap_analysis.json`
   - `section_2_4_summary.md`
+  - `section_2_4_summary.json`
 
 ## Run Workflow (CLI)
 ```

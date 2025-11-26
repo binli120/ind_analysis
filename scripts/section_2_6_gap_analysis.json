@@ -1,0 +1,25 @@
+{
+  "model": "gpt-4o-mini",
+  "raw_text": "{\n  \"missing_sections\": [\n    {\n      \"section_number\": \"2.6.4\",\n      \"section_name\": \"Toxicology\",\n      \"severity\": \"CRITICAL\",\n      \"description\": \"Missing critical subsections such as repeat-dose toxicity studies and genotoxicity assessments.\",\n      \"recommended_action\": \"Provide data for repeat-dose toxicity studies and complete genotoxicity battery.\"\n    }\n  ],\n  \"incomplete_sections\": [\n    {\n      \"section_number\": \"2.6.3\",\n      \"missing_elements\": [\"Metabolism\"],\n      \"recommendation\": \"Provide data for metabolism studies to complete the pharmacokinetics section.\"\n    }\n  ],\n  \"coverage_notes\": \"The analysis indicates a critical gap in the toxicology section, which is essential for safety assessment. Additionally, the pharmacokinetics section is incomplete, lacking metabolism data, which could lead to regulatory inquiries.\"\n}",
+  "structured": {
+    "missing_sections": [
+      {
+        "section_number": "2.6.4",
+        "section_name": "Toxicology",
+        "severity": "CRITICAL",
+        "description": "Missing critical subsections such as repeat-dose toxicity studies and genotoxicity assessments.",
+        "recommended_action": "Provide data for repeat-dose toxicity studies and complete genotoxicity battery."
+      }
+    ],
+    "incomplete_sections": [
+      {
+        "section_number": "2.6.3",
+        "missing_elements": [
+          "Metabolism"
+        ],
+        "recommendation": "Provide data for metabolism studies to complete the pharmacokinetics section."
+      }
+    ],
+    "coverage_notes": "The analysis indicates a critical gap in the toxicology section, which is essential for safety assessment. Additionally, the pharmacokinetics section is incomplete, lacking metabolism data, which could lead to regulatory inquiries."
+  }
+}

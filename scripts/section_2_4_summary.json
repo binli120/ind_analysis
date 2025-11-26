@@ -1,0 +1,164 @@
+{
+  "model": "gpt-4-turbo-preview",
+  "raw_response": {
+    "id": "chatcmpl-CfzzCxa6Nau0mTZQ1r3zif60aqfFb",
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "index": 0,
+        "logprobs": null,
+        "message": {
+          "content": null,
+          "refusal": null,
+          "role": "assistant",
+          "annotations": [],
+          "audio": null,
+          "function_call": {
+            "arguments": "{\"document_metadata\":{\"drug_name\":\"ASONEP [Sonepcizumab; LT1009]\",\"completeness_score\":80},\"gap_analysis\":{\"missing_sections\":[{\"section_number\":\"2.6.4\",\"section_name\":\"Toxicology\",\"severity\":\"CRITICAL\",\"description\":\"Missing critical subsections such as repeat-dose toxicity studies and genotoxicity assessments.\",\"recommended_action\":\"Provide data for repeat-dose toxicity studies and complete genotoxicity battery.\"}],\"incomplete_sections\":[{\"section_number\":\"2.6.3\",\"missing_elements\":[\"Metabolism\"],\"recommendation\":\"Provide data for metabolism studies to complete the pharmacokinetics section.\"}],\"coverage_notes\":\"The analysis indicates a critical gap in the toxicology section, which is essential for safety assessment. Additionally, the pharmacokinetics section is incomplete, lacking metabolism data, which could lead to regulatory inquiries.\"},\"section_2_4_content\":{\"2.4.1_introduction\":{\"text\":\"ASONEP [Sonepcizumab; LT1009] is a humanized monoclonal antibody targeting S1P, a bioactive phospholipid implicated in various pathological states including cancer. By modulating S1P activity, LT1009 aims to provide therapeutic benefits in diseases characterized by abnormal cell proliferation and intravascular trafficking.\",\"has_gaps\":false,\"source_sections\":[\"3\"]},\"2.4.2_pharmacology_summary\":{\"primary_pharmacology\":{\"text\":\"LT1009 demonstrated significant efficacy in reducing tumor volumes, angiogenesis, and circulating levels of pro-angiogenic growth factors in various in vivo cancer models, supporting its potential as a therapeutic agent in oncology.\",\"key_findings\":[\"Reduction in tumor volumes and weights\",\"Decrease in tumor angiogenesis\",\"Lowering of circulating pro-angiogenic growth factors\"],\"has_gaps\":false},\"safety_pharmacology\":{\"cardiovascular\":\"No dose-limiting adverse findings in cardiovascular safety pharmacology studies.\",\"cns\":\"No significant CNS-related adverse effects observed.\",\"respiratory\":\"No adverse respiratory effects noted in safety pharmacology studies.\",\"has_gaps\":false}},\"2.4.3_pharmacokinetics_summary\":{\"adme_overview\":\"LT1009 demonstrated sustained systemic drug exposure with no systemic toxicity liabilities over a 4-week treatment period in Cynomolgus monkeys, indicating favorable pharmacokinetic properties.\",\"species_comparison\":\"Pharmacokinetic profiles of LT1009 were consistent across species, supporting its development for human use.\",\"exposure_multiples\":[{\"species\":\"Cynomolgus monkey\",\"exposure_multiple\":\"High exposure multiples observed at non-toxic doses, providing a safety margin for clinical trials.\",\"basis\":\"Based on systemic exposure levels in non-human primates compared to proposed human dosing regimens.\"}],\"has_gaps\":true},\"2.4.4_toxicology_summary\":{\"repeat_dose_toxicity\":{\"text\":\"In repeat-dose toxicity studies, LT1009 was well tolerated with no significant adverse findings up to the highest doses tested in non-human primates.\",\"noael_summary\":[{\"species\":\"Cynomolgus monkey\",\"duration\":\"4 weeks\",\"noael\":\"100 mg/kg\",\"target_organs\":[\"No target organ toxicity identified\"]}],\"has_gaps\":true},\"genotoxicity\":{\"text\":\"Genotoxicity studies were not conducted based on applicable guidelines for protein-based therapeutics, which is consistent with regulatory expectations for monoclonal antibodies.\",\"battery_complete\":false,\"conclusion\":\"Based on the nature of LT1009 and regulatory guidelines, genotoxicity assessments were not deemed necessary.\",\"has_gaps\":true},\"reproductive_toxicity\":{\"fertility\":\"No studies conducted\",\"embryofetal\":\"No studies conducted\",\"pre_postnatal\":\"No studies conducted\",\"has_gaps\":true},\"carcinogenicity\":{\"text\":\"Carcinogenicity studies were not conducted, as not typically required for monoclonal antibodies at this stage of development.\",\"applicable\":false,\"has_gaps\":true}},\"2.4.5_integrated_risk_assessment\":{\"clinical_trial_support\":\"The nonclinical data supports the initiation of human clinical trials with LT1009 in oncology patients, with adequate safety margins based on non-adverse findings at high doses in preclinical studies.\",\"starting_dose_justification\":{\"proposed_starting_dose\":\"1 mg/kg\",\"hsd_calculation\":\"Based on non-adverse findings in non-human primates and safety margins.\",\"safety_margin\":\"High safety margins observed, supporting the proposed starting dose for clinical trials.\"},\"monitoring_recommendations\":[\"Close monitoring of hematology parameters\",\"Monitoring for potential blood pressure and heart rate changes\"],\"has_gaps\":false}},\"summary_statistics\":{\"total_sections_required\":5,\"sections_found\":5,\"critical_gaps\":1,\"major_gaps\":0,\"minor_gaps\":0,\"regulatory_readiness\":\"NEEDS_MAJOR_UPDATES\"}}",
+            "name": "generate_ind_2_4_summary"
+          },
+          "tool_calls": null
+        }
+      }
+    ],
+    "created": 1764125758,
+    "model": "gpt-4-0125-preview",
+    "object": "chat.completion",
+    "service_tier": "default",
+    "system_fingerprint": null,
+    "usage": {
+      "completion_tokens": 992,
+      "prompt_tokens": 25875,
+      "total_tokens": 26867,
+      "completion_tokens_details": {
+        "accepted_prediction_tokens": 0,
+        "audio_tokens": 0,
+        "reasoning_tokens": 0,
+        "rejected_prediction_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 0
+      }
+    }
+  },
+  "summary": {
+    "document_metadata": {
+      "drug_name": "ASONEP [Sonepcizumab; LT1009]",
+      "completeness_score": 80
+    },
+    "gap_analysis": {
+      "missing_sections": [
+        {
+          "section_number": "2.6.4",
+          "section_name": "Toxicology",
+          "severity": "CRITICAL",
+          "description": "Missing critical subsections such as repeat-dose toxicity studies and genotoxicity assessments.",
+          "recommended_action": "Provide data for repeat-dose toxicity studies and complete genotoxicity battery."
+        }
+      ],
+      "incomplete_sections": [
+        {
+          "section_number": "2.6.3",
+          "missing_elements": [
+            "Metabolism"
+          ],
+          "recommendation": "Provide data for metabolism studies to complete the pharmacokinetics section."
+        }
+      ],
+      "coverage_notes": "The analysis indicates a critical gap in the toxicology section, which is essential for safety assessment. Additionally, the pharmacokinetics section is incomplete, lacking metabolism data, which could lead to regulatory inquiries."
+    },
+    "section_2_4_content": {
+      "2.4.1_introduction": {
+        "text": "ASONEP [Sonepcizumab; LT1009] is a humanized monoclonal antibody targeting S1P, a bioactive phospholipid implicated in various pathological states including cancer. By modulating S1P activity, LT1009 aims to provide therapeutic benefits in diseases characterized by abnormal cell proliferation and intravascular trafficking.",
+        "has_gaps": false,
+        "source_sections": [
+          "3"
+        ]
+      },
+      "2.4.2_pharmacology_summary": {
+        "primary_pharmacology": {
+          "text": "LT1009 demonstrated significant efficacy in reducing tumor volumes, angiogenesis, and circulating levels of pro-angiogenic growth factors in various in vivo cancer models, supporting its potential as a therapeutic agent in oncology.",
+          "key_findings": [
+            "Reduction in tumor volumes and weights",
+            "Decrease in tumor angiogenesis",
+            "Lowering of circulating pro-angiogenic growth factors"
+          ],
+          "has_gaps": false
+        },
+        "safety_pharmacology": {
+          "cardiovascular": "No dose-limiting adverse findings in cardiovascular safety pharmacology studies.",
+          "cns": "No significant CNS-related adverse effects observed.",
+          "respiratory": "No adverse respiratory effects noted in safety pharmacology studies.",
+          "has_gaps": false
+        }
+      },
+      "2.4.3_pharmacokinetics_summary": {
+        "adme_overview": "LT1009 demonstrated sustained systemic drug exposure with no systemic toxicity liabilities over a 4-week treatment period in Cynomolgus monkeys, indicating favorable pharmacokinetic properties.",
+        "species_comparison": "Pharmacokinetic profiles of LT1009 were consistent across species, supporting its development for human use.",
+        "exposure_multiples": [
+          {
+            "species": "Cynomolgus monkey",
+            "exposure_multiple": "High exposure multiples observed at non-toxic doses, providing a safety margin for clinical trials.",
+            "basis": "Based on systemic exposure levels in non-human primates compared to proposed human dosing regimens."
+          }
+        ],
+        "has_gaps": true
+      },
+      "2.4.4_toxicology_summary": {
+        "repeat_dose_toxicity": {
+          "text": "In repeat-dose toxicity studies, LT1009 was well tolerated with no significant adverse findings up to the highest doses tested in non-human primates.",
+          "noael_summary": [
+            {
+              "species": "Cynomolgus monkey",
+              "duration": "4 weeks",
+              "noael": "100 mg/kg",
+              "target_organs": [
+                "No target organ toxicity identified"
+              ]
+            }
+          ],
+          "has_gaps": true
+        },
+        "genotoxicity": {
+          "text": "Genotoxicity studies were not conducted based on applicable guidelines for protein-based therapeutics, which is consistent with regulatory expectations for monoclonal antibodies.",
+          "battery_complete": false,
+          "conclusion": "Based on the nature of LT1009 and regulatory guidelines, genotoxicity assessments were not deemed necessary.",
+          "has_gaps": true
+        },
+        "reproductive_toxicity": {
+          "fertility": "No studies conducted",
+          "embryofetal": "No studies conducted",
+          "pre_postnatal": "No studies conducted",
+          "has_gaps": true
+        },
+        "carcinogenicity": {
+          "text": "Carcinogenicity studies were not conducted, as not typically required for monoclonal antibodies at this stage of development.",
+          "applicable": false,
+          "has_gaps": true
+        }
+      },
+      "2.4.5_integrated_risk_assessment": {
+        "clinical_trial_support": "The nonclinical data supports the initiation of human clinical trials with LT1009 in oncology patients, with adequate safety margins based on non-adverse findings at high doses in preclinical studies.",
+        "starting_dose_justification": {
+          "proposed_starting_dose": "1 mg/kg",
+          "hsd_calculation": "Based on non-adverse findings in non-human primates and safety margins.",
+          "safety_margin": "High safety margins observed, supporting the proposed starting dose for clinical trials."
+        },
+        "monitoring_recommendations": [
+          "Close monitoring of hematology parameters",
+          "Monitoring for potential blood pressure and heart rate changes"
+        ],
+        "has_gaps": false
+      }
+    },
+    "summary_statistics": {
+      "total_sections_required": 5,
+      "sections_found": 5,
+      "critical_gaps": 1,
+      "major_gaps": 0,
+      "minor_gaps": 0,
+      "regulatory_readiness": "NEEDS_MAJOR_UPDATES"
+    }
+  }
+}

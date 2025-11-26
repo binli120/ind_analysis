@@ -71,6 +71,7 @@ class IND24GenerationConfig:
     output_gap_key: Optional[str] = None
     output_gap_json_key: Optional[str] = None
     output_summary_key: Optional[str] = None
+    output_summary_json_key: Optional[str] = None
     output_combined_markdown_key: Optional[str] = None
     gap_model: str = "gpt-4o-mini"
     summary_model_override: Optional[str] = None
@@ -82,6 +83,9 @@ class IND24GenerationConfig:
     max_summary_chars: int = 80000
     max_documents: Optional[int] = None
     write_back_markdown: bool = True
+    reference_summary_prefix: Optional[str] = None
+    max_reference_summaries: int = 2
+    reference_summary_token_limit: int = 8000
     guideline_path: Path = field(
         default_factory=lambda: Path(__file__).with_name("IND_2.4_Generation_Guideline.md")
     )
@@ -285,6 +289,45 @@ class Section26MarkdownCollector:
         return f"{self.config.company}/{self.config.project}"
 
     # ------------------------------------------------------------------
+    def fetch_reference_summaries(self) -> List[Dict[str, Any]]:
+        """Locate existing 2.4 summaries for few-shot conditioning."""
+        if not self._s3:
+            return []
+        base_prefix = self.config.reference_summary_prefix or f"{self.config.company.rstrip('/')}/{self.config.project}/"
+        candidates: List[_S3ObjectRef] = []
+        paginator = self._s3.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self.config.bucket, Prefix=base_prefix):
+            for entry in page.get("Contents", []):
+                key = entry.get("Key")
+                if not key:
+                    continue
+                lower = key.lower()
+                if "2.4" not in lower or "summary" not in lower:
+                    continue
+                if not (lower.endswith(".md") or lower.endswith(".json")):
+                    continue
+                lm = entry.get("LastModified")
+                candidates.append(
+                    _S3ObjectRef(
+                        key=key,
+                        version_id=None,
+                        last_modified=lm if isinstance(lm, datetime) else None,
+                    )
+                )
+        candidates.sort(key=lambda x: x.last_modified or datetime.now(), reverse=True)
+        selected = candidates[: max(self.config.max_reference_summaries, 0)]
+        results: List[Dict[str, Any]] = []
+        for ref in selected:
+            text = self._download_text(ref.key, ref.version_id)
+            if not text:
+                continue
+            token_est = _estimate_tokens(text)
+            if token_est > self.config.reference_summary_token_limit:
+                text = text[: self.config.reference_summary_token_limit * 4]
+            results.append({"key": ref.key, "text": text})
+        return results
+
+    # ------------------------------------------------------------------
     def _build_s3_client(self) -> Any:
         if boto3 is None:
             raise RuntimeError("boto3 is required for Section 2.6 collection.")
@@ -394,11 +437,16 @@ class IND24LLMClient:
 
         merged = _merge_gap_structured([r.get("structured") for r in all_results if r.get("structured")])
         merged = _validate_gap_structured(merged)
+        gap_validation = _score_gap_validation(
+            merged,
+            chunk_count=len(chunks),
+        )
         return {
             "model": self.config.gap_model,
             "raw_text": "\n\n".join(r.get("raw_text", "") for r in all_results if r.get("raw_text")),
             "structured": merged,
             "chunk_results": all_results,
+            "validation": gap_validation,
         }
 
     def generate_missing_sections(
@@ -453,7 +501,10 @@ class IND24LLMClient:
             return []
 
     def generate_summary(
-        self, combined_markdown: str, gap_payload: Dict[str, Any] | None
+        self,
+        combined_markdown: str,
+        gap_payload: Dict[str, Any] | None,
+        reference_examples: Optional[List[Dict[str, str]]] = None,
     ) -> Dict[str, Any]:
         if not self._client:
             raise RuntimeError("OpenAI client is not available for summary generation.")
@@ -470,6 +521,13 @@ class IND24LLMClient:
             if gap_payload:
                 content += "\n\nGAP ANALYSIS (machine detected):\n"
                 content += json.dumps(gap_payload, indent=2)
+            if reference_examples:
+                refs = "\n\n".join(
+                    f"EXAMPLE {idx+1} ({ref.get('key','')}):\n{ref.get('text','')[: self.config.reference_summary_token_limit*4]}"
+                    for idx, ref in enumerate(reference_examples)
+                )
+                content += "\n\nREFERENCE SUMMARIES (few-shot style cues):\n"
+                content += refs
             messages.append({"role": message.get("role", "user"), "content": content})
 
         kwargs: Dict[str, Any] = {
@@ -616,6 +674,7 @@ class IND24GenerationPipeline:
         gap_structured = gap_result.get("structured")
 
         condensed_input = _build_condensed_summary_input(chunk_summaries)
+        reference_examples = self._collector.fetch_reference_summaries()
         auto_generated: List[Dict[str, str]] = []
         missing_sections = (
             gap_structured.get("missing_sections") if isinstance(gap_structured, dict) else None
@@ -626,7 +685,13 @@ class IND24GenerationPipeline:
             )
         gap_result["auto_generated_sections"] = auto_generated
 
-        summary_result = self._llm.generate_summary(condensed_input, gap_structured)
+        summary_result = self._llm.generate_summary(
+            condensed_input, gap_structured, reference_examples=reference_examples
+        )
+        if reference_examples:
+            summary_result["reference_examples"] = [ref.get("key", "") for ref in reference_examples]
+        summary_validation = _score_summary_validation(summary_result)
+        summary_result["validation"] = summary_validation
 
         outputs = self._persist_outputs(
             output_prefix=output_prefix,
@@ -655,6 +720,7 @@ class IND24GenerationPipeline:
         gap_key = self.config.output_gap_key or f"{output_prefix}/section_2_6_gap_analysis.md"
         gap_json_key = self.config.output_gap_json_key or f"{output_prefix}/section_2_6_gap_analysis.json"
         summary_key = self.config.output_summary_key or f"{output_prefix}/section_2_4_summary.md"
+        summary_json_key = self.config.output_summary_json_key or f"{output_prefix}/section_2_4_summary.json"
 
         gap_markdown = _format_gap_markdown(gap_result)
         summary_markdown = _format_summary_markdown(summary_result)
@@ -683,11 +749,18 @@ class IND24GenerationPipeline:
             Body=summary_markdown.encode("utf-8"),
             ContentType="text/markdown",
         )
+        s3_client.put_object(
+            Bucket=self.config.bucket,
+            Key=summary_json_key,
+            Body=json.dumps(summary_result, indent=2).encode("utf-8"),
+            ContentType="application/json",
+        )
         return {
             "combined_markdown_key": combined_key,
             "gap_analysis_key": gap_key,
             "gap_analysis_json_key": gap_json_key,
             "summary_key": summary_key,
+            "summary_json_key": summary_json_key,
         }
 
 
@@ -714,6 +787,15 @@ def _format_gap_markdown(gap_result: Dict[str, Any]) -> str:
     if model:
         header.append(f"_Model: {model}_")
     structured = gap_result.get("structured")
+    validation = gap_result.get("validation") or {}
+    if validation:
+        header.append("\n## Validation")
+        header.append(f"- Confidence: {validation.get('confidence', 'N/A')}")
+        issues = validation.get("issues") or []
+        if issues:
+            header.append("- Issues:")
+            for issue in issues:
+                header.append(f"  - {issue}")
 
     if isinstance(structured, dict) and structured:
         missing = structured.get("missing_sections") or []
@@ -805,6 +887,15 @@ def _format_summary_markdown(summary_result: Dict[str, Any]) -> str:
             header.append("\n## Summary Statistics")
             for key, value in stats.items():
                 header.append(f"- **{key}**: {value}")
+    validation = summary_result.get("validation") or {}
+    if validation:
+        header.append("\n## Validation")
+        header.append(f"- Confidence: {validation.get('confidence', 'N/A')}")
+        issues = validation.get("issues") or []
+        if issues:
+            header.append("- Issues:")
+            for issue in issues:
+                header.append(f"  - {issue}")
     else:
         # Fallback: raw JSON/text
         if summary:
@@ -1004,8 +1095,121 @@ def _validate_gap_structured(payload: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
+def _score_gap_validation(payload: Dict[str, Any], chunk_count: int) -> Dict[str, Any]:
+    missing = payload.get("missing_sections") or []
+    incomplete = payload.get("incomplete_sections") or []
+    issues: List[str] = []
+    evidence: List[str] = []
+    missing_count = len(missing)
+    incomplete_count = len(incomplete)
+    severity_counts: Dict[str, int] = {}
+    for item in missing:
+        sev = str(item.get("severity") or "").upper()
+        severity_counts[sev] = severity_counts.get(sev, 0) + 1
+    if severity_counts:
+        evidence.append(
+            "Missing by severity: "
+            + ", ".join(f"{k or 'UNSPECIFIED'}={v}" for k, v in sorted(severity_counts.items()))
+        )
+    if chunk_count:
+        evidence.append(f"Chunks analyzed: {chunk_count}")
+    if missing_count == 0 and incomplete_count == 0:
+        issues.append("No missing or incomplete sections detected.")
+    else:
+        if missing_count:
+            issues.append(f"{missing_count} missing sections flagged.")
+        if incomplete_count:
+            issues.append(f"{incomplete_count} incomplete sections flagged.")
+
+    confidence = 0.9
+    confidence -= 0.08 * missing_count
+    confidence -= 0.05 * incomplete_count
+    confidence += 0.01 * max(chunk_count, 1)
+    confidence = _clamp(confidence, 0.0, 0.99)
+    return {"confidence": round(confidence, 3), "issues": issues, "evidence": evidence}
+
+
+def _score_summary_validation(summary_result: Dict[str, Any]) -> Dict[str, Any]:
+    summary = summary_result.get("summary") if isinstance(summary_result, dict) else None
+    issues: List[str] = []
+    evidence: List[str] = []
+    ref_examples = summary_result.get("reference_examples") or []
+    if ref_examples:
+        evidence.append(f"Reference summaries used: {len(ref_examples)}")
+    placeholders = 0
+    required_sections = [
+        "2.4.1_introduction",
+        "2.4.2_pharmacology_summary",
+        "2.4.3_pharmacokinetics_summary",
+        "2.4.4_toxicology_summary",
+        "2.4.5_integrated_risk_assessment",
+    ]
+    present = set()
+    if isinstance(summary, dict):
+        content = summary.get("section_2_4_content") or {}
+        present.update(content.keys())
+        placeholders = _count_placeholders(summary)
+    missing_sections = [sec for sec in required_sections if sec not in present]
+    if missing_sections:
+        issues.append(f"Missing sections: {', '.join(missing_sections)}")
+    if placeholders:
+        issues.append(f"Placeholders detected: {placeholders}")
+    if present:
+        evidence.append(f"Sections present: {', '.join(sorted(present))}")
+    evidence.append(f"Placeholders counted: {placeholders}")
+
+    confidence = 0.9
+    if isinstance(summary, dict):
+        meta = summary.get("document_metadata") or {}
+        if "completeness_score" in meta:
+            try:
+                confidence = max(confidence, float(meta["completeness_score"]) / 100.0)
+                evidence.append(f"Completeness score: {meta['completeness_score']}")
+            except Exception:
+                pass
+    confidence -= 0.1 * len(missing_sections)
+    confidence -= 0.05 * placeholders
+    confidence = _clamp(confidence, 0.0, 0.99)
+    return {"confidence": round(confidence, 3), "issues": issues, "evidence": evidence}
+
+
 def _safe_json_parse(text: str) -> Any:
     try:
         return json.loads(text)
     except Exception:
         return None
+
+
+def _clamp(value: float, lower: float, upper: float) -> float:
+    return max(lower, min(upper, value))
+
+
+def _count_placeholders(obj: Any) -> int:
+    pattern = re.compile(r"\[MISSING:", re.IGNORECASE)
+    def _iter_strings(val: Any) -> Iterable[str]:
+        if isinstance(val, str):
+            yield val
+        elif isinstance(val, dict):
+            for v in val.values():
+                yield from _iter_strings(v)
+        elif isinstance(val, list):
+            for v in val:
+                yield from _iter_strings(v)
+    return sum(1 for s in _iter_strings(obj) if pattern.search(s))
+
+
+def validate_gap_payload(payload: Dict[str, Any], chunk_count: int = 1) -> Dict[str, Any]:
+    """Public helper to validate gap analysis payloads."""
+    structured = _validate_gap_structured(payload or {})
+    return _score_gap_validation(structured, chunk_count)
+
+
+def validate_summary_payload(summary_payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Public helper to validate summary payloads (expects full summary_result or summary dict).
+    """
+    if summary_payload and "summary" in summary_payload:
+        target = summary_payload
+    else:
+        target = {"summary": summary_payload}
+    return _score_summary_validation(target)

@@ -55,6 +55,7 @@ Use the new `IND24GenerationPipeline` when your Section 2.6 source lives in S3 a
 - Run gap analysis using `IND_2.4_Generation_Guideline.md`
 - Generate a Section 2.4 JSON summary via `ind_2_4_generation_template.json`
 - Save combined markdown, gap report, and summary JSON back into the Section 2.6 folder in S3
+- If existing 2.4 summaries are found in the project, use them as few-shot references during generation
 
 ```python
 from summary import IND24GenerationConfig, IND24GenerationPipeline
@@ -89,7 +90,21 @@ Outputs (written alongside the detected 2.6 prefix):
 - `section_2_6_gap_analysis.md`
 - `section_2_6_gap_analysis.json`
 - `section_2_4_summary.md`
+- `section_2_4_summary.json`
+- `section_2_4_summary.json`
 
+### Validation (optional)
+
+After generation, validate gap/summary outputs from local files or directly from S3:
+```
+poetry run python scripts/validate_ind24_outputs.py \
+  --gap-key ./section_2_6_gap_analysis.json \  # local file (preferred)
+  --summary-key ./section_2_4_summary.json \   # local file (preferred)
+  --chunk-count 8
+```
+Console output includes “Thinking” (evidence), “Issues,” and “Confidence” for gap and summary. If you skip `--summary-json`, only gap validation runs. Use `s3://...` URIs for `--gap-key/--summary-key` to read directly from S3 instead of local files.
+
+Use `s3://...` URIs in `--gap-key/--summary-key` if you want to read directly from S3; otherwise files are loaded locally and `--bucket` is ignored.
 Flags:
 - `--section-prefix` to override auto-discovery
 - `--max-chunks`, `--log-level DEBUG`, `--auto-discover-prefix` (on by default)
