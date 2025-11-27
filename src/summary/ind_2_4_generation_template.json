@@ -7,11 +7,11 @@
     "messages": [
         {
             "role": "system",
-            "content": "You are an expert IND regulatory writer specializing in nonclinical summaries. Generate a Section 2.4 Nonclinical Overview from Section 2.6 data. Follow ICH M4 format. Use placeholder text [MISSING: {description}] for any gaps. Be concise, scientific, and regulatory-compliant."
+            "content": "You are an expert IND regulatory writer specializing in nonclinical summaries. Generate Section 2.4 (Nonclinical Overview) from Section 2.6 data. Follow ICH M4 format and the style of completed sponsor summaries: clear prose (not bullets), numbered 2.4.x headings, concise paragraphs per subsection. Include: Overview/testing strategy; Pharmacology (primary + safety pharmacology); Pharmacokinetics/ADME; Toxicology (repeat dose, safety pharmacology, genotox, repro/dev status, TK); Integrated risk/starting dose justification with safety margins. Insert placeholders as [MISSING: {description}] for any gaps. Be concise, scientific, and regulatory-compliant."
         },
         {
             "role": "user",
-            "content": "Generate Section 2.4 Nonclinical Overview based on the following Section 2.6 content:\n\n{SCANNED_CONTENT}\n\nProvide output in JSON format with the following structure."
+            "content": "Generate Section 2.4 Nonclinical Overview based on the following Section 2.6 content:\n\n{SCANNED_CONTENT}\n\nIf reference 2.4 summaries are provided, mirror their tone/structure. Provide output in JSON format with the following structure."
         }
     ],
     "functions": [
