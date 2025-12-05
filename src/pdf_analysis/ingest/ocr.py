@@ -3,10 +3,9 @@
 # @author: Bin Lee
 # @email: blee@filynai.com
 
+import logging
 from pathlib import Path
 from typing import Dict, List
-
-import logging
 
 try:
     import pytesseract
@@ -14,8 +13,8 @@ try:
     from pdf2image.exceptions import PDFInfoNotInstalledError
 except Exception:
     pytesseract = None
-    convert_from_path = None
-    PDFInfoNotInstalledError = None
+    convert_from_path = None  # type: ignore[assignment]
+    PDFInfoNotInstalledError = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -37,15 +36,17 @@ def ocr_pages_if_needed(
             last_page=max(zero_based_page_ids) + 1,
         )
     except FileNotFoundError as exc:
-        logger.warning("pdf2image poppler binary not found: %s", exc)
+        logger.warning("pdf2image Popper binary not found: %s", exc)
         return {}
-    except Exception as exc:  # pragma: no cover - optional dependency quirks
-        if PDFInfoNotInstalledError and isinstance(exc, PDFInfoNotInstalledError):
+    except Exception as exc:  # pylint: disable=broad-except
+        if PDFInfoNotInstalledError is not None and isinstance(
+            exc, PDFInfoNotInstalledError
+        ):
             logger.warning(
                 "poppler is required for pdf2image OCR fallback. Install poppler and ensure it is on PATH."
             )
         else:
-            logger.warning("pdf2image failed to rasterise pages: %s", exc)
+            logger.warning("pdf2image failed to rasterize pages: %s", exc)
         return {}
 
     # The returned list is contiguous from first_page..last_page

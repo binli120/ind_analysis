@@ -1,4 +1,9 @@
-"""Utility script to scaffold IND project folders in S3 from a template."""
+"""
+@author: Bin Lee
+@email: blee@filynai.com
+
+Utility script to scaffold IND project folders in S3 from a template.
+"""
 
 import argparse
 import json

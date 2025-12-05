@@ -1,14 +1,19 @@
-"""Lambda entry point that records ingest events and tracks pipeline progress."""
+"""
+@author: Bin Lee
+@email: blee@filynai.com
+
+Lambda entry point that records ingest events and tracks pipeline progress."""
 
 from __future__ import annotations
 
 import json
 import logging
 import os
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import boto3
+
+from src.utils.utils import _utc_now, _extract_event_time
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -19,7 +24,7 @@ sns = boto3.client("sns")
 _TABLE_NAME = os.getenv("PIPELINE_STATUS_TABLE", "")
 if not _TABLE_NAME:
     logger.warning(
-        ("PIPELINE_STATUS_TABLE is not set; handler will raise on first invocation.")
+        "PIPELINE_STATUS_TABLE is not set; handler will raise on first invocation."
     )
 
 _DEFAULT_COMPANY = os.getenv("DEFAULT_COMPANY", "filynai.com")
@@ -49,7 +54,7 @@ _KNOWN_STAGES = [
 ]
 
 
-def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def handler(event: Dict[str, Any]) -> Dict[str, Any]:
     """Process S3 and SNS events to keep document pipeline status in sync."""
     logger.debug("Received event: %s", json.dumps(event))
     if "Records" not in event:
@@ -75,7 +80,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
 
 def _handle_s3_record(record: Dict[str, Any]) -> Dict[str, Any]:
-    """Persist ingest metadata for a new S3 object and send completion notice."""
+    """Persist ingest metadata for a new S3 object and send a completion notice."""
     s3_info = record.get("s3", {})
     bucket = s3_info.get("bucket", {}).get("name")
     object_info = s3_info.get("object", {})
@@ -140,7 +145,7 @@ def _handle_s3_record(record: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _handle_sns_record(record: Dict[str, Any]) -> Dict[str, Any]:
-    """Update pipeline stage state in DynamoDB based on SNS callbacks."""
+    """Update the pipeline stage state in DynamoDB based on SNS callbacks."""
     sns_payload = record.get("Sns", {})
     message_str = sns_payload.get("Message", "")
     try:
@@ -218,19 +223,6 @@ def _build_document_id(bucket: str, key: str, version_id: Optional[str]) -> str:
     if version_id:
         return f"{base}#{version_id}"
     return base
-
-
-def _extract_event_time(record: Dict[str, Any]) -> str:
-    """Extract the ingest timestamp from the record or fall back to now."""
-    timestamp = record.get("eventTime")
-    if timestamp:
-        return timestamp
-    return _utc_now()
-
-
-def _utc_now() -> str:
-    """Return the current UTC timestamp in ISO-8601 format."""
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _extract_document_attributes(

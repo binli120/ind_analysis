@@ -15,7 +15,9 @@ from pdfminer.pdfpage import PDFPage
 from .ocr import ocr_pages_if_needed
 
 
-def _extract_page_text(page, rsrcmgr: PDFResourceManager, laparams: LAParams) -> str:
+def _extract_page_text(
+    page: PDFPage, rsrcmgr: PDFResourceManager, laparams: LAParams
+) -> str:
     """
     Render a single PDF page to text using pdfminer primitives.
     """
@@ -54,7 +56,7 @@ def iter_pages_text(
 
             rsrcmgr = PDFResourceManager()
             text = _extract_page_text(page, rsrcmgr, laparams).strip()
-            yield {"page_number": idx, "text": text}
+            yield {"page_number": str(idx), "text": text}
 
 
 def extract_pages_text(

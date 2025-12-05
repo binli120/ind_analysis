@@ -1,4 +1,9 @@
-"""Centralised logging helpers shared across scripts and services."""
+"""
+@author: Bin Lee
+@email: blee@filynai.com
+
+Centralized logging helpers shared across scripts and services.
+"""
 
 from __future__ import annotations
 

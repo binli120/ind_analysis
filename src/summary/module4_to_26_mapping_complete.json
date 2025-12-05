@@ -1,0 +1,707 @@
+{
+  "version": "1.0",
+  "standard": "eCTD v4.0",
+  "description": "Complete Module 4 to Module 2.6 mapping for IND submissions with priority levels",
+  "priority_definitions": {
+    "P0": "Absolutely Required for IND - Must be present or flagged as critical gap",
+    "P1": "Sometimes Required - Depends on drug class, route of administration, clinical phase",
+    "P2": "Optional / Not Required at IND stage - May be needed for NDA"
+  },
+  
+  "pharmacology_mappings": {
+    "4.2.1.1": {
+      "category": "Primary Pharmacodynamics",
+      "priority": "P0",
+      "target_sections": {
+        "tabulated": ["2.6.3.2"],
+        "written": ["2.6.2.2"]
+      },
+      "required_content": [
+        "Study ID and Title",
+        "Document Type",
+        "Study report body",
+        "Synopsis",
+        "Protocol or amendment",
+        "Signatures from investigators",
+        "Audit certificates",
+        "Pharmacodynamics core data",
+        "PD In Vivo Study",
+        "Data tabulation",
+        "Data definitions"
+      ],
+      "extraction_focus": {
+        "mechanism_of_action": "Primary therapeutic effect",
+        "target_receptor": "Molecular target identification",
+        "dose_response": "EC50, Emax values",
+        "species": "Animal model used",
+        "in_vivo_studies": "Required for P0",
+        "in_vitro_studies": "P1 priority"
+      }
+    },
+    
+    "4.2.1.2": {
+      "category": "Secondary Pharmacodynamics",
+      "priority": "P1",
+      "target_sections": {
+        "tabulated": ["2.6.3.3"],
+        "written": ["2.6.2.3"]
+      },
+      "required_content": [
+        "Off-target activities",
+        "Receptor binding panel",
+        "Functional assays"
+      ],
+      "extraction_focus": {
+        "off_target_effects": "Secondary receptor interactions",
+        "selectivity": "Binding selectivity data",
+        "potency_comparison": "IC50 values for multiple targets"
+      }
+    },
+    
+    "4.2.1.3": {
+      "category": "Safety Pharmacology",
+      "priority": "P0",
+      "target_sections": {
+        "tabulated": ["2.6.3.4"],
+        "written": ["2.6.2.4"]
+      },
+      "fda_example": "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2016/209531Orig1s000PharmR.pdf",
+      "required_content": [
+        "Cardiovascular system effects",
+        "CNS effects",
+        "Respiratory system effects"
+      ],
+      "extraction_focus": {
+        "cardiovascular": ["hERG", "blood_pressure", "heart_rate", "QT_interval"],
+        "cns": ["behavior", "motor_activity", "cognition"],
+        "respiratory": ["rate", "tidal_volume", "blood_gases"]
+      },
+      "validation_rules": {
+        "hERG_required": true,
+        "in_vivo_cv_required": true,
+        "respiratory_study_required": "if_cns_active_or_respiratory_indication"
+      }
+    },
+    
+    "4.2.1.4": {
+      "category": "Pharmacodynamic Drug Interactions",
+      "priority": "P1",
+      "target_sections": {
+        "tabulated": ["2.6.3.5"],
+        "written": ["2.6.2.5"]
+      },
+      "extraction_focus": {
+        "drug_combinations": "Synergistic or antagonistic effects",
+        "receptor_competition": "Competitive binding studies"
+      }
+    }
+  },
+  
+  "pharmacokinetics_mappings": {
+    "4.2.2.1": {
+      "category": "Analytical Methods and Validation",
+      "priority": "P0",
+      "target_sections": {
+        "tabulated": ["2.6.5.2"],
+        "written": ["2.6.4.2"]
+      },
+      "required_content": [
+        "Bioanalytical method validation",
+        "LLOQ and ULOQ",
+        "Accuracy and precision",
+        "Stability data"
+      ]
+    },
+    
+    "4.2.2.2": {
+      "category": "Absorption",
+      "priority": "P1",
+      "target_sections": {
+        "tabulated": ["2.6.5.3", "2.6.5.4"],
+        "written": ["2.6.4.3"]
+      },
+      "subsection_mapping": {
+        "2.6.5.3": "Absorption after a Single Dose",
+        "2.6.5.4": "Absorption after Repeated Doses"
+      },
+      "required_parameters": ["Cmax", "Tmax", "AUC", "Bioavailability", "F%"],
+      "extraction_focus": {
+        "single_dose": {
+          "parameters": ["Cmax", "Tmax", "AUC0-t", "AUC0-inf"],
+          "route_specific": ["oral", "iv", "subcutaneous"],
+          "food_effect": "if_oral_route"
+        },
+        "repeated_dose": {
+          "parameters": ["Cmax_ss", "Cmin_ss", "AUC_tau", "accumulation_ratio"],
+          "steady_state": "Required for P1"
+        }
+      }
+    },
+    
+    "4.2.2.3": {
+      "category": "Distribution",
+      "priority": "P1",
+      "target_sections": {
+        "tabulated": ["2.6.5.5", "2.6.5.6", "2.6.5.8"],
+        "written": ["2.6.4.4"]
+      },
+      "subsection_mapping": {
+        "2.6.5.5": "Organ Distribution",
+        "2.6.5.6": "Plasma Protein Binding",
+        "2.6.5.8": "Other Distribution Studies"
+      },
+      "required_parameters": ["Vd", "Vss", "protein_binding_%", "tissue_distribution"],
+      "extraction_focus": {
+        "organ_distribution": {
+          "target_organs": ["liver", "kidney", "brain", "tumor"],
+          "radio_labeled_study": "preferred"
+        },
+        "protein_binding": {
+          "plasma_binding": "Required",
+          "free_fraction": "fu value",
+          "species": ["human", "animal_species"]
+        },
+        "other_distribution": {
+          "blood_brain_barrier": "if_cns_indication",
+          "placental_transfer": "if_women_of_childbearing_potential",
+          "milk_excretion": "if_applicable"
+        }
+      }
+    },
+    
+    "4.2.2.4": {
+      "category": "Metabolism",
+      "priority": "P1",
+      "target_sections": {
+        "tabulated": ["2.6.5.9", "2.6.5.10", "2.6.5.11", "2.6.5.12"],
+        "written": ["2.6.4.5"]
+      },
+      "subsection_mapping": {
+        "2.6.5.9": "Metabolism In Vivo",
+        "2.6.5.10": "Metabolism In Vitro",
+        "2.6.5.11": "Possible Metabolic Pathways",
+        "2.6.5.12": "Induction/Inhibition of Drug-Metabolizing Enzymes"
+      },
+      "required_parameters": ["metabolic_pathways", "enzymes_involved", "metabolite_identification"],
+      "extraction_focus": {
+        "in_vivo": {
+          "mass_balance": "radio-labeled study",
+          "metabolite_profiling": "plasma, urine, feces",
+          "species_comparison": true
+        },
+        "in_vitro": {
+          "hepatocyte_studies": "primary hepatocytes",
+          "microsome_studies": "liver microsomes",
+          "enzyme_phenotyping": "CYP450 isoforms"
+        },
+        "pathways": {
+          "major_pathways": ["oxidation", "reduction", "hydrolysis", "conjugation"],
+          "active_metabolites": "pharmacological activity"
+        },
+        "ddi_potential": {
+          "cyp_inhibition": ["CYP3A4", "CYP2D6", "CYP2C9", "CYP2C19"],
+          "cyp_induction": ["CYP3A4", "CYP2B6"],
+          "transporter_effects": ["P-gp", "BCRP", "OAT", "OATP"]
+        }
+      }
+    },
+    
+    "4.2.2.5": {
+      "category": "Excretion",
+      "priority": "P1",
+      "target_sections": {
+        "tabulated": ["2.6.5.13", "2.6.5.14"],
+        "written": ["2.6.4.6"]
+      },
+      "subsection_mapping": {
+        "2.6.5.13": "Excretion",
+        "2.6.5.14": "Excretion into Bile"
+      },
+      "required_parameters": ["t1/2", "CL", "CLr", "excretion_routes"],
+      "extraction_focus": {
+        "general_excretion": {
+          "half_life": "terminal t1/2",
+          "clearance": "total and renal clearance",
+          "routes": ["urine", "feces", "bile"],
+          "mass_balance": "% dose recovered"
+        },
+        "biliary_excretion": {
+          "bile_duct_cannulation": "if_significant_biliary_route",
+          "enterohepatic_recirculation": true
+        }
+      }
+    },
+    
+    "4.2.2.6": {
+      "category": "Pharmacokinetic Drug Interactions (nonclinical)",
+      "priority": "P1",
+      "target_sections": {
+        "tabulated": ["2.6.5.15"],
+        "written": ["2.6.4.7"]
+      },
+      "extraction_focus": {
+        "cyp_perpetrator": "Is drug an inhibitor/inducer?",
+        "cyp_victim": "Is drug metabolized by inhibitable/inducible enzymes?",
+        "transporter_interactions": "P-gp, BCRP, OAT, OATP effects"
+      }
+    },
+    
+    "4.2.2.7": {
+      "category": "Other Pharmacokinetic Studies",
+      "priority": "P2",
+      "target_sections": {
+        "tabulated": ["2.6.5.16"],
+        "written": ["2.6.4.8"]
+      },
+      "extraction_focus": {
+        "special_populations": ["renal_impairment", "hepatic_impairment"],
+        "formulation_studies": "bioequivalence",
+        "other_studies": "as_needed"
+      }
+    }
+  },
+  
+  "toxicology_mappings": {
+    "4.2.3.1": {
+      "category": "Single-Dose Toxicity",
+      "priority": "P0",
+      "target_sections": {
+        "tabulated": ["2.6.7.5"],
+        "written": ["2.6.6.2"]
+      },
+      "required_content": [
+        "Species (at least 2)",
+        "Route of administration",
+        "LD50 or MTD",
+        "Clinical signs",
+        "Mortality",
+        "Body weight changes",
+        "Necropsy findings"
+      ],
+      "extraction_focus": {
+        "species_required": ["rodent", "non_rodent"],
+        "route_match": "must_match_clinical_route",
+        "dose_levels": "at_least_3_dose_levels",
+        "observations": ["clinical_signs", "mortality", "body_weight", "food_consumption"]
+      },
+      "validation_rules": {
+        "min_species": 2,
+        "route_relevance": "clinical_route_required",
+        "ld50_or_mtd": "must_be_determined"
+      }
+    },
+    
+    "4.2.3.2": {
+      "category": "Repeat-Dose Toxicity",
+      "priority": "P0",
+      "target_sections": {
+        "tabulated": ["2.6.7.6", "2.6.7.7"],
+        "written": ["2.6.6.3"]
+      },
+      "subsection_mapping": {
+        "2.6.7.6": "Non-Pivotal Studies (dose-range finding)",
+        "2.6.7.7": "Pivotal Studies (GLP)"
+      },
+      "required_content": [
+        "Duration (2-week, 1-month, 3-month, 6-month)",
+        "Species (rodent and non-rodent)",
+        "NOAEL determination",
+        "Target organs",
+        "Reversibility assessment",
+        "Toxicokinetics"
+      ],
+      "extraction_focus": {
+        "study_design": {
+          "duration": "must_support_clinical_duration",
+          "species": ["rat_or_mouse", "dog_or_monkey"],
+          "route": "clinical_route",
+          "dose_levels": "at_least_3_plus_control"
+        },
+        "endpoints": {
+          "noael": "critical_for_FIH_dose",
+          "target_organs": "list_all_affected_organs",
+          "reversibility": "2-4_week_recovery_period",
+          "dose_response": "clear_dose_relationship"
+        },
+        "toxicokinetics": {
+          "exposure": "Cmax_and_AUC_at_all_doses",
+          "accumulation": "compare_day1_vs_steady_state",
+          "exposure_multiples": "relative_to_proposed_clinical_exposure"
+        }
+      },
+      "validation_rules": {
+        "min_duration": "support_phase1_duration",
+        "noael_required": true,
+        "tk_required": true,
+        "recovery_period": "required_for_severe_findings"
+      }
+    },
+    
+    "4.2.3.3.1": {
+      "category": "Genotoxicity - In Vitro",
+      "priority": "P0",
+      "target_sections": {
+        "tabulated": ["2.6.7.8"],
+        "written": ["2.6.6.4"]
+      },
+      "required_content": [
+        "Bacterial mutagenicity (Ames)",
+        "In vitro mammalian cell assay (chromosomal aberration or micronucleus)"
+      ],
+      "extraction_focus": {
+        "ames_test": {
+          "strains": ["TA98", "TA100", "TA1535", "TA1537", "E.coli_WP2uvrA"],
+          "metabolic_activation": ["+S9", "-S9"],
+          "result": "positive_or_negative"
+        },
+        "mammalian_cell": {
+          "assay_type": ["chromosomal_aberration", "micronucleus"],
+          "cell_line": "CHO_or_CHL_or_human_lymphocytes",
+          "metabolic_activation": ["+S9", "-S9"]
+        }
+      },
+      "validation_rules": {
+        "ames_required": true,
+        "mammalian_assay_required": true,
+        "both_with_without_s9": true
+      }
+    },
+    
+    "4.2.3.3.2": {
+      "category": "Genotoxicity - In Vivo",
+      "priority": "P1",
+      "target_sections": {
+        "tabulated": ["2.6.7.9"],
+        "written": ["2.6.6.4"]
+      },
+      "required_content": [
+        "In vivo micronucleus test (if in vitro positive)",
+        "Toxicokinetics confirmation"
+      ],
+      "extraction_focus": {
+        "in_vivo_study": {
+          "species": "mouse_or_rat",
+          "tissue": "bone_marrow_or_blood",
+          "exposure_confirmation": "TK_data_required"
+        }
+      },
+      "validation_rules": {
+        "required_if": "in_vitro_positive_result",
+        "exposure_demonstrated": "must_show_systemic_exposure"
+      }
+    },
+    
+    "4.2.3.4.1": {
+      "category": "Carcinogenicity - Long-term Studies",
+      "priority": "P2",
+      "target_sections": {
+        "tabulated": ["2.6.7.10"],
+        "written": ["2.6.6.5"]
+      },
+      "note": "Not required for IND; required for NDA if chronic use expected",
+      "extraction_focus": {
+        "study_duration": "18-24_months",
+        "species": ["rat", "mouse"],
+        "tumor_findings": "benign_and_malignant"
+      }
+    },
+    
+    "4.2.3.4.2": {
+      "category": "Carcinogenicity - Short/Medium-term Studies",
+      "priority": "P2",
+      "target_sections": {
+        "tabulated": ["2.6.7.10"],
+        "written": ["2.6.6.5"]
+      },
+      "note": "Alternative models, not required for IND"
+    },
+    
+    "4.2.3.5": {
+      "category": "Reproductive and Developmental Toxicity - Overview",
+      "priority": null,
+      "target_sections": {
+        "tabulated": ["2.6.7.11"],
+        "written": ["2.6.6.6"]
+      },
+      "note": "General category with specific subsections below"
+    },
+    
+    "4.2.3.5.1": {
+      "category": "Fertility and Early Embryonic Development",
+      "priority": "P1",
+      "target_sections": {
+        "tabulated": ["2.6.7.12"],
+        "written": ["2.6.6.6"]
+      },
+      "required_content": [
+        "Segment I study (ICH S5(R3))",
+        "Male and female fertility indices",
+        "Mating performance",
+        "Implantation data",
+        "Early embryonic development"
+      ],
+      "extraction_focus": {
+        "fertility_parameters": {
+          "mating_index": "percentage_mated",
+          "fertility_index": "percentage_pregnant",
+          "conception_index": "calculated",
+          "sperm_parameters": "count_motility_morphology"
+        },
+        "embryonic_development": {
+          "pre_implantation_loss": "percentage",
+          "post_implantation_loss": "percentage",
+          "noael": "for_fertility_and_embryonic_development"
+        }
+      },
+      "validation_rules": {
+        "required_if": "women_of_childbearing_potential_included",
+        "species": "rat_preferred",
+        "both_sexes": true
+      }
+    },
+    
+    "4.2.3.5.2": {
+      "category": "Embryo-Fetal Development",
+      "priority": "P1",
+      "target_sections": {
+        "tabulated": ["2.6.7.13"],
+        "written": ["2.6.6.6"]
+      },
+      "required_content": [
+        "Segment II study (ICH S5(R3))",
+        "Two species (rodent and rabbit)",
+        "Maternal toxicity",
+        "Fetal morphology",
+        "Skeletal examinations",
+        "Visceral examinations"
+      ],
+      "extraction_focus": {
+        "maternal_endpoints": {
+          "clinical_signs": true,
+          "body_weight": "gain_and_food_consumption",
+          "mortality": true
+        },
+        "embryo_fetal_endpoints": {
+          "resorptions": "early_and_late",
+          "fetal_weight": "mean_per_litter",
+          "external_malformations": true,
+          "skeletal_malformations": true,
+          "visceral_malformations": true,
+          "variations": "distinguish_from_malformations"
+        },
+        "noael": {
+          "maternal": "NOAEL_for_maternal_toxicity",
+          "developmental": "NOAEL_for_developmental_toxicity"
+        }
+      },
+      "validation_rules": {
+        "required_if": "women_of_childbearing_potential_included",
+        "two_species": ["rat_or_mouse", "rabbit"],
+        "timing": "before_phase2_in_pregnant_women"
+      }
+    },
+    
+    "4.2.3.5.3": {
+      "category": "Pre- and Postnatal Development",
+      "priority": "P2",
+      "target_sections": {
+        "tabulated": ["2.6.7.14"],
+        "written": ["2.6.6.6"]
+      },
+      "required_content": [
+        "Segment III study (ICH S5(R3))",
+        "F1 generation development",
+        "Maternal function",
+        "Behavior and reproductive performance of F1"
+      ],
+      "note": "Not required for IND; required for NDA if chronic use or women of childbearing potential"
+    },
+    
+    "4.2.3.5.4": {
+      "category": "Juvenile Animal Studies",
+      "priority": "P2",
+      "target_sections": {
+        "tabulated": ["2.6.7.15"],
+        "written": ["2.6.6.6"]
+      },
+      "note": "Required only if pediatric population will be studied",
+      "required_content": [
+        "Age-appropriate endpoints",
+        "Growth and development",
+        "Behavioral assessments"
+      ]
+    },
+    
+    "4.2.3.6": {
+      "category": "Local Tolerance",
+      "priority": "P1",
+      "target_sections": {
+        "tabulated": ["2.6.7.16"],
+        "written": ["2.6.6.7"]
+      },
+      "required_content": [
+        "Route-specific irritation studies",
+        "Injection site reactions (if parenteral)",
+        "Dermal irritation (if topical)",
+        "Ocular irritation (if ophthalmic)"
+      ],
+      "extraction_focus": {
+        "parenteral": {
+          "iv_irritation": "if_IV_route",
+          "sc_im_irritation": "if_subcutaneous_or_IM",
+          "vascular_irritation": true
+        },
+        "dermal": {
+          "skin_irritation": "if_dermal_route",
+          "sensitization": "required"
+        },
+        "other_routes": {
+          "route_specific": "match_clinical_route"
+        }
+      },
+      "validation_rules": {
+        "required_if": "non_oral_route",
+        "route_match": "must_match_clinical_administration"
+      }
+    },
+    
+    "4.2.3.7.1": {
+      "category": "Antigenicity",
+      "priority": "P1",
+      "target_sections": {
+        "tabulated": ["2.6.7.18"],
+        "written": ["2.6.6.8"]
+      },
+      "extraction_focus": {
+        "immunogenicity": "antibody_formation",
+        "hypersensitivity": "anaphylaxis_potential"
+      },
+      "validation_rules": {
+        "required_if": "biologics_or_peptides"
+      }
+    },
+    
+    "4.2.3.7.2": {
+      "category": "Immunotoxicity",
+      "priority": "P1",
+      "target_sections": {
+        "tabulated": ["2.6.7.19"],
+        "written": ["2.6.6.8"]
+      },
+      "extraction_focus": {
+        "immune_function": "immunosuppression_or_enhancement",
+        "weight_of_evidence": "from_repeat_dose_studies"
+      },
+      "validation_rules": {
+        "required_if": "immunomodulatory_mechanism_or_findings"
+      }
+    },
+    
+    "4.2.3.7.3": {
+      "category": "Mechanistic Studies",
+      "priority": "P2",
+      "target_sections": {
+        "tabulated": ["2.6.7.20"],
+        "written": ["2.6.6.8"]
+      },
+      "note": "Optional studies to understand mechanisms of toxicity"
+    },
+    
+    "4.2.3.7.4": {
+      "category": "Dependence",
+      "priority": "P2",
+      "target_sections": {
+        "tabulated": ["2.6.7.21"],
+        "written": ["2.6.6.8"]
+      },
+      "validation_rules": {
+        "required_if": "cns_active_or_abuse_potential"
+      }
+    },
+    
+    "4.2.3.7.5": {
+      "category": "Metabolites",
+      "priority": "P1",
+      "target_sections": {
+        "tabulated": ["2.6.7.22"],
+        "written": ["2.6.6.8"]
+      },
+      "extraction_focus": {
+        "unique_metabolites": "human_specific_metabolites",
+        "major_metabolites": "if_greater_than_10_percent_exposure"
+      },
+      "validation_rules": {
+        "required_if": "human_specific_or_major_metabolite"
+      }
+    },
+    
+    "4.2.3.7.6": {
+      "category": "Impurities",
+      "priority": "P1",
+      "target_sections": {
+        "tabulated": ["2.6.7.23"],
+        "written": ["2.6.6.8"]
+      },
+      "extraction_focus": {
+        "qualified_impurities": "toxicology_studies_on_impurities",
+        "ich_q3a_q3b": "compliance_with_thresholds"
+      },
+      "validation_rules": {
+        "required_if": "impurities_above_ICH_threshold"
+      }
+    },
+    
+    "4.2.3.7.7": {
+      "category": "Other Toxicity Studies",
+      "priority": "P2",
+      "target_sections": {
+        "tabulated": ["2.6.7.24"],
+        "written": ["2.6.6.8"]
+      },
+      "note": "Any other studies not fitting above categories"
+    }
+  },
+  
+  "cross_module_references": {
+    "overview_to_detail": {
+      "2.4_to_2.6": "Module 2.4 (Nonclinical Overview) references detailed data in Module 2.6",
+      "2.6_to_4.2": "Module 2.6 summaries reference full study reports in Module 4.2"
+    },
+    "internal_references": {
+      "pk_in_toxicology": "Toxicokinetics in repeat-dose studies references 4.2.2 PK studies",
+      "metabolites": "Metabolite toxicity studies reference 4.2.2.4 metabolism data"
+    }
+  },
+  
+  "gap_analysis_framework": {
+    "P0_gaps": {
+      "severity": "CRITICAL",
+      "action": "Flag as submission-blocking issue",
+      "examples": [
+        "Missing NOAEL from repeat-dose toxicity",
+        "No hERG safety pharmacology study",
+        "Incomplete genotoxicity battery",
+        "Missing single-dose toxicity in required species"
+      ]
+    },
+    "P1_gaps": {
+      "severity": "MAJOR",
+      "action": "Evaluate based on context (drug class, indication, phase)",
+      "decision_tree": {
+        "embryo_fetal_dev": "Required if WCBP included in clinical study",
+        "fertility_study": "Required if WCBP included in clinical study",
+        "local_tolerance": "Required if non-oral route",
+        "immunotoxicity": "Required if immunomodulatory effects observed"
+      }
+    },
+    "P2_gaps": {
+      "severity": "MINOR",
+      "action": "Document as future requirement for NDA",
+      "examples": [
+        "Carcinogenicity studies (deferred to NDA)",
+        "PPND study (deferred to NDA)",
+        "Juvenile animal studies (only if pediatric population)"
+      ]
+    }
+  }
+}

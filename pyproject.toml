@@ -18,7 +18,9 @@ dependencies = [
     "uvicorn[standard] (>=0.30.0,<1.0.0)",
     "pdfminer (>=20191125,<20191126)",
     "fitz (>=0.0.1.dev2,<0.0.2)",
-    "jpype1 (>=1.6.0,<2.0.0)"
+    "jpype1 (>=1.6.0,<2.0.0)",
+    "pandoc (>=2.4,<3.0)",
+    "ocrmypdf (>=16.12.0,<17.0.0)"
 ]
 
 [tool.poetry]
@@ -81,6 +83,8 @@ infra = [
 
 
 
+
+
 [tool.poetry.group.ocr]
 optional = true
 
@@ -92,11 +96,15 @@ pdf2image = ">=1.17.0,<2.0.0"
 
 
 
+
+
 [tool.poetry.group.pymupdf]
 optional = true
 
 [tool.poetry.group.pymupdf.dependencies]
 pymupdf = ">=1.23.0,<2.0.0"
+
+
 
 
 
@@ -114,6 +122,8 @@ langchain-text-splitters = ">=0.3.0,<0.4.0"
 
 
 
+
+
 [tool.poetry.group.infra]
 optional = true
 
@@ -122,6 +132,8 @@ boto3 = ">=1.35.0,<2.0.0"
 redis = ">=5.2.0,<6.0.0"
 python-dotenv = ">=1.0.1,<2.0.0"
 psycopg = {extras = ["binary"], version = "^3.2.12"}
+
+
 
 
 

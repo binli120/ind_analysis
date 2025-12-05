@@ -21,17 +21,17 @@ logger = logging.getLogger(__name__)
 try:
     from openai import OpenAI
 except ModuleNotFoundError:  # pragma: no cover - handled gracefully at runtime
-    OpenAI = None  # type: ignore[misc]
+    OpenAI = None  # type: ignore[misc, assignment]
 
 try:
     import boto3
 except ModuleNotFoundError:  # pragma: no cover - handled gracefully at runtime
-    boto3 = None  # type: ignore[misc]
+    boto3 = None
 
 try:
-    import redis  # type: ignore[import-not-found]
+    import redis
 except ModuleNotFoundError:  # pragma: no cover - handled gracefully at runtime
-    redis = None  # type: ignore[misc]
+    redis = None  # type: ignore[assignment]
 
 _SECTION26_PATTERN = re.compile(r"2\.6(\.[0-9]+)*", re.IGNORECASE)
 
@@ -107,6 +107,12 @@ class Section26MarkdownCollector:
 
     # ------------------------------------------------------------------
     def collect(self) -> Tuple[List[Section26Document], str, str]:
+        if self.config.section_prefix and "2.4" in str(self.config.section_prefix).lower():
+            raise RuntimeError(
+                f"section_prefix points to a 2.4 path: {self.config.section_prefix}. "
+                "Please provide the Section 2.6 prefix."
+            )
+
         documents: List[Section26Document] = []
         combined_parts: List[str] = []
         output_prefix: Optional[str] = None
@@ -360,10 +366,10 @@ class IND24LLMClient:
                 env_path = Path(candidate)
                 if env_path.exists():
                     try:
-                        from dotenv import load_dotenv  # type: ignore
+                        from dotenv import load_dotenv
                     except ModuleNotFoundError:
                         load_dotenv = None  # type: ignore[assignment]
-                    if load_dotenv:
+                    if load_dotenv is not None:
                         load_dotenv(env_path, override=False)
                         api_key = os.getenv("OPENAI_API_KEY")
                         break
@@ -690,7 +696,7 @@ class IND24GenerationPipeline:
         )
         if reference_examples:
             summary_result["reference_examples"] = [ref.get("key", "") for ref in reference_examples]
-        summary_validation = _score_summary_validation(summary_result)
+        summary_validation = _score_summary_validation(summary_result, reference_examples=reference_examples)
         summary_result["validation"] = summary_validation
 
         outputs = self._persist_outputs(
@@ -717,8 +723,8 @@ class IND24GenerationPipeline:
     ) -> Dict[str, str]:
         s3_client = self._collector._s3
         combined_key = self.config.output_combined_markdown_key or f"{output_prefix}/section_2_6_combined.md"
-        gap_key = self.config.output_gap_key or f"{output_prefix}/section_2_6_gap_analysis.md"
-        gap_json_key = self.config.output_gap_json_key or f"{output_prefix}/section_2_6_gap_analysis.json"
+        gap_key = self.config.output_gap_key or f"{output_prefix}/section_2_4_gap_analysis.md"
+        gap_json_key = self.config.output_gap_json_key or f"{output_prefix}/section_2_4_gap_analysis.json"
         summary_key = self.config.output_summary_key or f"{output_prefix}/section_2_4_summary.md"
         summary_json_key = self.config.output_summary_json_key or f"{output_prefix}/section_2_4_summary.json"
 
@@ -1086,12 +1092,12 @@ def _validate_gap_structured(payload: Dict[str, Any]) -> Dict[str, Any]:
         missing_elems = item.get("missing_elements") or []
         if not isinstance(missing_elems, list):
             missing_elems = [str(missing_elems)]
-        cleaned = {
+        cleaned_incomplete: Dict[str, Any] = {
             "section_number": sec or "N/A",
             "missing_elements": [str(elem).strip() for elem in missing_elems if str(elem).strip()],
             "recommendation": str(item.get("recommendation") or "").strip(),
         }
-        result["incomplete_sections"].append(cleaned)
+        result["incomplete_sections"].append(cleaned_incomplete)
     return result
 
 
@@ -1129,11 +1135,15 @@ def _score_gap_validation(payload: Dict[str, Any], chunk_count: int) -> Dict[str
     return {"confidence": round(confidence, 3), "issues": issues, "evidence": evidence}
 
 
-def _score_summary_validation(summary_result: Dict[str, Any]) -> Dict[str, Any]:
+def _score_summary_validation(
+    summary_result: Dict[str, Any], reference_examples: Optional[List[Dict[str, str]]] = None
+) -> Dict[str, Any]:
     summary = summary_result.get("summary") if isinstance(summary_result, dict) else None
     issues: List[str] = []
     evidence: List[str] = []
     ref_examples = summary_result.get("reference_examples") or []
+    if reference_examples:
+        ref_examples = [ref.get("key", "") for ref in reference_examples]
     if ref_examples:
         evidence.append(f"Reference summaries used: {len(ref_examples)}")
     placeholders = 0
@@ -1144,7 +1154,7 @@ def _score_summary_validation(summary_result: Dict[str, Any]) -> Dict[str, Any]:
         "2.4.4_toxicology_summary",
         "2.4.5_integrated_risk_assessment",
     ]
-    present = set()
+    present: set[str] = set()
     if isinstance(summary, dict):
         content = summary.get("section_2_4_content") or {}
         present.update(content.keys())
@@ -1157,6 +1167,14 @@ def _score_summary_validation(summary_result: Dict[str, Any]) -> Dict[str, Any]:
     if present:
         evidence.append(f"Sections present: {', '.join(sorted(present))}")
     evidence.append(f"Placeholders counted: {placeholders}")
+    # Optional lexical overlap with reference summaries
+    if reference_examples:
+        summary_text = _flatten_strings(summary)
+        ref_text = "\n".join(ref.get("text", "") for ref in reference_examples)
+        overlap = _lexical_overlap(summary_text, ref_text)
+        evidence.append(f"Reference lexical overlap: {overlap:.1%}")
+    else:
+        overlap = 0.0
 
     confidence = 0.9
     if isinstance(summary, dict):
@@ -1169,6 +1187,7 @@ def _score_summary_validation(summary_result: Dict[str, Any]) -> Dict[str, Any]:
                 pass
     confidence -= 0.1 * len(missing_sections)
     confidence -= 0.05 * placeholders
+    confidence += 0.1 * overlap
     confidence = _clamp(confidence, 0.0, 0.99)
     return {"confidence": round(confidence, 3), "issues": issues, "evidence": evidence}
 
@@ -1213,3 +1232,27 @@ def validate_summary_payload(summary_payload: Dict[str, Any]) -> Dict[str, Any]:
     else:
         target = {"summary": summary_payload}
     return _score_summary_validation(target)
+
+
+def _flatten_strings(obj: Any) -> str:
+    parts: List[str] = []
+    def _walk(val: Any) -> None:
+        if isinstance(val, str):
+            parts.append(val)
+        elif isinstance(val, dict):
+            for v in val.values():
+                _walk(v)
+        elif isinstance(val, list):
+            for v in val:
+                _walk(v)
+    _walk(obj)
+    return "\n".join(parts)
+
+
+def _lexical_overlap(a: str, b: str) -> float:
+    def _tokens(text: str) -> set[str]:
+        return {tok for tok in re.split(r"[^a-z0-9]+", text.lower()) if len(tok) >= 4}
+    ta, tb = _tokens(a), _tokens(b)
+    if not tb:
+        return 0.0
+    return len(ta & tb) / max(len(tb), 1)
