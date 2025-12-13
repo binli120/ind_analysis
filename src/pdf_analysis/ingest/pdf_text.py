@@ -73,7 +73,9 @@ def extract_pages_text(
         iter_pages_text(pdf_path, max_pages=max_pages)
     )
     empty_page_ids: List[int] = [
-        entry["page_number"] - 1 for entry in pages_out if not entry.get("text")
+        int(entry["page_number"]) - 1
+        for entry in pages_out
+        if entry.get("page_number") is not None and not entry.get("text")
     ]
 
     if ocr_fallback and empty_page_ids:

@@ -8,22 +8,25 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any, Dict, List, Optional, Sequence, cast
+from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
 from urllib.parse import urlencode
 
 import pandas as pd
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
+from rapidfuzz import fuzz
 
 from pdf_analysis.ingest.pdf_text import extract_pages_text
 from pdf_analysis.ingest.tables import extract_tables_all
 from pdf_analysis.pipeline import PDFProcessingPipeline
-from pdf_analysis.service.ai_metadata import OpenAIMetadataGenerator
+from pdf_analysis.service.ai_metadata import OpenAIMetadataGenerator, _extract_text_from_response
 from pdf_analysis.service.document_summarizer import (
     OpenAIDocumentSummarizer,
     embed_topics_into_markdown,
@@ -45,6 +48,9 @@ app = FastAPI(
     description="Upload a PDF study report and receive extracted content, structured tables, and quality analysis.",
     version="0.1.0",
 )
+upload_router = APIRouter(tags=["upload"])
+ncd_router = APIRouter(prefix="/ncd", tags=["ncd"])
+dev_router = APIRouter(prefix="/dev", tags=["dev"])
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +117,18 @@ class S3MarkdownUploadRequest(BaseModel):
     tags: Optional[Dict[str, str]] = None
     metadata: Optional[Dict[str, str]] = None
     aws_region: Optional[str] = None
+
+
+class NCDLabelRequest(BaseModel):
+    """Request payload for minimal section labeling of a PDF stored in S3."""
+
+    key: str
+    company: str
+    project: str
+    bucket: Optional[str] = None
+    aws_region: Optional[str] = None
+    page_limit: int = 5
+    use_llm: bool = False
 
 
 try:
@@ -245,6 +263,214 @@ def _upload_analysis_json_to_s3(
     except Exception as exc:  # pragma: no cover - best effort
         logger.warning("Failed to upload analysis payload for %s: %s", analysis_key, exc)
     return analysis_key
+
+
+# ---------------------------------------------------------------------------
+# Section labeling helpers (Module 2.4 / 2.6 template-driven)
+# ---------------------------------------------------------------------------
+_IND_TEMPLATE_SECTIONS: List[Dict[str, str]] | None = None
+
+
+def _load_ind_template_sections() -> List[Dict[str, str]]:
+    """Load section numbers/titles from the IND 2.4/2.6 template."""
+    global _IND_TEMPLATE_SECTIONS
+    if _IND_TEMPLATE_SECTIONS is not None:
+        return _IND_TEMPLATE_SECTIONS
+
+    template_path = Path(__file__).resolve().parents[2] / "ncd" / "ind_24_26_template.json"
+    try:
+        raw = json.loads(template_path.read_text())
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Unable to load template %s: %s", template_path, exc)
+        _IND_TEMPLATE_SECTIONS = []
+        return _IND_TEMPLATE_SECTIONS
+
+    entries: List[Dict[str, Any]] = []
+    if isinstance(raw, list):
+        entries = [entry for entry in raw if isinstance(entry, dict)]
+    elif isinstance(raw, dict):
+        for value in raw.values():
+            if isinstance(value, list):
+                entries.extend([entry for entry in value if isinstance(entry, dict)])
+
+    sections: List[Dict[str, str]] = []
+    for entry in entries:
+        section_id = str(entry.get("Section") or "").strip()
+        if not section_id:
+            continue
+        title = str(
+            entry.get("Subsection Header")
+            or entry.get("Section Header")
+            or section_id
+        ).strip()
+        content_parts = [
+            entry.get("Section Header") or "",
+            entry.get("Subsection Header") or "",
+            entry.get("Content") or "",
+        ]
+        blob = " ".join(part for part in content_parts if part).strip()
+        sections.append({"section": section_id, "title": title, "blob": blob})
+
+    _IND_TEMPLATE_SECTIONS = sections
+    return _IND_TEMPLATE_SECTIONS
+
+
+def _match_section_regex(text: str, sections: List[Dict[str, str]]) -> Tuple[str, str, float] | None:
+    """Find direct section-number mentions in text."""
+    for entry in sections:
+        sec = entry["section"]
+        if not sec:
+            continue
+        pattern = rf"\b{re.escape(sec)}\b"
+        if re.search(pattern, text):
+            return sec, entry["title"], 0.98
+    return None
+
+
+def _score_sections_similarity(text: str, sections: List[Dict[str, str]]) -> Tuple[str, str, float] | None:
+    """Score sections using fuzzy similarity against headers/content."""
+    if not text.strip():
+        return None
+    sample = text.lower()[:8000]
+    best: Tuple[str, str, float] | None = None
+    for entry in sections:
+        title = entry["title"].lower()
+        blob = entry["blob"].lower() if entry["blob"] else title
+        score = max(fuzz.partial_ratio(sample, title), fuzz.partial_ratio(sample, blob)) / 100.0
+        if best is None or score > best[2]:
+            best = (entry["section"], entry["title"], round(score, 3))
+    return best
+
+
+def _guess_section_from_name(name: str, sections: List[Dict[str, str]]) -> Tuple[str, str, float] | None:
+    """Infer section directly from filename/key if it contains a number."""
+    if not name:
+        return None
+    candidates = re.findall(r"\b\d+(?:\.\d+)+\b", name)
+    if not candidates:
+        return None
+    # Pick the longest/most specific section string
+    candidates.sort(key=lambda s: (s.count("."), len(s)), reverse=True)
+    for cand in candidates:
+        for entry in sections:
+            if entry["section"] == cand:
+                return cand, entry["title"], 0.99
+    # No template match, still return the first candidate
+    return candidates[0], candidates[0], 0.8
+
+
+def _top_section_candidates(
+    text: str, sections: List[Dict[str, str]], limit: int = 5
+) -> List[Dict[str, Any]]:
+    """Return top candidate matches for debugging/QA."""
+    sample = text.lower()[:8000]
+    scored: List[Tuple[float, Dict[str, str]]] = []
+    for entry in sections:
+        title = entry["title"].lower()
+        blob = entry["blob"].lower() if entry["blob"] else title
+        score = max(fuzz.partial_ratio(sample, title), fuzz.partial_ratio(sample, blob)) / 100.0
+        scored.append((score, entry))
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    top = []
+    for score, entry in scored[:limit]:
+        top.append(
+            {
+                "section_number": entry["section"],
+                "section_title": entry["title"],
+                "score": round(score, 3),
+            }
+        )
+    return top
+
+
+def _llm_select_section(text: str, sections: List[Dict[str, str]]) -> Tuple[str, str, float] | None:
+    """Optional LLM-based selection constrained to known sections."""
+    if not _metadata_generator or not getattr(_metadata_generator, "_client", None):
+        return None
+    client = _metadata_generator._client  # type: ignore[attr-defined]
+    options = "\n".join(f"- {s['section']}: {s['title']}" for s in sections[:120])
+    system_prompt = (
+        "You are a regulatory assistant classifying Module 2.4/2.6 documents. "
+        "Choose the single best matching section number from the provided options. "
+        "Respond ONLY with minified JSON: "
+        '{"section_number":"<number>","section_title":"<title>","confidence":0.0} '
+        "where confidence is 0.0-1.0. Use only the supplied section numbers."
+    )
+    user_prompt = (
+        f"Options:\n{options}\n\n"
+        "PDF excerpt (trimmed):\n"
+        f"{text[:4000]}"
+    )
+    try:
+        response = client.responses.create(
+            model=getattr(_metadata_generator, "model", "gpt-4o-mini"),  # type: ignore[attr-defined]
+            input=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.1,
+        )
+    except Exception as exc:  # pragma: no cover - network or auth errors
+        logger.warning("LLM section selection failed: %s", exc)
+        return None
+
+    raw_text = _extract_text_from_response(response)
+    if not raw_text:
+        return None
+    try:
+        data = json.loads(raw_text)
+    except json.JSONDecodeError:
+        logger.warning("LLM section response was not valid JSON: %s", raw_text)
+        return None
+
+    sec = str(data.get("section_number") or "").strip()
+    title = str(data.get("section_title") or "").strip()
+    conf = data.get("confidence")
+    try:
+        confidence = float(conf) if conf is not None else None
+    except (TypeError, ValueError):
+        confidence = None
+
+    if not sec:
+        return None
+    if not title:
+        try:
+            title = next((s["title"] for s in sections if s["section"] == sec), "")
+        except StopIteration:
+            title = ""
+    return sec, title, round(confidence or 0.0, 3)
+
+
+def _classify_section_from_text(
+    text: str, *, filename: Optional[str] = None, use_llm: bool = False
+) -> Tuple[str, str, float, str] | None:
+    """Determine the best section using filename hints + minimal text."""
+    sections = _load_ind_template_sections()
+    if not sections:
+        return None
+
+    if filename:
+        guessed = _guess_section_from_name(filename, sections)
+        if guessed:
+            return guessed[0], guessed[1], guessed[2], "filename"
+
+    direct = _match_section_regex(text, sections)
+    if direct:
+        return direct[0], direct[1], direct[2], "regex"
+
+    heuristic = _score_sections_similarity(text, sections)
+    best = heuristic
+    method = "heuristic"
+
+    if use_llm:
+        llm_pick = _llm_select_section(text, sections)
+        if llm_pick:
+            best = llm_pick
+            method = "llm"
+
+    if best:
+        return best[0], best[1], best[2], method
+    return None
 
 
 def _parse_s3_context(key: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
@@ -459,6 +685,207 @@ def _process_pdf_and_store_analysis(
     return analysis_payload
 
 
+@ncd_router.post("/label")
+async def label_s3_pdf(payload: NCDLabelRequest) -> Dict[str, Any]:
+    """
+    Lightweight section labeling for a PDF stored in S3.
+
+    - Downloads once, reads the first few pages (page_limit) to classify.
+    - Uses template-driven heuristics with optional LLM refinement.
+    - Copies the PDF into company/project/<section>/filename and updates metadata + sidecar.
+    """
+    try:
+        import boto3  # type: ignore
+        from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
+    except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
+        raise HTTPException(
+            status_code=500,
+            detail="boto3 is required for S3 labeling. Install the 'infra' extras.",
+        ) from exc
+
+    bucket = payload.bucket or os.getenv("S3_BUCKET")
+    if not bucket:
+        raise HTTPException(
+            status_code=400,
+            detail="bucket is required (pass in payload or set S3_BUCKET).",
+        )
+
+    page_limit = payload.page_limit if payload.page_limit and payload.page_limit > 0 else 5
+
+    def worker() -> Dict[str, Any]:
+        s3_client = boto3.client("s3", region_name=payload.aws_region)
+        with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp_path = Path(tmp.name)
+        try:
+            with tmp_path.open("wb") as handle:
+                s3_client.download_fileobj(bucket, payload.key, handle)
+        except ClientError as exc:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            error_code = exc.response.get("Error", {}).get("Code")
+            status = 404 if error_code in {"404", "NoSuchKey"} else 502
+            raise HTTPException(status_code=status, detail=f"Failed to fetch S3 object: {exc}") from exc
+
+        try:
+            sample_text, pages_sampled = _extract_sample_text(tmp_path, page_limit)
+            classification = _classify_section_from_text(
+                sample_text,
+                filename=Path(payload.key).name,
+                use_llm=payload.use_llm,
+            )
+        finally:
+            try:
+                tmp_path.unlink()
+            except Exception:
+                pass
+
+        section_number = classification[0] if classification else None
+        section_title = classification[1] if classification else None
+        confidence = classification[2] if classification else 0.0
+        method = classification[3] if classification else "none"
+
+        target_folder = section_number or "unlabeled"
+        key_parts = (
+            _split_path_segments(payload.company)
+            + _split_path_segments(payload.project)
+            + _split_path_segments(target_folder)
+        )
+        if not key_parts:
+            raise HTTPException(status_code=400, detail="company/project must be provided for labeling.")
+
+        dest_key = "/".join(key_parts + [Path(payload.key).name])
+        copy_source: Dict[str, Any] = {"Bucket": bucket, "Key": payload.key}
+
+        try:
+            copy_resp = s3_client.copy_object(
+                Bucket=bucket,
+                Key=dest_key,
+                CopySource=copy_source,
+                MetadataDirective="COPY",
+            )
+        except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
+            raise HTTPException(status_code=502, detail=f"Failed to copy PDF to labeled folder: {exc}") from exc
+
+        dest_version_id = copy_resp.get("VersionId")
+        meta_fields: Dict[str, Any] = {
+            "ind_section_number": section_number,
+            "ind_section_title": section_title,
+            "ind_classification_confidence": confidence,
+            "classification_method": method,
+            "source_key": payload.key,
+            "pages_sampled": pages_sampled,
+        }
+        if section_number:
+            meta_fields["labels"] = [f"section:{section_number}"]
+
+        _update_object_metadata(
+            s3_client,
+            bucket=bucket,
+            key=dest_key,
+            version_id=dest_version_id,
+            metadata_fields=meta_fields,
+        )
+        _upload_metadata_json_to_s3(
+            s3_client,
+            bucket=bucket,
+            key=dest_key,
+            payload=meta_fields,
+        )
+
+        return {
+            "section_number": section_number,
+            "section_title": section_title,
+            "confidence": confidence,
+            "method": method,
+            "pages_sampled": pages_sampled,
+            "s3": {
+                "bucket": bucket,
+                "source_key": payload.key,
+                "labeled_key": dest_key,
+                "version_id": dest_version_id,
+                "metadata_key": _metadata_json_key(dest_key),
+            },
+        }
+
+    try:
+        return await asyncio.to_thread(worker)
+    except HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=500, detail=f"Labeling failed: {exc}") from exc
+
+
+@dev_router.post("/label-local")
+async def dev_label_local(
+    file: UploadFile = File(...),
+    page_limit: int = Form(5, ge=1, description="Max pages to sample for labeling"),
+    use_llm: bool = Form(False, description="Enable optional LLM refinement"),
+) -> Dict[str, Any]:
+    """
+    Dev-only: label a local PDF upload without S3 side-effects.
+    Returns the predicted section, confidence, method, and top fuzzy candidates.
+    """
+    filename = file.filename or "uploaded.pdf"
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+
+    with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp_path = Path(tmp.name)
+        try:
+            shutil.copyfileobj(file.file, tmp)
+            tmp.flush()
+        finally:
+            file.file.close()
+
+    try:
+        sample_text, pages_sampled = _extract_sample_text(tmp_path, page_limit)
+        classification = _classify_section_from_text(
+            sample_text,
+            filename=filename,
+            use_llm=use_llm,
+        )
+        candidates = _top_section_candidates(sample_text, _load_ind_template_sections(), limit=5)
+    finally:
+        try:
+            tmp_path.unlink()
+        except Exception:
+            pass
+
+    if classification:
+        section_number, section_title, confidence, method = classification
+    else:
+        section_number = section_title = None
+        confidence = 0.0
+        method = "none"
+
+    if not candidates and section_number:
+        candidates = [
+            {"section_number": section_number, "section_title": section_title or section_number, "score": confidence}
+        ]
+
+    return {
+        "filename": filename,
+        "section_number": section_number,
+        "section_title": section_title,
+        "confidence": confidence,
+        "method": method,
+        "pages_sampled": pages_sampled,
+        "candidates": candidates,
+    }
+
+
+@dev_router.get("/sections")
+async def dev_list_sections(limit: int = 0) -> Dict[str, Any]:
+    """
+    Dev-only: return the known template sections for quick QA.
+    """
+    sections = _load_ind_template_sections()
+    payload = sections if limit <= 0 else sections[:limit]
+    return {"count": len(sections), "sections": payload}
+
+
 async def _analyze_uploaded_pdf(upload: UploadFile) -> Dict[str, Any]:
     """Analyze an uploaded PDF file entirely in memory."""
     filename = upload.filename or "uploaded.pdf"
@@ -621,7 +1048,7 @@ async def _analyze_s3_payload(payload: S3AnalyzeRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=502, detail=f"Failed to download S3 object: {exc}") from exc
 
 
-@app.post("/analyze")
+@upload_router.post("/analyze")
 async def analyze_pdf(request: Request) -> Dict[str, Any]:
     """
     Analyze a PDF from either a direct upload or an S3 location.
@@ -654,7 +1081,7 @@ async def analyze_pdf(request: Request) -> Dict[str, Any]:
     )
 
 
-@app.post("/s3/upload-analyze")
+@upload_router.post("/s3/upload-analyze")
 async def upload_and_analyze_to_s3(
     file: UploadFile = File(...),
     bucket: str = Form(..., description="Destination S3 bucket for the uploaded PDF."),
@@ -932,7 +1359,63 @@ def _run_pipeline_with_runner(
     }
 
 
-@app.post("/s3/markdown")
+def _extract_sample_text(pdf_path: Path, page_limit: int) -> Tuple[str, int]:
+    """
+    Grab minimal text from the first N pages using layered fallbacks.
+    Returns (text, pages_sampled).
+    """
+    pages_sampled = 0
+    sample_text = ""
+
+    try:
+        pages = extract_pages_text(
+            pdf_path,
+            ocr_fallback=False,
+            max_pages=page_limit,
+        )
+        pages_sampled = len(pages)
+        sample_text = "\n".join((p.get("text") or "") for p in pages)
+        if not sample_text.strip():
+            pages = extract_pages_text(pdf_path, ocr_fallback=True, max_pages=page_limit)
+            pages_sampled = len(pages)
+            sample_text = "\n".join((p.get("text") or "") for p in pages)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Primary text extraction failed: %s", exc)
+
+    if sample_text.strip():
+        return sample_text, pages_sampled
+
+    # PyMuPDF fallback
+    try:
+        import fitz  # type: ignore
+        doc = fitz.open(pdf_path)
+        texts: List[str] = []
+        for page in doc[:page_limit]:
+            texts.append(page.get_text("text") or "")
+        sample_text = "\n".join(texts)
+        pages_sampled = max(pages_sampled, min(page_limit, len(doc)))
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("fitz text extraction failed: %s", exc)
+
+    if sample_text.strip():
+        return sample_text, pages_sampled
+
+    # pdfplumber fallback (best effort)
+    try:
+        import pdfplumber  # type: ignore
+        with pdfplumber.open(pdf_path) as pdfdoc:
+            texts = []
+            for page in pdfdoc.pages[:page_limit]:
+                texts.append(page.extract_text() or "")
+            sample_text = "\n".join(texts)
+            pages_sampled = max(pages_sampled, min(page_limit, len(pdfdoc.pages)))
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("pdfplumber text extraction failed: %s", exc)
+
+    return sample_text, pages_sampled
+
+
+@upload_router.post("/s3/markdown")
 async def fetch_s3_markdown(payload: S3MarkdownRequest) -> Dict[str, Any]:
     """Extract markdown directly from an S3 object and persist refreshed metadata."""
     try:  # Lazy import so API works without S3 extras.
@@ -1010,7 +1493,7 @@ async def fetch_s3_markdown(payload: S3MarkdownRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@app.post("/s3/markdown/summary")
+@upload_router.post("/s3/markdown/summary")
 async def fetch_s3_markdown_with_summary(payload: S3MarkdownRequest) -> Dict[str, Any]:
     """Return markdown plus an OpenAI-generated summary/topic listing for an S3 object."""
     if not _summary_generator or not _summary_generator.is_available():
@@ -1101,7 +1584,7 @@ def _build_markdown_key(path: str, filename: str) -> str:
     return key
 
 
-@app.post("/s3/markdown/save")
+@upload_router.post("/s3/markdown/save")
 async def save_s3_markdown(payload: S3MarkdownUploadRequest) -> Dict[str, Any]:
     """Save a markdown document to S3 while capturing metadata/tag sidecars."""
     try:
@@ -1165,7 +1648,7 @@ async def save_s3_markdown(payload: S3MarkdownUploadRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=502, detail=f"Failed to upload markdown: {exc}") from exc
 
 
-@app.get("/s3/analysis/status")
+@upload_router.get("/s3/analysis/status")
 async def get_s3_analysis_status(
     bucket: str,
     key: str,
@@ -1215,7 +1698,7 @@ async def get_s3_analysis_status(
         raise HTTPException(status_code=502, detail=f"Failed to check analysis status: {exc}") from exc
 
 
-@app.get("/s3/analysis/result")
+@upload_router.get("/s3/analysis/result")
 async def get_s3_analysis_result(
     bucket: str,
     key: str,
@@ -1260,6 +1743,11 @@ async def get_s3_analysis_result(
         raise
     except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
         raise HTTPException(status_code=502, detail=f"Failed to download analysis result: {exc}") from exc
+
+
+app.include_router(upload_router)
+app.include_router(ncd_router)
+app.include_router(dev_router)
 
 
 def export_openapi_to_file(app: FastAPI, out_path: str | Path) -> None:

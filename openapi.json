@@ -8,6 +8,9 @@
   "paths": {
     "/analyze": {
       "post": {
+        "tags": [
+          "upload"
+        ],
         "summary": "Analyze Pdf",
         "description": "Analyze a PDF from either a direct upload or an S3 location.",
         "operationId": "analyze_pdf_analyze_post",
@@ -29,6 +32,9 @@
     },
     "/s3/upload-analyze": {
       "post": {
+        "tags": [
+          "upload"
+        ],
         "summary": "Upload And Analyze To S3",
         "description": "Upload a PDF to S3, trigger analysis, and return the results or an async handle.",
         "operationId": "upload_and_analyze_to_s3_s3_upload_analyze_post",
@@ -68,6 +74,9 @@
     },
     "/s3/markdown": {
       "post": {
+        "tags": [
+          "upload"
+        ],
         "summary": "Fetch S3 Markdown",
         "description": "Extract markdown directly from an S3 object and persist refreshed metadata.",
         "operationId": "fetch_s3_markdown_s3_markdown_post",
@@ -109,6 +118,9 @@
     },
     "/s3/markdown/summary": {
       "post": {
+        "tags": [
+          "upload"
+        ],
         "summary": "Fetch S3 Markdown With Summary",
         "description": "Return markdown plus an OpenAI-generated summary/topic listing for an S3 object.",
         "operationId": "fetch_s3_markdown_with_summary_s3_markdown_summary_post",
@@ -150,6 +162,9 @@
     },
     "/s3/markdown/save": {
       "post": {
+        "tags": [
+          "upload"
+        ],
         "summary": "Save S3 Markdown",
         "description": "Save a markdown document to S3 while capturing metadata/tag sidecars.",
         "operationId": "save_s3_markdown_s3_markdown_save_post",
@@ -191,6 +206,9 @@
     },
     "/s3/analysis/status": {
       "get": {
+        "tags": [
+          "upload"
+        ],
         "summary": "Get S3 Analysis Status",
         "description": "Check whether the async analysis payload has been written back to S3.",
         "operationId": "get_s3_analysis_status_s3_analysis_status_get",
@@ -258,6 +276,9 @@
     },
     "/s3/analysis/result": {
       "get": {
+        "tags": [
+          "upload"
+        ],
         "summary": "Get S3 Analysis Result",
         "description": "Retrieve the persisted analysis JSON produced by the pipeline.",
         "operationId": "get_s3_analysis_result_s3_analysis_result_get",
@@ -322,10 +343,171 @@
           }
         }
       }
+    },
+    "/ncd/label": {
+      "post": {
+        "tags": [
+          "ncd"
+        ],
+        "summary": "Label S3 Pdf",
+        "description": "Lightweight section labeling for a PDF stored in S3.\n\n- Downloads once, reads the first few pages (page_limit) to classify.\n- Uses template-driven heuristics with optional LLM refinement.\n- Copies the PDF into company/project/<section>/filename and updates metadata + sidecar.",
+        "operationId": "label_s3_pdf_ncd_label_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NCDLabelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Label S3 Pdf Ncd Label Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dev/label-local": {
+      "post": {
+        "tags": [
+          "dev"
+        ],
+        "summary": "Dev Label Local",
+        "description": "Dev-only: label a local PDF upload without S3 side-effects.\nReturns the predicted section, confidence, method, and top fuzzy candidates.",
+        "operationId": "dev_label_local_dev_label_local_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_dev_label_local_dev_label_local_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Dev Label Local Dev Label Local Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dev/sections": {
+      "get": {
+        "tags": [
+          "dev"
+        ],
+        "summary": "Dev List Sections",
+        "description": "Dev-only: return the known template sections for quick QA.",
+        "operationId": "dev_list_sections_dev_sections_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Dev List Sections Dev Sections Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "Body_dev_label_local_dev_label_local_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          },
+          "page_limit": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Page Limit",
+            "description": "Max pages to sample for labeling",
+            "default": 5
+          },
+          "use_llm": {
+            "type": "boolean",
+            "title": "Use Llm",
+            "description": "Enable optional LLM refinement",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_dev_label_local_dev_label_local_post"
+      },
       "Body_upload_and_analyze_to_s3_s3_upload_analyze_post": {
         "properties": {
           "file": {
@@ -440,6 +622,62 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "NCDLabelRequest": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "company": {
+            "type": "string",
+            "title": "Company"
+          },
+          "project": {
+            "type": "string",
+            "title": "Project"
+          },
+          "bucket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket"
+          },
+          "aws_region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aws Region"
+          },
+          "page_limit": {
+            "type": "integer",
+            "title": "Page Limit",
+            "default": 5
+          },
+          "use_llm": {
+            "type": "boolean",
+            "title": "Use Llm",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "company",
+          "project"
+        ],
+        "title": "NCDLabelRequest",
+        "description": "Request payload for minimal section labeling of a PDF stored in S3."
       },
       "S3MarkdownRequest": {
         "properties": {
