@@ -351,12 +351,19 @@ def _guess_section_from_name(name: str, sections: List[Dict[str, str]]) -> Tuple
         return None
     # Pick the longest/most specific section string
     candidates.sort(key=lambda s: (s.count("."), len(s)), reverse=True)
+    section_numbers = [entry["section"] for entry in sections]
     for cand in candidates:
         for entry in sections:
             if entry["section"] == cand:
                 return cand, entry["title"], 0.99
-    # No template match, still return the first candidate
-    return candidates[0], candidates[0], 0.8
+        # No exact template match; compute similarity against known numbers to set confidence
+        best_num_score = 0.0
+        for sec in section_numbers:
+            best_num_score = max(best_num_score, fuzz.partial_ratio(cand, sec) / 100.0)
+        depth_bonus = min(0.2, cand.count(".") * 0.05)
+        confidence = round(min(0.95, max(best_num_score, 0.5) + depth_bonus), 3)
+        return cand, cand, confidence
+    return None
 
 
 def _top_section_candidates(

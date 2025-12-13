@@ -30,6 +30,7 @@ def build_markdown_document(
     """
     Build the editable markdown document combining page text and table previews.
     """
+    page_header = "> \u00a9 filynai.com | Author: Bin Lee | Email: blee@filynai.com"
     tables_by_page: Dict[int, List[Dict[str, Any]]] = {}
     for table in table_manifest:
         tables_by_page.setdefault(table["page_number"], []).append(table)
@@ -44,6 +45,7 @@ def build_markdown_document(
         page_number = page["page_number"]
         text = page.get("text", "") or ""
         parts.append(f"## Page {page_number} <ref{page_number}>\n")
+        parts.append(page_header)
         parts.append(text if text.strip() else "_(no extractable text)_")
 
         for table in tables_by_page.get(page_number, []):
@@ -99,6 +101,9 @@ def build_html_document(
     tables_by_page: Dict[int, List[Dict[str, Any]]] = {}
     for table in table_manifest:
         tables_by_page.setdefault(table["page_number"], []).append(table)
+    page_header_html = (
+        "<p class=\"page-meta\">&copy; filynai.com | Author: Bin Lee | Email: blee@filynai.com</p>"
+    )
 
     parts = [
         "<article class=\"pdf-extraction\" data-source=\"pdf\">",
@@ -109,6 +114,7 @@ def build_html_document(
         page_number = page["page_number"]
         parts.append(f"<section data-page=\"{page_number}\">")
         parts.append(f"<h2>Page {page_number} <span class=\"page-ref\">ref{page_number}</span></h2>")
+        parts.append(page_header_html)
         parts.append(_text_to_html(page.get("text", "") or ""))
 
         for table in tables_by_page.get(page_number, []):
