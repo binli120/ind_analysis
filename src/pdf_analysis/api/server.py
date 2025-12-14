@@ -131,6 +131,18 @@ class NCDLabelRequest(BaseModel):
     use_llm: bool = False
 
 
+class NCDRelabelRequest(BaseModel):
+    """Request payload to correct a labeled section for a PDF in S3."""
+
+    key: str
+    company: str
+    project: str
+    section_number: str
+    section_title: Optional[str] = None
+    bucket: Optional[str] = None
+    aws_region: Optional[str] = None
+
+
 try:
     _metadata_generator = OpenAIMetadataGenerator()
 except Exception:  # pragma: no cover - optional dependency or missing key
@@ -822,6 +834,95 @@ async def label_s3_pdf(payload: NCDLabelRequest) -> Dict[str, Any]:
         raise
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=500, detail=f"Labeling failed: {exc}") from exc
+
+
+@ncd_router.post("/relabel")
+async def relabel_s3_pdf(payload: NCDRelabelRequest) -> Dict[str, Any]:
+    """
+    Correct the section number/title for an S3 PDF by copying into the desired section folder
+    and updating metadata sidecars.
+    """
+    try:
+        import boto3  # type: ignore
+        from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
+    except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
+        raise HTTPException(
+            status_code=500,
+            detail="boto3 is required for S3 relabel. Install the 'infra' extras.",
+        ) from exc
+
+    bucket = payload.bucket or os.getenv("S3_BUCKET")
+    if not bucket:
+        raise HTTPException(
+            status_code=400,
+            detail="bucket is required (pass in payload or set S3_BUCKET).",
+        )
+
+    target_folder = payload.section_number or "unlabeled"
+    key_parts = (
+        _split_path_segments(payload.company)
+        + _split_path_segments(payload.project)
+        + _split_path_segments(target_folder)
+    )
+    if not key_parts:
+        raise HTTPException(status_code=400, detail="company/project must be provided for relabeling.")
+
+    dest_key = "/".join(key_parts + [Path(payload.key).name])
+
+    s3_client = boto3.client("s3", region_name=payload.aws_region)
+    copy_source: Dict[str, Any] = {"Bucket": bucket, "Key": payload.key}
+
+    try:
+        copy_resp = s3_client.copy_object(
+            Bucket=bucket,
+            Key=dest_key,
+            CopySource=copy_source,
+            MetadataDirective="COPY",
+        )
+    except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
+        raise HTTPException(status_code=502, detail=f"Failed to copy PDF to relabeled folder: {exc}") from exc
+
+    # Best-effort move: delete the original after successful copy
+    try:
+        s3_client.delete_object(Bucket=bucket, Key=payload.key)
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning("Failed to delete original after relabel (%s): %s", payload.key, exc)
+
+    dest_version_id = copy_resp.get("VersionId")
+    meta_fields: Dict[str, Any] = {
+        "ind_section_number": payload.section_number,
+        "ind_section_title": payload.section_title or payload.section_number,
+        "classification_method": "manual",
+        "source_key": payload.key,
+        "labels": [f"section:{payload.section_number}"],
+    }
+
+    _update_object_metadata(
+        s3_client,
+        bucket=bucket,
+        key=dest_key,
+        version_id=dest_version_id,
+        metadata_fields=meta_fields,
+    )
+    _upload_metadata_json_to_s3(
+        s3_client,
+        bucket=bucket,
+        key=dest_key,
+        payload=meta_fields,
+    )
+
+    return {
+        "section_number": payload.section_number,
+        "section_title": meta_fields["ind_section_title"],
+        "method": "manual",
+        "s3": {
+            "bucket": bucket,
+            "source_key": payload.key,
+            "relabeled_key": dest_key,
+            "version_id": dest_version_id,
+            "metadata_key": _metadata_json_key(dest_key),
+        },
+    }
 
 
 @dev_router.post("/label-local")

@@ -1,4 +1,7 @@
-from pydantic import BaseSettings
+try:
+    from pydantic_settings import BaseSettings  # Pydantic v2 preferred location
+except ImportError:  # pragma: no cover - fallback for environments without pydantic-settings
+    from pydantic import BaseSettings
 
 
 class Settings(BaseSettings):

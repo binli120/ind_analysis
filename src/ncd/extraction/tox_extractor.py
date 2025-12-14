@@ -70,32 +70,70 @@ def extract_tox_for_study(
         **raw,
         "source_chunk_ids": chunk_ids,
     }
+    # Ensure required list fields exist to avoid validation failures
+    data.setdefault("dose_groups", [])
+    data.setdefault("exposure_metrics", [])
+    data.setdefault("findings", [])
+    # Fill optional scalars when missing
+    for key in (
+        "duration_days",
+        "noael_mg_per_kg",
+        "loael_mg_per_kg",
+        "limiting_organ",
+        "limiting_finding",
+        "clinical_multiple",
+    ):
+        data.setdefault(key, None)
     summary = ToxStudySummarySchema(**data)
 
     # Persist to DB: ncd_dose_group, ncd_exposure_metric, ncd_finding, ncd_study_safety_summary
-    # 1) Safety summary
-    db.execute(
+    # 1) Safety summary (manual upsert to avoid ON CONFLICT requirement)
+    existing_ss = db.execute(
         sqltext("""
-            INSERT INTO ncd_study_safety_summary (
-                study_id, noael_mg_per_kg, loael_mg_per_kg,
-                limiting_organ, limiting_finding, clinical_multiple
-            ) VALUES (:sid, :noael, :loael, :organ, :finding, :cm)
-            ON CONFLICT (study_id) DO UPDATE SET
-              noael_mg_per_kg = EXCLUDED.noael_mg_per_kg,
-              loael_mg_per_kg = EXCLUDED.loael_mg_per_kg,
-              limiting_organ = EXCLUDED.limiting_organ,
-              limiting_finding = EXCLUDED.limiting_finding,
-              clinical_multiple = EXCLUDED.clinical_multiple;
+            SELECT id FROM ncd_study_safety_summary
+            WHERE study_id = :sid
+            LIMIT 1
         """),
-        {
-            "sid": study_id,
-            "noael": summary.noael_mg_per_kg,
-            "loael": summary.loael_mg_per_kg,
-            "organ": summary.limiting_organ,
-            "finding": summary.limiting_finding,
-            "cm": summary.clinical_multiple,
-        },
-    )
+        {"sid": study_id},
+    ).scalar()
+
+    if existing_ss:
+        db.execute(
+            sqltext("""
+                UPDATE ncd_study_safety_summary
+                SET noael_mg_per_kg = :noael,
+                    loael_mg_per_kg = :loael,
+                    limiting_organ = :organ,
+                    limiting_finding = :finding,
+                    clinical_multiple = :cm
+                WHERE study_id = :sid
+            """),
+            {
+                "sid": study_id,
+                "noael": summary.noael_mg_per_kg,
+                "loael": summary.loael_mg_per_kg,
+                "organ": summary.limiting_organ,
+                "finding": summary.limiting_finding,
+                "cm": summary.clinical_multiple,
+            },
+        )
+    else:
+        db.execute(
+            sqltext("""
+                INSERT INTO ncd_study_safety_summary (
+                    study_id, noael_mg_per_kg, loael_mg_per_kg,
+                    limiting_organ, limiting_finding, clinical_multiple
+                ) VALUES (:sid, :noael, :loael, :organ, :finding, :cm)
+            """),
+            {
+                "sid": study_id,
+                "noael": summary.noael_mg_per_kg,
+                "loael": summary.loael_mg_per_kg,
+                "organ": summary.limiting_organ,
+                "finding": summary.limiting_finding,
+                "cm": summary.clinical_multiple,
+            },
+        )
 
     # 2) Dose groups
     for dg in summary.dose_groups:

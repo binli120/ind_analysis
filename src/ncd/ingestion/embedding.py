@@ -1,6 +1,6 @@
 from typing import List
 
-import numpy as np
+import random
 from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session
 
@@ -11,9 +11,9 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
     - Call embeddings API
     - Return list of vectors
     """
-    # Temporary dummy embeddings
+    # Temporary dummy embeddings (pure Python floats to avoid adapter issues)
     dim = 1536
-    return [list(np.random.rand(dim)) for _ in texts]
+    return [[random.random() for _ in range(dim)] for _ in texts]
 
 
 def embed_chunks(db: Session, chunk_ids: List[str]):
@@ -37,13 +37,16 @@ def embed_chunks(db: Session, chunk_ids: List[str]):
     vectors = embed_texts(texts)
 
     for r, vec in zip(rows, vectors):
+        clean_vec = [float(v) for v in vec]
+        # pgvector accepts either a Python list or a string literal; use string to avoid adapter issues
+        vec_literal = "[" + ",".join(f"{v:.6f}" for v in clean_vec) + "]"
         db.execute(
             sqltext("""
                 INSERT INTO ncd_text_chunk_embedding (chunk_id, embedding)
-                VALUES (:cid, :emb)
+                VALUES (:cid, CAST(:emb AS vector))
                 ON CONFLICT (chunk_id) DO UPDATE SET embedding = EXCLUDED.embedding;
             """),
-            {"cid": r["id"], "emb": vec},
+            {"cid": r["id"], "emb": vec_literal},
         )
 
     db.commit()

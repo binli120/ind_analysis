@@ -1,3 +1,4 @@
+import json
 import re
 
 from sqlalchemy import text as sqltext
@@ -112,21 +113,21 @@ def classify_study_for_document(
             sqltext("""
                 UPDATE ncd_study
                 SET study_type = COALESCE(:stype, study_type),
-                    extra_attributes = extra_attributes || :extra::jsonb
+                    extra_attributes = extra_attributes || CAST(:extra_json AS jsonb)
                 WHERE id = :id
             """),
-            {"stype": study_type, "extra": {"title": title}, "id": study_row},
+            {"stype": study_type, "extra_json": json.dumps({"title": title}), "id": study_row},
         )
     else:
         new_id = db.execute(
             sqltext("""
                 INSERT INTO ncd_study (project_id, main_source_document_id, study_type, extra_attributes)
-                SELECT project_id, :sid, :stype, :extra
+                SELECT project_id, :sid, :stype, CAST(:extra_json AS jsonb)
                 FROM ncd_source_document
                 WHERE id = :sid
                 RETURNING id;
             """),
-            {"sid": source_document_id, "stype": study_type, "extra": {"title": title}},
+            {"sid": source_document_id, "stype": study_type, "extra_json": json.dumps({"title": title})},
         ).scalar()
         study_row = new_id
 

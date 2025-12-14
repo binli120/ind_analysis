@@ -388,6 +388,50 @@
         }
       }
     },
+    "/ncd/relabel": {
+      "post": {
+        "tags": [
+          "ncd"
+        ],
+        "summary": "Relabel S3 Pdf",
+        "description": "Correct the section number/title for an S3 PDF by copying into the desired section folder\nand updating metadata sidecars.",
+        "operationId": "relabel_s3_pdf_ncd_relabel_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NCDRelabelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Relabel S3 Pdf Ncd Relabel Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/dev/label-local": {
       "post": {
         "tags": [
@@ -678,6 +722,68 @@
         ],
         "title": "NCDLabelRequest",
         "description": "Request payload for minimal section labeling of a PDF stored in S3."
+      },
+      "NCDRelabelRequest": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "company": {
+            "type": "string",
+            "title": "Company"
+          },
+          "project": {
+            "type": "string",
+            "title": "Project"
+          },
+          "section_number": {
+            "type": "string",
+            "title": "Section Number"
+          },
+          "section_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Title"
+          },
+          "bucket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket"
+          },
+          "aws_region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aws Region"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "company",
+          "project",
+          "section_number"
+        ],
+        "title": "NCDRelabelRequest",
+        "description": "Request payload to correct a labeled section for a PDF in S3."
       },
       "S3MarkdownRequest": {
         "properties": {

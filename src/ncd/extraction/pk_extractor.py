@@ -56,6 +56,7 @@ def extract_pk_for_study(
 
     user_prompt = build_pk_prompt(combined, study_id)
     raw = llm.extract_json(PK_EXTRACTION_SYSTEM_PROMPT, user_prompt)
+    raw.setdefault("parameters", [])
     raw["source_chunk_ids"] = chunk_ids
     summary = PKStudySummarySchema(**raw)
 

@@ -1,3 +1,4 @@
+import json
 import re
 from typing import List, cast
 
@@ -78,6 +79,15 @@ def chunk_text_by_pages(
     )
     db.execute(
         sqltext("""
+            DELETE FROM ncd_topic_assignment
+            WHERE chunk_id IN (
+                SELECT id FROM ncd_text_chunk WHERE source_document_id = :sid
+            );
+        """),
+        {"sid": source_document_id},
+    )
+    db.execute(
+        sqltext("""
             DELETE FROM ncd_text_chunk
             WHERE source_document_id = :sid
         """),
@@ -144,9 +154,9 @@ def chunk_text_by_pages(
             sqltext("""
                 INSERT INTO ncd_text_chunk (
                     source_document_id, page_from, page_to,
-                    raw_text, section_label, extra_attributes
+                    raw_text, section_label
                 ) VALUES (
-                    :sid, :pf, :pt, :txt, :sec, :extra
+                    :sid, :pf, :pt, :txt, :sec
                 )
                 RETURNING id
             """),
@@ -156,7 +166,6 @@ def chunk_text_by_pages(
                 "pt": pt,
                 "txt": text_block,
                 "sec": primary,
-                "extra": extra,
             },
         ).scalar()
 
