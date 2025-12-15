@@ -14,6 +14,9 @@ This summarizes the main FastAPI routes exposed by `pdf_analysis.api.server` tha
 ## NCD (router: ncd)
 - `POST /ncd/label` — S3-only lightweight section labeling. Inputs: `bucket` (or `S3_BUCKET` env), `key`, `company`, `project`, optional `page_limit` (default 5), `use_llm`. Reads minimal pages, classifies against `ind_24_26_template.json`, copies the PDF to `company/project/<section|unlabeled>/filename`, and updates S3 metadata + `.meta.json`.
 - `POST /ncd/relabel` — Manually correct a section: provide `bucket` (or `S3_BUCKET`), `key`, `company`, `project`, `section_number`, optional `section_title`; copies the PDF into `company/project/<section>/filename`, deletes the original key, and updates metadata + `.meta.json` with `classification_method=manual`.
+- `GET /ncd/template?section=2.4.1` — Return template entries from `ind_24_26_template.json` matching the section/subsection. Passing a parent section returns all subsections under it; passing a subsection returns that entry only.
+- `POST /ncd/template/override` — Upsert a user-specific template override. Body: `user_id`, `section`, optional `subsection`, `payload` (template JSON). Stores into `ncd_template_override` (assumes table exists).
+- `GET /ncd/template?section=...&user_id=...` — When `user_id` is provided, merges user overrides from `ncd_template_override` (override wins) before returning entries.
 
 ## Dev/QA (router: dev)
 - `POST /dev/label-local` — Local upload labeling (no S3 side effects); returns section guess, confidence, method, and top candidates.

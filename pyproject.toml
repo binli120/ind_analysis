@@ -24,7 +24,8 @@ dependencies = [
     "ocrmypdf (>=16.12.0,<17.0.0)",
     "pymupdf (>=1.26.6,<2.0.0)",
     "sqlalchemy (>=2.0.44,<3.0.0)",
-    "psycopg2-binary (>=2.9.11,<3.0.0)"
+    "psycopg2-binary (>=2.9.11,<3.0.0)",
+    "rapidfuzz (>=3.14.3,<4.0.0)"
 ]
 
 [tool.poetry]
@@ -90,6 +91,7 @@ infra = [
 
 
 
+
 [tool.poetry.group.ocr]
 optional = true
 
@@ -104,11 +106,13 @@ pdf2image = ">=1.17.0,<2.0.0"
 
 
 
+
 [tool.poetry.group.pymupdf]
 optional = true
 
 [tool.poetry.group.pymupdf.dependencies]
 pymupdf = ">=1.23.0,<2.0.0"
+
 
 
 
@@ -132,6 +136,7 @@ langchain-text-splitters = ">=0.3.0,<0.4.0"
 
 
 
+
 [tool.poetry.group.infra]
 optional = true
 
@@ -140,6 +145,7 @@ boto3 = ">=1.35.0,<2.0.0"
 redis = ">=5.2.0,<6.0.0"
 python-dotenv = ">=1.0.1,<2.0.0"
 psycopg = {extras = ["binary"], version = "^3.2.12"}
+
 
 
 

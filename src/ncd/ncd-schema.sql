@@ -207,4 +207,21 @@ CREATE TABLE IF NOT EXISTS ncd_config (
                                           updated_at      TIMESTAMPTZ DEFAULT now()
 );
 
+-- Ensure extension for UUID generation is available
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+CREATE TABLE IF NOT EXISTS ncd_template_override (
+                                                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+                                                     user_id UUID NOT NULL,
+                                                     section TEXT NOT NULL,
+                                                     subsection TEXT,
+
+                                                     payload JSONB NOT NULL,
+
+                                                     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                                                     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+                                                     CONSTRAINT ncd_template_override_user_section_subsection_unique
+                                                         UNIQUE (user_id, section, subsection)
+);

@@ -432,6 +432,111 @@
         }
       }
     },
+    "/ncd/template/override": {
+      "post": {
+        "tags": [
+          "ncd"
+        ],
+        "summary": "Upsert Template Override",
+        "description": "Create or update a user-specific template override for a section/subsection.",
+        "operationId": "upsert_template_override_ncd_template_override_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateOverrideRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Upsert Template Override Ncd Template Override Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ncd/template": {
+      "get": {
+        "tags": [
+          "ncd"
+        ],
+        "summary": "Get Template Sections",
+        "description": "Return template entries for a given section or subsection from ind_24_26_template.json.\n- If you pass a subsection (e.g., 2.4.1-A), returns the matching entry.\n- If you pass a parent section (e.g., 2.4.1), returns all subsection entries under it.\n- If user_id is provided and overrides exist, they are merged (override wins).",
+        "operationId": "get_template_sections_ncd_template_get",
+        "parameters": [
+          {
+            "name": "section",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Section"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Template Sections Ncd Template Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/dev/label-local": {
       "post": {
         "tags": [
@@ -902,6 +1007,53 @@
           "markdown"
         ],
         "title": "S3MarkdownUploadRequest"
+      },
+      "TemplateOverrideRequest": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "section": {
+            "type": "string",
+            "title": "Section"
+          },
+          "subsection": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subsection"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "aws_region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aws Region"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "section",
+          "payload"
+        ],
+        "title": "TemplateOverrideRequest",
+        "description": "Create or update a template override for a user."
       },
       "ValidationError": {
         "properties": {

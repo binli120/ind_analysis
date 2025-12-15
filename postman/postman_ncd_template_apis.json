@@ -1,0 +1,100 @@
+{
+  "info": {
+    "_postman_id": "c9b9b9e3-4e8a-4c3e-b85b-3e1a60b5dc4f",
+    "name": "NCD Template APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Collection for template retrieval and overrides (ind_24_26_template.json plus user overrides)."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "userId",
+      "value": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+  "item": [
+    {
+      "name": "Get Template by Section",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/ncd/template?section=2.4.1",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ncd",
+            "template"
+          ],
+          "query": [
+            {
+              "key": "section",
+              "value": "2.4.1"
+            }
+          ]
+        },
+        "description": "Fetch template entries for section/subsection from the default template."
+      }
+    },
+    {
+      "name": "Get Template with Overrides",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/ncd/template?section=2.4.1&user_id={{userId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ncd",
+            "template"
+          ],
+          "query": [
+            {
+              "key": "section",
+              "value": "2.4.1"
+            },
+            {
+              "key": "user_id",
+              "value": "{{userId}}"
+            }
+          ]
+        },
+        "description": "Fetch template entries merged with user overrides (if any) from the database."
+      }
+    },
+    {
+      "name": "Upsert Template Override",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": \"{{userId}}\",\n  \"section\": \"2.4.1\",\n  \"subsection\": \"2.4.1-A\",\n  \"payload\": {\n    \"Section\": \"2.4.1\",\n    \"Subsection\": \"2.4.1-A\",\n    \"Section Header\": \"Custom Overview of the Nonclinical Development Strategy\",\n    \"Subsection Header\": \"Custom High-Level Summary\",\n    \"Content\": \"Override content for this subsection.\" }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ncd/template/override",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ncd",
+            "template",
+            "override"
+          ]
+        },
+        "description": "Create or update a user-specific template override for a section/subsection."
+      }
+    }
+  ]
+}

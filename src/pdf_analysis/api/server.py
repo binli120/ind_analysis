@@ -143,6 +143,16 @@ class NCDRelabelRequest(BaseModel):
     aws_region: Optional[str] = None
 
 
+class TemplateOverrideRequest(BaseModel):
+    """Create or update a template override for a user."""
+
+    user_id: str
+    section: str
+    subsection: Optional[str] = None
+    payload: Dict[str, Any]
+    aws_region: Optional[str] = None
+
+
 try:
     _metadata_generator = OpenAIMetadataGenerator()
 except Exception:  # pragma: no cover - optional dependency or missing key
@@ -281,6 +291,8 @@ def _upload_analysis_json_to_s3(
 # Section labeling helpers (Module 2.4 / 2.6 template-driven)
 # ---------------------------------------------------------------------------
 _IND_TEMPLATE_SECTIONS: List[Dict[str, str]] | None = None
+_IND_TEMPLATE_ENTRIES: List[Dict[str, Any]] | None = None
+_IND_TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "ncd" / "ind_24_26_template.json"
 
 
 def _load_ind_template_sections() -> List[Dict[str, str]]:
@@ -289,7 +301,7 @@ def _load_ind_template_sections() -> List[Dict[str, str]]:
     if _IND_TEMPLATE_SECTIONS is not None:
         return _IND_TEMPLATE_SECTIONS
 
-    template_path = Path(__file__).resolve().parents[2] / "ncd" / "ind_24_26_template.json"
+    template_path = _IND_TEMPLATE_PATH
     try:
         raw = json.loads(template_path.read_text())
     except Exception as exc:  # pragma: no cover - defensive
@@ -325,6 +337,132 @@ def _load_ind_template_sections() -> List[Dict[str, str]]:
 
     _IND_TEMPLATE_SECTIONS = sections
     return _IND_TEMPLATE_SECTIONS
+
+
+def _load_ind_template_entries() -> List[Dict[str, Any]]:
+    """Load full template entries (section + subsection + headers/content)."""
+    global _IND_TEMPLATE_ENTRIES
+    if _IND_TEMPLATE_ENTRIES is not None:
+        return _IND_TEMPLATE_ENTRIES
+
+    try:
+        raw = json.loads(_IND_TEMPLATE_PATH.read_text())
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Unable to load template %s: %s", _IND_TEMPLATE_PATH, exc)
+        _IND_TEMPLATE_ENTRIES = []
+        return _IND_TEMPLATE_ENTRIES
+
+    entries: List[Dict[str, Any]] = []
+    source_blocks = []
+    if isinstance(raw, list):
+        source_blocks.append(raw)
+    elif isinstance(raw, dict):
+        for value in raw.values():
+            if isinstance(value, list):
+                source_blocks.append(value)
+
+    for block in source_blocks:
+        for entry in block:
+            if not isinstance(entry, dict):
+                continue
+            section_id = str(entry.get("Section") or "").strip()
+            subsection = str(entry.get("Subsection") or "").strip()
+            if not section_id and not subsection:
+                continue
+            entries.append(
+                {
+                    "section": section_id,
+                    "subsection": subsection or None,
+                    "section_header": entry.get("Section Header"),
+                    "subsection_header": entry.get("Subsection Header"),
+                    "content": entry.get("Content"),
+                    "raw": entry,
+                }
+            )
+
+    _IND_TEMPLATE_ENTRIES = entries
+    return _IND_TEMPLATE_ENTRIES
+
+
+def _fetch_template_overrides(db: Session, user_id: str, section: str) -> List[Dict[str, Any]]:
+    """
+    Fetch overrides for a user matching a section or subsection prefix.
+    Assumes table ncd_template_override(user_id UUID, section TEXT, subsection TEXT, payload JSONB, updated_at TIMESTAMPTZ, created_at TIMESTAMPTZ).
+    """
+    try:
+        rows = (
+            db.execute(
+                sqltext(
+                    """
+                    SELECT section, subsection, payload
+                    FROM ncd_template_override
+                    WHERE user_id = :uid
+                      AND (section = :sec OR section LIKE :sec_like)
+                """
+                ),
+                {"uid": user_id, "sec": section, "sec_like": f"{section}%"},
+            )
+            .mappings()
+            .all()
+        )
+    except Exception as exc:
+        logger.warning("Failed to fetch template overrides: %s", exc)
+        return []
+
+    overrides: List[Dict[str, Any]] = []
+    for row in rows:
+        overrides.append(
+            {
+                "section": row.get("section"),
+                "subsection": row.get("subsection"),
+                "payload": row.get("payload") or {},
+            }
+        )
+    return overrides
+
+
+def _upsert_template_override(
+    db: Session, user_id: str, section: str, subsection: Optional[str], payload: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Insert or update a template override for a user."""
+    existing = db.execute(
+        sqltext(
+            """
+            SELECT id FROM ncd_template_override
+            WHERE user_id = :uid
+              AND section = :sec
+              AND ((subsection IS NULL AND :sub IS NULL) OR subsection = :sub)
+            """
+        ),
+        {"uid": user_id, "sec": section, "sub": subsection},
+    ).scalar()
+
+    if existing:
+        db.execute(
+            sqltext(
+                """
+                UPDATE ncd_template_override
+                SET payload = CAST(:payload AS jsonb), updated_at = now()
+                WHERE id = :id
+                """
+            ),
+            {"payload": json.dumps(payload), "id": existing},
+        )
+        db.commit()
+        return {"id": str(existing), "section": section, "subsection": subsection, "payload": payload}
+
+    new_id = db.execute(
+        sqltext(
+            """
+            INSERT INTO ncd_template_override (user_id, section, subsection, payload)
+            VALUES (:uid, :sec, :sub, CAST(:payload AS jsonb))
+            RETURNING id
+            """
+        ),
+        {"uid": user_id, "sec": section, "sub": subsection, "payload": json.dumps(payload)},
+    ).scalar()
+    db.commit()
+    return {"id": str(new_id), "section": section, "subsection": subsection, "payload": payload}
 
 
 def _match_section_regex(text: str, sections: List[Dict[str, str]]) -> Tuple[str, str, float] | None:
@@ -992,6 +1130,98 @@ async def dev_list_sections(limit: int = 0) -> Dict[str, Any]:
     sections = _load_ind_template_sections()
     payload = sections if limit <= 0 else sections[:limit]
     return {"count": len(sections), "sections": payload}
+
+
+@ncd_router.post("/template/override")
+async def upsert_template_override(payload: TemplateOverrideRequest) -> Dict[str, Any]:
+    """
+    Create or update a user-specific template override for a section/subsection.
+    """
+    db = SessionLocal()
+    try:
+        record = _upsert_template_override(
+            db,
+            user_id=payload.user_id,
+            section=payload.section.strip(),
+            subsection=(payload.subsection or None),
+            payload=payload.payload,
+        )
+        return record
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to upsert template override: {exc}") from exc
+    finally:
+        db.close()
+
+
+@ncd_router.get("/template")
+async def get_template_sections(section: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Return template entries for a given section or subsection from ind_24_26_template.json.
+    - If you pass a subsection (e.g., 2.4.1-A), returns the matching entry.
+    - If you pass a parent section (e.g., 2.4.1), returns all subsection entries under it.
+    - If user_id is provided and overrides exist, they are merged (override wins).
+    """
+    target = section.strip()
+    if not target:
+        raise HTTPException(status_code=400, detail="section is required")
+
+    entries = _load_ind_template_entries()
+    matches: List[Dict[str, Any]] = []
+    target_lower = target.lower()
+    for entry in entries:
+        sec = (entry.get("section") or "").lower()
+        sub = (entry.get("subsection") or "").lower()
+        if sub and sub == target_lower:
+            matches.append(entry)
+        elif sec and sec == target_lower:
+            matches.append(entry)
+        elif sec and sec.startswith(target_lower):
+            matches.append(entry)
+
+    if not matches:
+        raise HTTPException(status_code=404, detail="Section not found in template")
+
+    # Apply overrides if user_id provided
+    if user_id:
+        db = SessionLocal()
+        try:
+            overrides = _fetch_template_overrides(db, user_id, target)
+        finally:
+            db.close()
+
+        if overrides:
+            override_map = {
+                ((o.get("section") or "").lower(), (o.get("subsection") or None)): o["payload"]
+                for o in overrides
+            }
+            merged: List[Dict[str, Any]] = []
+            seen_keys = set()
+            for entry in matches:
+                key = ((entry.get("section") or "").lower(), (entry.get("subsection") or None))
+                if key in override_map:
+                    merged_entry = dict(entry)
+                    merged_entry["raw"] = {**(entry.get("raw") or {}), **(override_map[key] or {})}
+                    merged.append(merged_entry)
+                    seen_keys.add(key)
+                else:
+                    merged.append(entry)
+                    seen_keys.add(key)
+            # Add overrides not present in defaults
+            for key, payload in override_map.items():
+                if key not in seen_keys:
+                    merged.append(
+                        {
+                            "section": key[0],
+                            "subsection": key[1],
+                            "section_header": payload.get("Section Header"),
+                            "subsection_header": payload.get("Subsection Header"),
+                            "content": payload.get("Content"),
+                            "raw": payload,
+                        }
+                    )
+            matches = merged
+
+    return {"section": target, "entries": matches}
 
 
 async def _analyze_uploaded_pdf(upload: UploadFile) -> Dict[str, Any]:
