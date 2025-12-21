@@ -42,10 +42,48 @@ from ncd.db_interface import NCDRepository
 from ncd.llm_client import LLMClient
 from ncd.pipeline_runner import run_pdf_ingest_and_extract
 from ncd.ingestion.pdf_ingestion import sha256_file
+from ind_pipeline import metadata_summary_extraction as section_summary
+from ncd.ingestion.section_detector import SectionSpan, persist_section_spans
 from sqs_worker import process_message
 
 
 _MODULE_PATTERN = re.compile(r"^module\s*(?P<number>\d+)(?:[\s._-].*)?$", re.IGNORECASE)
+_SECTION_TOKEN_PATTERN = re.compile(r"\d+(?:\.\d+)+(?:\|\d+(?:\.\d+)+)*")
+
+
+def _sanitize_section_suffix(name: str) -> str:
+    cleaned = re.sub(r"\s+", "_", name.strip())
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "", cleaned)
+    return cleaned or "document"
+
+
+def _clean_section_title(segment: str, token: str) -> Optional[str]:
+    title = segment.replace(token, "")
+    title = title.replace("|", " ")
+    title = title.replace('"', "").replace("'", "")
+    title = re.sub(r"^[\s._-]+", "", title)
+    title = re.sub(r"\s{2,}", " ", title).strip()
+    return title or None
+
+
+def _derive_section_from_key(key: str) -> tuple[str, Optional[str]]:
+    parts = key.split("/")
+    file_stem = Path(key).stem
+    suffix = _sanitize_section_suffix(file_stem)
+    section_token = None
+    section_title = None
+    for segment in parts[:-1]:
+        match = _SECTION_TOKEN_PATTERN.search(segment)
+        if match:
+            section_token = match.group(0)
+            section_title = _clean_section_title(segment, section_token)
+    if section_token:
+        section_number = f"{section_token}.{suffix}"
+    else:
+        section_number = suffix
+    if not section_title:
+        section_title = file_stem
+    return section_number, section_title
 
 
 class DummyLLM(LLMClient):
@@ -302,6 +340,119 @@ def _core_needed(
     return False
 
 
+def _parse_company_project(key: str) -> tuple[Optional[str], Optional[str]]:
+    parts = key.split("/")
+    if len(parts) >= 2:
+        return parts[0], parts[1]
+    if parts:
+        return parts[0], None
+    return None, None
+
+
+def _ensure_project_id(
+    repo: NCDRepository,
+    *,
+    project_name: str,
+    tenant_id: Optional[str],
+    created_by: Optional[str],
+    product_type: str,
+    sponsor_email: str,
+    sponsor_name: Optional[str],
+) -> str:
+    db = repo.session
+    row = db.execute(
+        sqltext(
+            """
+            SELECT id
+            FROM projects
+            WHERE ind_title = :name OR drug_name = :name
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        ),
+        {"name": project_name},
+    ).scalar()
+    if row:
+        return str(row)
+
+    values = {
+        "ind_title": project_name,
+        "drug_name": project_name,
+        "product_type": product_type,
+        "sponsor_contact_email": sponsor_email,
+        "sponsor_name": sponsor_name,
+        "project_creator_id": created_by,
+        "tenantid": tenant_id,
+    }
+    row = db.execute(
+        sqltext(
+            """
+            INSERT INTO projects (
+                ind_title,
+                drug_name,
+                product_type,
+                sponsor_contact_email,
+                sponsor_name,
+                project_creator_id,
+                tenantid
+            )
+            VALUES (
+                :ind_title,
+                :drug_name,
+                :product_type,
+                :sponsor_contact_email,
+                :sponsor_name,
+                :project_creator_id,
+                :tenantid
+            )
+            RETURNING id
+            """
+        ),
+        values,
+    ).scalar()
+    if not row:
+        raise RuntimeError("Failed to create project row")
+    db.commit()
+    return str(row)
+
+
+def _read_markdown_sidecar(
+    client: Any,
+    bucket: str,
+    key: str,
+) -> Optional[str]:
+    try:
+        obj = client.get_object(Bucket=bucket, Key=key)
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") in {"NoSuchKey", "NotFound"}:
+            return None
+        raise
+    body = obj.get("Body")
+    if not body:
+        return None
+    return body.read().decode("utf-8")
+
+
+def _upload_meta_json(
+    client: Any,
+    bucket: str,
+    key: str,
+    payload: Dict[str, Any],
+) -> Optional[str]:
+    meta_key = f"{key}.meta.json"
+    try:
+        client.put_object(
+            Bucket=bucket,
+            Key=meta_key,
+            Body=json.dumps(payload, indent=2).encode("utf-8"),
+            ContentType="application/json",
+        )
+    except ClientError as exc:
+        print(f"[WARN] Failed to upload meta json for {key}: {exc}", file=sys.stderr)
+        return None
+    return meta_key
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Batch ingest Module 4 PDFs from S3 into the DB.")
     parser.add_argument("--bucket", default=os.getenv("S3_BUCKET"), help="S3 bucket name.")
@@ -309,6 +460,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--project", default=os.getenv("PROJECT"), help="Project name under company.")
     parser.add_argument("--project-id", default=os.getenv("PROJECT_ID"), help="Project UUID for NCD tox pipeline.")
     parser.add_argument("--module", type=int, default=4, help="Module number to ingest.")
+    parser.add_argument(
+        "--all-modules",
+        action="store_true",
+        help="Process all PDFs under the prefix (ignore module filtering).",
+    )
     parser.add_argument(
         "--prefix",
         default=None,
@@ -319,13 +475,20 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--created-by", default=os.getenv("DEFAULT_USER_ID"), help="User UUID.")
     parser.add_argument("--limit", type=int, default=None, help="Limit on number of PDFs to process.")
     parser.add_argument("--workers", type=int, default=4, help="Concurrent worker threads.")
-    parser.add_argument("--mode", choices=("auto", "core", "tox"), default="auto")
+    parser.add_argument("--mode", choices=("auto", "core", "tox"), default="core")
     parser.add_argument("--core-check", choices=("md", "status", "both"), default="both")
     parser.add_argument("--md-suffix", default=".extracted.md", help="Markdown sidecar suffix.")
     parser.add_argument(
         "--skip-langchain",
         action="store_true",
+        default=True,
         help="Skip LangChain pipeline even when core runs.",
+    )
+    parser.add_argument(
+        "--run-langchain",
+        action="store_false",
+        dest="skip_langchain",
+        help="Enable LangChain pipeline (overrides default skip).",
     )
     parser.add_argument(
         "--force-langchain",
@@ -348,9 +511,31 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Disable table extraction in core pipeline (avoids camelot/tabula).",
     )
     parser.add_argument("--force", action="store_true", help="Alias for --force-core.")
-    parser.add_argument("--force-core", action="store_true", help="Re-run core pipeline regardless of checks.")
+    parser.add_argument(
+        "--force-core",
+        action="store_true",
+        default=True,
+        help="Re-run core pipeline regardless of checks.",
+    )
+    parser.add_argument(
+        "--no-force-core",
+        action="store_false",
+        dest="force_core",
+        help="Respect core prechecks (disable default force).",
+    )
     parser.add_argument("--force-tox", action="store_true", help="Re-run tox pipeline regardless of checks.")
-    parser.add_argument("--no-precheck", action="store_true", help="Disable ingestion status precheck.")
+    parser.add_argument(
+        "--no-precheck",
+        action="store_true",
+        default=True,
+        help="Disable ingestion status precheck.",
+    )
+    parser.add_argument(
+        "--precheck",
+        action="store_false",
+        dest="no_precheck",
+        help="Enable ingestion status precheck (overrides default no-precheck).",
+    )
     parser.add_argument("--dry-run", action="store_true", help="List matches without processing.")
     parser.add_argument(
         "--tox-llm",
@@ -367,6 +552,84 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--report-dir",
         default="tmp/ingestion_reports",
         help="Directory to write JSON/CSV reports.",
+    )
+    parser.add_argument(
+        "--project-product-type",
+        default=os.getenv("PROJECT_PRODUCT_TYPE", "drug"),
+        help="Product type for project auto-creation.",
+    )
+    parser.add_argument(
+        "--project-sponsor-email",
+        default=os.getenv("PROJECT_SPONSOR_EMAIL", "unknown@filynai.com"),
+        help="Sponsor contact email for project auto-creation.",
+    )
+    parser.add_argument(
+        "--project-sponsor-name",
+        default=os.getenv("PROJECT_SPONSOR_NAME"),
+        help="Sponsor name for project auto-creation.",
+    )
+    parser.add_argument(
+        "--section-summary",
+        action="store_true",
+        default=True,
+        help="Generate per-section summaries + keywords and persist to document_section_summary.",
+    )
+    parser.add_argument(
+        "--no-section-summary",
+        action="store_false",
+        dest="section_summary",
+        help="Disable section summaries (overrides default on).",
+    )
+    parser.add_argument(
+        "--force-section-summary",
+        action="store_true",
+        default=True,
+        help="Re-run section summaries even if completed.",
+    )
+    parser.add_argument(
+        "--no-force-section-summary",
+        action="store_false",
+        dest="force_section_summary",
+        help="Respect summary prechecks (disable default force).",
+    )
+    parser.add_argument(
+        "--summary-min-chars",
+        type=int,
+        default=None,
+        help="Override minimum characters required for section summaries.",
+    )
+    parser.add_argument(
+        "--summary-max-chars",
+        type=int,
+        default=None,
+        help="Override maximum characters sent to the LLM per section.",
+    )
+    parser.add_argument(
+        "--summary-keywords-min",
+        type=int,
+        default=None,
+        help="Minimum keywords per section summary.",
+    )
+    parser.add_argument(
+        "--summary-keywords-max",
+        type=int,
+        default=None,
+        help="Maximum keywords per section summary.",
+    )
+    parser.add_argument(
+        "--summary-purpose",
+        default=None,
+        help="Summary purpose label (default: ctd_2_6).",
+    )
+    parser.add_argument(
+        "--summary-type",
+        default=None,
+        help="Summary type label (default: abstractive).",
+    )
+    parser.add_argument(
+        "--no-meta",
+        action="store_true",
+        help="Skip uploading .meta.json sidecar files.",
     )
     return parser.parse_args(argv)
 
@@ -387,19 +650,26 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
     core_required = False
     langchain_required = False
     tox_required = False
+    summary_required = False
 
     core_status = "skipped"
     langchain_status = "skipped"
     tox_status = "skipped"
+    summary_status = "skipped"
     core_error = ""
     langchain_error = ""
     tox_error = ""
+    summary_error = ""
     core_duration = 0.0
     langchain_duration = 0.0
     tox_duration = 0.0
+    summary_duration = 0.0
     document_version_id = ""
     tox_source_document_id = ""
     tox_study_id = ""
+    summary_count = 0
+    meta_key = ""
+    content_hash = ""
 
     try:
         precheck_enabled = not args.no_precheck
@@ -426,9 +696,17 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                         s3_version_id=version_id,
                         pipeline="langchain",
                     )
+                    summary_status_row = repo.fetch_pipeline_status_for_key(
+                        s3_bucket=args.bucket,
+                        s3_key=key,
+                        s3_version_id=version_id,
+                        pipeline="section-summary",
+                    )
                     status_completed = bool(
                         core_status_row and core_status_row.get("status") == "completed"
                     )
+                    if core_status_row and core_status_row.get("content_hash"):
+                        content_hash = str(core_status_row.get("content_hash") or "")
                     if core_status_row and core_status_row.get("document_version_id"):
                         document_version_id = str(core_status_row.get("document_version_id"))
                     if not document_version_id and langchain_status_row and langchain_status_row.get("document_version_id"):
@@ -437,6 +715,8 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                         core_status = str(core_status_row.get("status") or core_status)
                     if langchain_status_row:
                         langchain_status = str(langchain_status_row.get("status") or langchain_status)
+                    if summary_status_row:
+                        summary_status = str(summary_status_row.get("status") or summary_status)
                 except Exception as exc:
                     status_completed = False
                     core_error = _format_error(exc)
@@ -454,6 +734,14 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                 langchain_required = bool(args.force_langchain) or langchain_status != "completed"
 
             if langchain_required and not document_version_id:
+                core_required = True
+
+            summary_required = bool(args.section_summary)
+            if summary_required and summary_status == "completed" and not args.force_section_summary:
+                summary_required = False
+            if args.force_section_summary:
+                summary_required = True
+            if summary_required and not document_version_id:
                 core_required = True
 
         if args.mode in {"auto", "tox"}:
@@ -492,6 +780,11 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                 "langchain_status": "dry_run",
                 "langchain_error": langchain_error,
                 "langchain_duration_seconds": langchain_duration,
+                "summary_required": summary_required,
+                "summary_status": "dry_run",
+                "summary_error": summary_error,
+                "summary_duration_seconds": summary_duration,
+                "summary_count": summary_count,
                 "document_version_id": document_version_id,
                 "tox_required": tox_required,
                 "tox_status": "dry_run",
@@ -499,6 +792,7 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                 "tox_duration_seconds": tox_duration,
                 "tox_source_document_id": tox_source_document_id,
                 "tox_study_id": tox_study_id,
+                "meta_key": meta_key,
             }
 
         if (core_required or langchain_required) and args.mode in {"auto", "core"}:
@@ -532,6 +826,19 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                     langchain_status = "failed"
                     langchain_error = _format_error(exc)
             core_duration = max(core_duration, (datetime.now(timezone.utc) - started).total_seconds())
+            if not content_hash:
+                try:
+                    repo = repo or NCDRepository()
+                    status_row = repo.fetch_pipeline_status_for_key(
+                        s3_bucket=args.bucket,
+                        s3_key=key,
+                        s3_version_id=version_id,
+                        pipeline="core",
+                    )
+                    if status_row and status_row.get("content_hash"):
+                        content_hash = str(status_row.get("content_hash") or "")
+                except Exception:
+                    pass
 
         if tox_required and args.mode in {"auto", "tox"}:
             started = datetime.now(timezone.utc)
@@ -594,6 +901,174 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                     except Exception:
                         pass
             tox_duration = (datetime.now(timezone.utc) - started).total_seconds()
+
+        if summary_required and args.mode in {"auto", "core"}:
+            started = datetime.now(timezone.utc)
+            try:
+                if args.summary_min_chars is not None:
+                    os.environ["SECTION_SUMMARY_MIN_CHARS"] = str(args.summary_min_chars)
+                if args.summary_max_chars is not None:
+                    os.environ["SECTION_SUMMARY_MAX_CHARS"] = str(args.summary_max_chars)
+                if args.summary_keywords_min is not None:
+                    os.environ["SECTION_SUMMARY_KEYWORDS_MIN"] = str(args.summary_keywords_min)
+                if args.summary_keywords_max is not None:
+                    os.environ["SECTION_SUMMARY_KEYWORDS_MAX"] = str(args.summary_keywords_max)
+                if args.summary_purpose is not None:
+                    os.environ["SECTION_SUMMARY_PURPOSE"] = str(args.summary_purpose)
+                if args.summary_type is not None:
+                    os.environ["SECTION_SUMMARY_TYPE"] = str(args.summary_type)
+
+                if not content_hash:
+                    repo = repo or NCDRepository()
+                    status_row = repo.fetch_ingestion_status_for_key(
+                        s3_bucket=args.bucket,
+                        s3_key=key,
+                        s3_version_id=version_id,
+                    )
+                    if status_row and status_row.get("content_hash"):
+                        content_hash = str(status_row.get("content_hash") or "")
+                if not document_version_id:
+                    repo = repo or NCDRepository()
+                    if content_hash:
+                        status_row = repo.fetch_ingestion_status(
+                            s3_bucket=args.bucket,
+                            s3_key=key,
+                            content_hash=content_hash,
+                        )
+                        if status_row and status_row.get("document_version_id"):
+                            document_version_id = str(status_row.get("document_version_id"))
+                if not document_version_id:
+                    raise RuntimeError("document_version_id is required for section summaries")
+                if not content_hash:
+                    raise RuntimeError("content_hash is required for section summaries")
+
+                repo = repo or NCDRepository()
+                repo.upsert_pipeline_status(
+                    s3_bucket=args.bucket,
+                    s3_key=key,
+                    s3_version_id=version_id,
+                    content_hash=content_hash,
+                    pipeline="section-summary",
+                    status="processing",
+                    document_version_id=document_version_id,
+                )
+
+                markdown = _read_markdown_sidecar(s3_client, args.bucket, md_key)
+                if not markdown:
+                    raise RuntimeError("Markdown sidecar missing for section summaries")
+
+                section_number, section_title = _derive_section_from_key(key)
+                sections = [
+                    SectionSpan(
+                        section_number=section_number,
+                        section_title=section_title,
+                        char_start=0,
+                        char_end=len(markdown),
+                        page_start=None,
+                        page_end=None,
+                    )
+                ]
+                repo = repo or NCDRepository()
+                persist_section_spans(
+                    repo.session,
+                    document_version_id,
+                    sections,
+                    replace_existing=True,
+                )
+                llm_client = LLMClient()
+                summary_rows: List[Dict[str, Any]] = []
+                for section in sections:
+                    text = markdown[section.char_start : section.char_end].strip()
+                    if not text:
+                        summary_text = {
+                            "summary": "No extractable text for this file.",
+                            "topics": [],
+                        }
+                        keywords = section_summary._pad_keywords([], section)
+                    else:
+                        snippet = text
+                        if args.summary_max_chars is not None:
+                            snippet = snippet[: args.summary_max_chars]
+                        payload = section_summary._summarize_section(llm_client, section, snippet)
+                        if payload:
+                            summary_text = payload.get("summary_text") or {}
+                            keywords = payload.get("keywords") or []
+                        else:
+                            summary_text = {
+                                "summary": "Summary generation failed.",
+                                "topics": [],
+                            }
+                            keywords = section_summary._pad_keywords([], section)
+                    summary_rows.append(
+                        {
+                            "section_number": section.section_number,
+                            "section_title": section.section_title,
+                            "summary_text": summary_text,
+                            "keywords": keywords,
+                        }
+                    )
+
+                stored = section_summary._persist_summaries(
+                    document_version_id,
+                    sections,
+                    summary_rows,
+                    model_name=llm_client.model_name,
+                )
+                summary_status = "completed"
+                summary_count = len(summary_rows)
+                repo.upsert_pipeline_status(
+                    s3_bucket=args.bucket,
+                    s3_key=key,
+                    s3_version_id=version_id,
+                    content_hash=content_hash,
+                    pipeline="section-summary",
+                    status="completed",
+                    document_version_id=document_version_id,
+                )
+                if stored.startswith("failed"):
+                    summary_status = "failed"
+                    summary_error = stored
+            except Exception as exc:
+                summary_status = "failed"
+                summary_error = _format_error(exc)
+                try:
+                    repo = repo or NCDRepository()
+                    repo.upsert_pipeline_status(
+                        s3_bucket=args.bucket,
+                        s3_key=key,
+                        s3_version_id=version_id,
+                        content_hash=content_hash,
+                        pipeline="section-summary",
+                        status="failed",
+                        document_version_id=document_version_id or None,
+                        error_message=summary_error,
+                    )
+                except Exception:
+                    pass
+            summary_duration = (datetime.now(timezone.utc) - started).total_seconds()
+
+        if not args.no_meta and args.mode in {"auto", "core"}:
+            try:
+                company, project = _parse_company_project(key)
+                meta_payload = {
+                    "bucket": args.bucket,
+                    "key": key,
+                    "version_id": version_id,
+                    "document_version_id": document_version_id or None,
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "company": company,
+                    "project": project,
+                    "markdown_key": md_key if md_exists else None,
+                    "quality_key": f"{key}.quality.json",
+                    "core_status": core_status,
+                    "langchain_status": langchain_status,
+                    "section_summary_status": summary_status,
+                    "section_summary_count": summary_count,
+                    "tox_status": tox_status,
+                }
+                meta_key = _upload_meta_json(s3_client, args.bucket, key, meta_payload) or ""
+            except Exception as exc:
+                print(f"[WARN] meta file upload failed for {key}: {exc}", file=sys.stderr)
         return {
             "key": key,
             "version_id": version_id,
@@ -609,6 +1084,11 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
             "langchain_status": langchain_status,
             "langchain_error": langchain_error,
             "langchain_duration_seconds": round(langchain_duration, 3),
+            "summary_required": summary_required,
+            "summary_status": summary_status,
+            "summary_error": summary_error,
+            "summary_duration_seconds": round(summary_duration, 3),
+            "summary_count": summary_count,
             "document_version_id": document_version_id,
             "tox_required": tox_required,
             "tox_status": tox_status,
@@ -616,6 +1096,7 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
             "tox_duration_seconds": round(tox_duration, 3),
             "tox_source_document_id": tox_source_document_id,
             "tox_study_id": tox_study_id,
+            "meta_key": meta_key,
         }
     except Exception as exc:
         core_error = core_error or _format_error(exc)
@@ -634,6 +1115,11 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
             "langchain_status": "failed" if langchain_required else langchain_status,
             "langchain_error": langchain_error,
             "langchain_duration_seconds": round(langchain_duration, 3),
+            "summary_required": summary_required,
+            "summary_status": "failed" if summary_required else summary_status,
+            "summary_error": summary_error,
+            "summary_duration_seconds": round(summary_duration, 3),
+            "summary_count": summary_count,
             "document_version_id": document_version_id,
             "tox_required": tox_required,
             "tox_status": "failed" if tox_required else tox_status,
@@ -641,6 +1127,7 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
             "tox_duration_seconds": round(tox_duration, 3),
             "tox_source_document_id": tox_source_document_id,
             "tox_study_id": tox_study_id,
+            "meta_key": meta_key,
         }
     finally:
         if repo is not None:
@@ -666,8 +1153,28 @@ def main(argv: list[str]) -> int:
             return 1
 
     if args.mode in {"auto", "tox"} and not args.project_id:
-        print("project_id is required for tox pipeline (--project-id or PROJECT_ID).", file=sys.stderr)
-        return 1
+        if not args.project:
+            print("project is required to auto-create project_id for tox pipeline.", file=sys.stderr)
+            return 1
+        try:
+            repo = NCDRepository()
+            args.project_id = _ensure_project_id(
+                repo,
+                project_name=args.project,
+                tenant_id=args.tenant_id,
+                created_by=args.created_by,
+                product_type=args.project_product_type,
+                sponsor_email=args.project_sponsor_email,
+                sponsor_name=args.project_sponsor_name,
+            )
+        except Exception as exc:
+            print(f"Unable to ensure project_id: {exc}", file=sys.stderr)
+            return 1
+        finally:
+            try:
+                repo.close()
+            except Exception:
+                pass
 
     prefix = args.prefix or f"{args.company.rstrip('/')}/{args.project.strip('/')}/"
     if not prefix.endswith("/"):
@@ -700,12 +1207,19 @@ def main(argv: list[str]) -> int:
     core_failed = 0
     langchain_runs = 0
     langchain_failed = 0
+    summary_runs = 0
+    summary_failed = 0
     tox_runs = 0
     tox_failed = 0
     error_counts: Dict[str, int] = {}
 
     docs: list[Dict[str, Any]] = []
-    for obj in _iter_module_pdfs(client, args.bucket, prefix, args.module):
+    iterator = (
+        _iter_latest_pdf_versions(client, args.bucket, prefix)
+        if args.all_modules
+        else _iter_module_pdfs(client, args.bucket, prefix, args.module)
+    )
+    for obj in iterator:
         if args.limit is not None and len(docs) >= args.limit:
             break
         docs.append(obj)
@@ -719,11 +1233,13 @@ def main(argv: list[str]) -> int:
             required = (
                 entry.get("core_required")
                 or entry.get("langchain_required")
+                or entry.get("summary_required")
                 or entry.get("tox_required")
             )
             failed = (
                 (entry.get("core_required") and entry.get("core_status") == "failed")
                 or (entry.get("langchain_required") and entry.get("langchain_status") == "failed")
+                or (entry.get("summary_required") and entry.get("summary_status") == "failed")
                 or (entry.get("tox_required") and entry.get("tox_status") == "failed")
             )
 
@@ -735,6 +1251,10 @@ def main(argv: list[str]) -> int:
                 langchain_runs += 1
                 if entry.get("langchain_status") == "failed":
                     langchain_failed += 1
+            if entry.get("summary_required"):
+                summary_runs += 1
+                if entry.get("summary_status") == "failed":
+                    summary_failed += 1
             if entry.get("tox_required"):
                 tox_runs += 1
                 if entry.get("tox_status") == "failed":
@@ -747,7 +1267,12 @@ def main(argv: list[str]) -> int:
             else:
                 doc_skipped += 1
 
-            for err in (entry.get("core_error"), entry.get("langchain_error"), entry.get("tox_error")):
+            for err in (
+                entry.get("core_error"),
+                entry.get("langchain_error"),
+                entry.get("summary_error"),
+                entry.get("tox_error"),
+            ):
                 if err:
                     name = err.split(":", 1)[0]
                     error_counts[name] = error_counts.get(name, 0) + 1
@@ -763,6 +1288,8 @@ def main(argv: list[str]) -> int:
                     print(f"  core_error: {entry['core_error']}", file=sys.stderr)
                 if entry.get("langchain_error"):
                     print(f"  langchain_error: {entry['langchain_error']}", file=sys.stderr)
+                if entry.get("summary_error"):
+                    print(f"  summary_error: {entry['summary_error']}", file=sys.stderr)
                 if entry.get("tox_error"):
                     print(f"  tox_error: {entry['tox_error']}", file=sys.stderr)
 
@@ -776,6 +1303,7 @@ def main(argv: list[str]) -> int:
         "project": args.project,
         "project_id": args.project_id,
         "module": args.module,
+        "all_modules": args.all_modules,
         "prefix": prefix,
         "mode": args.mode,
         "dry_run": args.dry_run,
@@ -792,6 +1320,8 @@ def main(argv: list[str]) -> int:
         "core_failed": core_failed,
         "langchain_runs": langchain_runs,
         "langchain_failed": langchain_failed,
+        "summary_runs": summary_runs,
+        "summary_failed": summary_failed,
         "tox_runs": tox_runs,
         "tox_failed": tox_failed,
         "error_summary": error_counts,
@@ -819,6 +1349,11 @@ def main(argv: list[str]) -> int:
                 "langchain_status",
                 "langchain_error",
                 "langchain_duration_seconds",
+                "summary_required",
+                "summary_status",
+                "summary_error",
+                "summary_duration_seconds",
+                "summary_count",
                 "document_version_id",
                 "tox_required",
                 "tox_status",
@@ -826,6 +1361,7 @@ def main(argv: list[str]) -> int:
                 "tox_duration_seconds",
                 "tox_source_document_id",
                 "tox_study_id",
+                "meta_key",
             ],
         )
         writer.writeheader()
@@ -861,8 +1397,8 @@ def main(argv: list[str]) -> int:
         print(f"[WARN] Unable to persist run report to DB: {exc}", file=sys.stderr)
 
     print(
-        "\nCompleted. processed=%d failed=%d skipped=%d core_runs=%d langchain_runs=%d tox_runs=%d"
-        % (doc_processed, doc_failed, doc_skipped, core_runs, langchain_runs, tox_runs)
+        "\nCompleted. processed=%d failed=%d skipped=%d core_runs=%d langchain_runs=%d summary_runs=%d tox_runs=%d"
+        % (doc_processed, doc_failed, doc_skipped, core_runs, langchain_runs, summary_runs, tox_runs)
     )
     print(f"Report JSON: {report_json_path}")
     print(f"Report CSV:  {report_csv_path}")
