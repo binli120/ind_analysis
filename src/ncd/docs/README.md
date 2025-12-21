@@ -1,3 +1,7 @@
+@copyright filynai.com
+@author: Bin Lee
+@email: blee@filynai.com
+
 # IND PDF Analysis
 
 AI-Powered Nonclinical Module Generator for CTD 2.4 & 2.6

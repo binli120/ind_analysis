@@ -64,7 +64,11 @@ aws ecs create-cluster --cluster-name "$CLUSTER_NAME" >/dev/null 2>&1 || true
 # Step 5: Task definition
 # =========================================================
 
-cat > taskdef.json << JSON
+TASKDEF_DIR="tmp/ecs"
+TASKDEF_PATH="$TASKDEF_DIR/taskdef.json"
+mkdir -p "$TASKDEF_DIR"
+
+cat > "$TASKDEF_PATH" << JSON
 {
   "family": "${TASK_FAMILY}",
   "networkMode": "awsvpc",
@@ -94,7 +98,7 @@ cat > taskdef.json << JSON
 JSON
 
 aws logs create-log-group --log-group-name /ecs/${SERVICE_NAME} >/dev/null 2>&1 || true
-aws ecs register-task-definition --cli-input-json file://taskdef.json
+aws ecs register-task-definition --cli-input-json file://"$TASKDEF_PATH"
 
 # =========================================================
 # Step 6: Create ECS service

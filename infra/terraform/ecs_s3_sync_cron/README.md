@@ -1,3 +1,7 @@
+@copyright filynai.com
+@author: Bin Lee
+@email: blee@filynai.com
+
 # ECS Scheduled S3 Sync
 
 This Terraform module wires up an EventBridge (CloudWatch) cron rule that fires an

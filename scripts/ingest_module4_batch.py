@@ -44,7 +44,7 @@ from ncd.pipeline_runner import run_pdf_ingest_and_extract
 from ncd.ingestion.pdf_ingestion import sha256_file
 from ind_pipeline import metadata_summary_extraction as section_summary
 from ncd.ingestion.section_detector import SectionSpan, persist_section_spans
-from sqs_worker import process_message
+from pdf_analysis.sqs_worker import process_message
 
 
 _MODULE_PATTERN = re.compile(r"^module\s*(?P<number>\d+)(?:[\s._-].*)?$", re.IGNORECASE)

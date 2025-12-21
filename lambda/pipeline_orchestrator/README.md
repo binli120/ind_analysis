@@ -1,3 +1,7 @@
+@copyright filynai.com
+@author: Bin Lee
+@email: blee@filynai.com
+
 # Pipeline Orchestrator Lambda
 
 This AWS Lambda function is triggered by S3 object creation events for PDF/Word

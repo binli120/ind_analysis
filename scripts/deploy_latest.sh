@@ -27,16 +27,19 @@ echo "✅ Image pushed: $IMAGE_URI"
 
 # ------------------------------------------------------------
 echo "🔹 Step 2. Get existing ECS task definition and update image"
+TASKDEF_DIR="tmp/ecs"
+TASKDEF_PATH="$TASKDEF_DIR/task-def.json"
+mkdir -p "$TASKDEF_DIR"
 aws ecs describe-task-definition \
   --task-definition $TASK_FAMILY \
-  --region $REGION > task-def.json
+  --region $REGION > "$TASKDEF_PATH"
 
 # Update image in task definition
-sed -i '' "s|\"image\": \".*\"|\"image\": \"$IMAGE_URI\"|" task-def.json
+sed -i '' "s|\"image\": \".*\"|\"image\": \"$IMAGE_URI\"|" "$TASKDEF_PATH"
 
 # Register new revision
 aws ecs register-task-definition \
-  --cli-input-json file://task-def.json \
+  --cli-input-json file://"$TASKDEF_PATH" \
   --region $REGION
 
 NEW_REVISION=$(aws ecs describe-task-definition \
@@ -124,4 +127,3 @@ aws ecs describe-services \
   --query 'services[0].deployments'
 
 echo "✅ Done. ECS service should now run only the latest revision ($TASK_FAMILY:$NEW_REVISION)."
-

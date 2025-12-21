@@ -1,3 +1,7 @@
+@copyright filynai.com
+@author: Bin Lee
+@email: blee@filynai.com
+
 # API Gateway HTTP Proxy for ECS
 
 This Terraform module provisions an API Gateway HTTP API based on the local
