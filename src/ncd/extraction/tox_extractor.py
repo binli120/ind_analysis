@@ -137,6 +137,14 @@ def extract_tox_for_study(
 
     # 2) Dose groups
     for dg in summary.dose_groups:
+        if (
+            dg.name is None
+            and dg.sex is None
+            and dg.n_animals is None
+            and dg.dose_mg_per_kg is None
+            and dg.dose_mg_per_m2 is None
+        ):
+            continue
         db.execute(
             sqltext("""
                 INSERT INTO ncd_dose_group (study_id, name, sex, n_animals, dose_mg_per_kg, dose_mg_per_m2, extra_attributes)
@@ -154,6 +162,8 @@ def extract_tox_for_study(
 
     # 3) Findings
     for f in summary.findings:
+        if not f.finding_term:
+            continue
         db.execute(
             sqltext("""
                 INSERT INTO ncd_finding (
@@ -180,6 +190,8 @@ def extract_tox_for_study(
 
     # 4) Exposure (if any)
     for em in summary.exposure_metrics:
+        if not em.parameter:
+            continue
         db.execute(
             sqltext("""
                 INSERT INTO ncd_exposure_metric (

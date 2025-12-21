@@ -292,7 +292,33 @@ A retry queue allows reprocessing.
 
 ---
 
-# **11. Full Workflow Diagram**
+# **11. Database Pipeline Map (Supabase / NCD)**
+
+- Upload → `documents` (logical) → `document_versions` (physical with hash/bucket/key/version).
+- Extraction → `extraction_runs` (module/extractor/model/status).
+- Structured outputs → `ncd_studies` (study metadata) plus `ncd_noael` and `ncd_pk_parameters`.
+- Traceability → `extracted_entities` ties each NOAEL/PK row back to `extraction_runs` and `document_versions` with anchors for highlighting.
+- Reviewer QA (optional) → `ncd_validation` status/comments per entity.
+
+### Local Smoke Test (populates every table)
+
+1. Make sure the schema is applied to your target DB (psql URL in `alembic.ini` or `$DATABASE_URL`).
+2. Run:
+   ```shell
+   psql "$DATABASE_URL" -f scripts/ncd_schema_smoke_test.sql
+   ```
+3. Verify rows landed:
+   ```shell
+   psql "$DATABASE_URL" -c "TABLE documents;"          # Demo Study Document
+   psql "$DATABASE_URL" -c "TABLE extracted_entities;" # NOAEL + PK_PARAM links
+   psql "$DATABASE_URL" -c "TABLE ncd_validation;"
+   ```
+
+The smoke script seeds a full demo flow end-to-end: document + version, extraction_run, study, NOAEL/PK rows, `extracted_entities` links (with anchors), and an accepted `ncd_validation`. It is idempotent for the demo identifiers so you can rerun safely.
+
+---
+
+# **12. Full Workflow Diagram**
 
 <pre class="overflow-visible!" data-start="6922" data-end="7258"><div class="contain-inline-size rounded-2xl corner-superellipse/1.1 relative bg-token-sidebar-surface-primary"><div class="sticky top-9"><div class="absolute end-0 bottom-0 flex h-9 items-center pe-2"><div class="bg-token-bg-elevated-secondary text-token-text-secondary flex items-center gap-4 rounded-sm px-2 font-sans text-xs"></div></div></div><div class="overflow-y-auto p-4" dir="ltr"><code class="whitespace-pre!"><span><span>PDF Upload
     ↓

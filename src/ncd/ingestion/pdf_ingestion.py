@@ -5,6 +5,12 @@ import fitz  # PyMuPDF
 from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session
 
+"""
+Coyright (c) Filynai.com 2024. All Rights Reserved.
+author: Bin Lee
+email: blee@filynai.com
+PDF ingestion utilities for NCD document processing.
+"""
 
 def sha256_file(path: str) -> str:
     h = hashlib.sha256()
@@ -35,11 +41,13 @@ def create_source_document(
         return cast(str, row)
 
     new_id = db.execute(
-        sqltext("""
+        sqltext(
+            """
             INSERT INTO ncd_source_document (project_id, file_name, module, sha256)
             VALUES (:pid, :fname, :module, :sha)
-            RETURNING id;
-        """),
+            RETURNING id
+            """
+        ),
         {"pid": project_id, "fname": file_name, "module": module, "sha": file_hash},
     ).scalar()
 

@@ -88,6 +88,33 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
 - If you maintain a custom domain, create it separately and pass the name via `custom_domain_name`; the module will create the stage mapping.
 - See `infra/terraform/api-gateway/README.md` for a complete variable reference and an example usage block.
 
+## Local End-to-End Runner (PDF → NCD)
+
+Quickly exercise PDF processing + LangChain extraction locally:
+
+```shell
+# Stubbed (no DB/LLM)
+poetry run python scripts/run_langchain_pipeline.py --pdf /path/to/file.pdf --stub-chains
+
+# Real DB + auto-created documents/versions
+DATABASE_URL=... OPENAI_API_KEY=... \
+poetry run python scripts/run_langchain_pipeline.py \
+  --pdf /path/to/file.pdf \
+  --use-db \
+  --tenant-id <tenant_uuid> \
+  --created-by <user_uuid>
+```
+
+Flags:
+- `--use-db` writes to your DB; omit to use in-memory stubs.
+- `--tenant-id` is required when auto-creating docs with `--use-db`.
+- `--s3-bucket` (default `local-bucket`) and `--s3-key` (default PDF filename) populate `document_versions`.
+- `--stub-chains` skips LLM calls; otherwise set `OPENAI_API_KEY` (or your provider) and `--model` (default `gpt-4o-mini`).
+
+Outputs:
+- Creates/reuses `documents` + `document_versions` (content-hash based).
+- Runs `extraction_runs`, `ncd_studies`, `ncd_noael`, `ncd_pk_parameters`, `extracted_entities`, and low-confidence comments when chains are enabled.
+
 ## Adaptive Extraction Pipeline
 
 - The orchestrator in `pdf_analysis.pipeline` runs text extraction, OCR, structured parsing, and optional LangChain post-processing with graceful fallbacks.
@@ -172,6 +199,22 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
   for _chunk in pipeline.stream(Path("./study.pdf"), chunk_size=10):
       pass  # chunks are persisted automatically using the derived key.
   ```
+
+## Pipeline Inventory and Routing
+
+This repo exposes multiple pipeline entry points. Pick the one that matches the input source and the outputs you want.
+
+- `PDFProcessingPipeline` (`src/pdf_analysis/pipeline/pipeline.py`): core PDF extraction (markdown/html/quality). No DB writes.
+- S3 ingestion + status tracking (`sqs_worker.py`): downloads from S3, writes `documents`, `document_versions`, `document_ingestion_status`, uploads markdown/quality to S3. Optional LangChain writes `ncd_studies`, `ncd_noael`, `ncd_pk_parameters`, `extracted_entities` (and `document_comments` for low-confidence).
+- NCD full tox pipeline (`src/ncd/pipeline_runner.py`): local PDF to full tox outputs, including `ncd_source_document`, `ncd_document_page`, `ncd_text_chunk`, embeddings, plus `ncd_study`, `ncd_dose_group`, `ncd_exposure_metric`, `ncd_finding`, `ncd_study_safety_summary`.
+- S3 -> Redis sync (`scripts/s3_sync.py`): scans S3, extracts markdown, writes Redis + S3 sidecars. No DB writes.
+- Batch Module 4 ingestion (`scripts/ingest_module4_batch.py`): iterates S3 Module 4 PDFs and runs `sqs_worker.process_message` with status-aware skipping and per-run reports.
+
+Decision guide:
+- S3 PDF -> DB with ingestion status: use `sqs_worker.py` (or `scripts/ingest_module4_batch.py` for batches).
+- Local PDF -> full tox findings (ncd_finding/exposure/safety summary): use `src/ncd/pipeline_runner.py`.
+- Markdown/quality only: use `PDFProcessingPipeline`.
+- Redis index of S3 content: use `scripts/s3_sync.py`.
 
 ## S3 → Redis Synchronisation Service
 
@@ -345,4 +388,3 @@ Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and r
 ```
 poetry run uvicorn pdf_analysis.api.server:app --reload
 ```
-

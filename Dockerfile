@@ -12,6 +12,7 @@ RUN apt-get update \
         build-essential \
         ghostscript \
         poppler-utils \
+        openjdk-21-jre-headless \
         curl \
     && rm -rf /var/lib/apt/lists/*
 

@@ -225,3 +225,324 @@ CREATE TABLE IF NOT EXISTS ncd_template_override (
                                                      CONSTRAINT ncd_template_override_user_section_subsection_unique
                                                          UNIQUE (user_id, section, subsection)
 );
+
+-- ============================================================
+-- ENUMS
+-- ============================================================
+
+DO $$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'comment_status') THEN
+            CREATE TYPE comment_status AS ENUM ('open', 'resolved');
+        END IF;
+    END $$;
+
+-- ============================================================
+-- DOCUMENT LAYER
+-- ============================================================
+
+-- Logical document (e.g. "Module 4 – Repeat Dose Toxicity Study")
+CREATE TABLE IF NOT EXISTS documents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    tenant_id UUID NOT NULL,
+    title TEXT NOT NULL,
+
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Physical versions (S3-backed, hash-protected)
+CREATE TABLE IF NOT EXISTS document_versions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    document_id UUID NOT NULL
+        REFERENCES documents(id) ON DELETE CASCADE,
+
+    s3_bucket TEXT NOT NULL,
+    s3_key TEXT NOT NULL,
+    s3_version_id TEXT NULL,
+
+    file_type TEXT NOT NULL CHECK (file_type IN ('pdf','docx','txt','html')),
+    content_hash TEXT NOT NULL,
+
+    page_count INT NULL,
+
+    created_by UUID NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+
+    UNIQUE (document_id, content_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_document_versions_document
+    ON document_versions(document_id);
+
+-- ============================================================
+-- DOCUMENT COMMENTS (THREADED)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS document_comments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    document_version_id UUID NOT NULL
+        REFERENCES document_versions(id) ON DELETE CASCADE,
+
+    parent_id UUID NULL
+        REFERENCES document_comments(id) ON DELETE CASCADE,
+
+    status comment_status DEFAULT 'open',
+
+    anchor JSONB NOT NULL,     -- page, offsets, quote, bbox
+    content TEXT NOT NULL,
+
+    created_by UUID NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+
+    resolved_by UUID NULL,
+    resolved_at TIMESTAMPTZ NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_comments_document_version
+    ON document_comments(document_version_id);
+
+CREATE INDEX IF NOT EXISTS idx_comments_parent
+    ON document_comments(parent_id);
+
+CREATE INDEX IF NOT EXISTS idx_comments_status
+    ON document_comments(status);
+
+-- ============================================================
+-- EXTRACTION LAYER (LLM / RULE-BASED)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS extraction_runs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    document_version_id UUID NOT NULL
+        REFERENCES document_versions(id) ON DELETE CASCADE,
+
+    module TEXT NOT NULL CHECK (module = '4'),
+
+    extractor TEXT NOT NULL,        -- e.g. pk_llm_v3
+    model TEXT NOT NULL,            -- gpt-4.1 / llama3 / etc
+
+    status TEXT CHECK (status IN ('pending','completed','failed')),
+
+    created_by UUID NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_extraction_runs_doc_version
+    ON extraction_runs(document_version_id);
+
+-- ============================================================
+-- NCD CORE (STUDY LEVEL)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS ncd_studies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    study_id TEXT NOT NULL,
+    study_type TEXT NOT NULL CHECK (
+        study_type IN ('tox','pk','safety_pharm','genotox','repro','carcinogenicity')
+    ),
+
+    species TEXT,
+    route TEXT,
+    duration TEXT,
+
+    source_document_id UUID NOT NULL
+        REFERENCES documents(id),
+
+    created_at TIMESTAMPTZ DEFAULT now(),
+
+    UNIQUE (study_id)
+);
+
+-- ============================================================
+-- NCD: NOAEL
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS ncd_noael (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    study_id UUID NOT NULL
+        REFERENCES ncd_studies(id) ON DELETE CASCADE,
+
+    dose NUMERIC,
+    dose_unit TEXT,
+
+    species TEXT,
+    sex TEXT,
+
+    endpoint TEXT,
+    value TEXT,
+
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ncd_noael_study
+    ON ncd_noael(study_id);
+
+-- ============================================================
+-- NCD: PK PARAMETERS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS ncd_pk_parameters (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    study_id UUID NOT NULL
+        REFERENCES ncd_studies(id) ON DELETE CASCADE,
+
+    parameter TEXT NOT NULL CHECK (
+        parameter IN ('AUC','Cmax','Tmax','t1/2','CL','Vd')
+    ),
+
+    value NUMERIC,
+    unit TEXT,
+    dose_group TEXT,
+
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ncd_pk_study
+    ON ncd_pk_parameters(study_id);
+
+-- ============================================================
+-- UNIVERSAL TRACEABILITY (DOCUMENT → NCD)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS extracted_entities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    extraction_run_id UUID NOT NULL
+        REFERENCES extraction_runs(id) ON DELETE CASCADE,
+
+    document_version_id UUID NOT NULL
+        REFERENCES document_versions(id) ON DELETE CASCADE,
+
+    entity_type TEXT NOT NULL,   -- 'NOAEL', 'PK_PARAM'
+    entity_id UUID NOT NULL,     -- FK into ncd_* tables
+
+    anchor JSONB NOT NULL,       -- page, offsets, quote
+    confidence NUMERIC(4,3),
+
+    created_at TIMESTAMPTZ DEFAULT now(),
+
+    UNIQUE (entity_type, entity_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_extracted_entities_doc_version
+    ON extracted_entities(document_version_id);
+
+CREATE INDEX IF NOT EXISTS idx_extracted_entities_entity
+    ON extracted_entities(entity_type, entity_id);
+
+-- ============================================================
+-- OPTIONAL: NCD VALIDATION (REVIEWER QA)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS ncd_validation (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    entity_type TEXT NOT NULL,
+    entity_id UUID NOT NULL,
+
+    status TEXT CHECK (status IN ('accepted','rejected','needs_review')),
+    reviewer_id UUID NOT NULL,
+    comment TEXT,
+
+    created_at TIMESTAMPTZ DEFAULT now(),
+
+    UNIQUE (entity_type, entity_id)
+);
+
+-- ============================================================
+-- INGESTION STATUS TRACKING
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS document_ingestion_status (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    s3_bucket TEXT NOT NULL,
+    s3_key TEXT NOT NULL,
+    s3_version_id TEXT NULL,
+
+    content_hash TEXT NOT NULL,
+
+    document_version_id UUID NULL
+        REFERENCES document_versions(id) ON DELETE SET NULL,
+
+    status TEXT NOT NULL CHECK (
+        status IN ('pending','processing','completed','failed','skipped')
+    ),
+
+    error_message TEXT NULL,
+
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+
+    UNIQUE (s3_bucket, s3_key, content_hash)
+);
+
+CREATE TABLE IF NOT EXISTS ncd_ingestion_pipeline_status (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    s3_bucket TEXT NOT NULL,
+    s3_key TEXT NOT NULL,
+    s3_version_id TEXT NULL,
+
+    content_hash TEXT NOT NULL,
+    pipeline TEXT NOT NULL CHECK (pipeline IN ('core','langchain','tox')),
+    status TEXT NOT NULL CHECK (
+        status IN ('pending','processing','completed','failed','skipped')
+    ),
+
+    document_version_id UUID NULL
+        REFERENCES document_versions(id) ON DELETE SET NULL,
+    source_document_id UUID NULL
+        REFERENCES ncd_source_document(id) ON DELETE SET NULL,
+    study_id UUID NULL
+        REFERENCES ncd_study(id) ON DELETE SET NULL,
+
+    error_message TEXT NULL,
+
+    started_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+
+    UNIQUE (s3_bucket, s3_key, content_hash, pipeline)
+);
+
+CREATE TABLE IF NOT EXISTS ncd_ingestion_run_reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    run_id TEXT NOT NULL UNIQUE,
+
+    bucket TEXT NOT NULL,
+    company TEXT,
+    project TEXT,
+    project_id UUID NULL,
+    module INT,
+    mode TEXT,
+    core_check TEXT,
+    md_suffix TEXT,
+    force_core BOOLEAN DEFAULT FALSE,
+    force_tox BOOLEAN DEFAULT FALSE,
+
+    started_at TIMESTAMPTZ,
+    ended_at TIMESTAMPTZ,
+
+    doc_processed INT DEFAULT 0,
+    doc_failed INT DEFAULT 0,
+    doc_skipped INT DEFAULT 0,
+    core_runs INT DEFAULT 0,
+    core_failed INT DEFAULT 0,
+    tox_runs INT DEFAULT 0,
+    tox_failed INT DEFAULT 0,
+
+    error_summary JSONB,
+    report_json JSONB,
+
+    created_at TIMESTAMPTZ DEFAULT now()
+);

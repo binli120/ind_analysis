@@ -1,0 +1,51 @@
+key,version_id,last_modified,md_exists,status_completed,tox_data_exists,core_required,core_status,core_error,core_duration_seconds,document_version_id,tox_required,tox_status,tox_error,tox_duration_seconds,tox_source_document_id,tox_study_id
+"filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf",h1MZbXMFSDOI6IKLeSG1V5_Rx71m2EP8,2025-11-19T02:57:21+00:00,False,False,False,True,failed,"IntegrityError: (psycopg2.errors.NotNullViolation) null value in column ""embedding"" of relation ""documents"" violates not-null constraint
+DETAIL:  Failing row contains (Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf, {}, null, 37ec02c4-a013-4a1e-81f2-9b0613be0ebe, c38daae8-07a8-4da4-9a68-9a9955b09f70, Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf, null, null, 2025-12-20 19:49:40.855876+00).
+
+[SQL: 
+                        INSERT INTO documents (tenant_id, title, content)
+                        VALUES (%(tenant_id)s, %(title)s, %(content)s)
+                        RETURNING id
+                        ]
+[parameters: {'tenant_id': 'c38daae8-07a8-4da4-9a68-9a9955b09f70', 'title': 'Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf', 'content': 'Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf'}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)",1.294,,True,failed,ResourceClosedError: This result object does not return rows. It has been closed automatically.,0.381,,
+filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf,6O_e6aQj97KtEUr4DheHWXXRKlU1WlhT,2025-11-19T02:57:20+00:00,False,False,False,True,failed,"IntegrityError: (psycopg2.errors.NotNullViolation) null value in column ""embedding"" of relation ""documents"" violates not-null constraint
+DETAIL:  Failing row contains (Comparison of the binding of anti-LPA antibodies to other lipid ..., {}, null, e67e3065-85a3-4d34-ade8-0018273439fe, c38daae8-07a8-4da4-9a68-9a9955b09f70, Comparison of the binding of anti-LPA antibodies to other lipid ..., null, null, 2025-12-20 19:49:42.511706+00).
+
+[SQL: 
+                        INSERT INTO documents (tenant_id, title, content)
+                        VALUES (%(tenant_id)s, %(title)s, %(content)s)
+                        RETURNING id
+                        ]
+[parameters: {'tenant_id': 'c38daae8-07a8-4da4-9a68-9a9955b09f70', 'title': 'Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf', 'content': 'Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf'}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)",0.869,,True,failed,ResourceClosedError: This result object does not return rows. It has been closed automatically.,0.364,,
+filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf,Zebq80R_ZKAmUQoSshyVP43Gi6YPdgNa,2025-11-19T02:57:21+00:00,False,False,False,True,failed,"IntegrityError: (psycopg2.errors.NotNullViolation) null value in column ""embedding"" of relation ""documents"" violates not-null constraint
+DETAIL:  Failing row contains (Direct and Competitive Binding of anti-LPA antibodies B3 and LT3..., {}, null, a677290a-faf1-4628-b0d3-4b866a170b9e, c38daae8-07a8-4da4-9a68-9a9955b09f70, Direct and Competitive Binding of anti-LPA antibodies B3 and LT3..., null, null, 2025-12-20 19:49:43.964079+00).
+
+[SQL: 
+                        INSERT INTO documents (tenant_id, title, content)
+                        VALUES (%(tenant_id)s, %(title)s, %(content)s)
+                        RETURNING id
+                        ]
+[parameters: {'tenant_id': 'c38daae8-07a8-4da4-9a68-9a9955b09f70', 'title': 'Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf', 'content': 'Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf'}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)",0.895,,True,failed,ResourceClosedError: This result object does not return rows. It has been closed automatically.,0.42,,
+filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain.pdf,LXwNtxJdC.qQc.95O0eJhrqZlZGgLXTE,2025-11-19T02:57:19+00:00,False,False,False,True,failed,"IntegrityError: (psycopg2.errors.NotNullViolation) null value in column ""embedding"" of relation ""documents"" violates not-null constraint
+DETAIL:  Failing row contains (Dose-Response Efficacy of Test Compound in a Therapeutic Model o..., {}, null, 4151cf54-8f2f-409a-910e-0a6ed02f393a, c38daae8-07a8-4da4-9a68-9a9955b09f70, Dose-Response Efficacy of Test Compound in a Therapeutic Model o..., null, null, 2025-12-20 19:49:45.747729+00).
+
+[SQL: 
+                        INSERT INTO documents (tenant_id, title, content)
+                        VALUES (%(tenant_id)s, %(title)s, %(content)s)
+                        RETURNING id
+                        ]
+[parameters: {'tenant_id': 'c38daae8-07a8-4da4-9a68-9a9955b09f70', 'title': 'Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain.pdf', 'content': 'Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain.pdf'}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)",0.935,,True,failed,ResourceClosedError: This result object does not return rows. It has been closed automatically.,0.778,,
+filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA).pdf,8ApKEDRG5GWpZiKVVNB9qugeoXmsmpK2,2025-11-19T02:57:41+00:00,False,False,False,True,failed,"IntegrityError: (psycopg2.errors.NotNullViolation) null value in column ""embedding"" of relation ""documents"" violates not-null constraint
+DETAIL:  Failing row contains (Efficacy of B3 antibody in a mouse model of Collagen Antibody In..., {}, null, 0b035f18-5240-498f-92c1-8ef740a6226d, c38daae8-07a8-4da4-9a68-9a9955b09f70, Efficacy of B3 antibody in a mouse model of Collagen Antibody In..., null, null, 2025-12-20 19:49:47.811841+00).
+
+[SQL: 
+                        INSERT INTO documents (tenant_id, title, content)
+                        VALUES (%(tenant_id)s, %(title)s, %(content)s)
+                        RETURNING id
+                        ]
+[parameters: {'tenant_id': 'c38daae8-07a8-4da4-9a68-9a9955b09f70', 'title': 'Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA).pdf', 'content': 'Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA).pdf'}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)",1.023,,True,failed,ResourceClosedError: This result object does not return rows. It has been closed automatically.,0.891,,

@@ -161,6 +161,20 @@ optional = true
 google-cloud-vision = ">=3.7.4,<4.0.0"
 boto3 = ">=1.35.0,<2.0.0"
 
+
+[tool.poetry.group.camelot]
+optional = true
+
+[tool.poetry.group.camelot.dependencies]
+camelot-py = ">=1.0.9,<2.0.0"
+
+
+[tool.poetry.group.tabula]
+optional = true
+
+[tool.poetry.group.tabula.dependencies]
+tabula-py = ">=2.10.0,<3.0.0"
+
 [tool.mypy]
 python_version = "3.11"
 pretty = true

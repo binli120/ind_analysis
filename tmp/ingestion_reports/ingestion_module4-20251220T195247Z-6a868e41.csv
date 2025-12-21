@@ -1,0 +1,116 @@
+key,version_id,last_modified,md_exists,status_completed,tox_data_exists,core_required,core_status,core_error,core_duration_seconds,document_version_id,tox_required,tox_status,tox_error,tox_duration_seconds,tox_source_document_id,tox_study_id
+"filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf",h1MZbXMFSDOI6IKLeSG1V5_Rx71m2EP8,2025-11-19T02:57:21+00:00,False,False,False,True,failed,"ProgrammingError: (psycopg2.errors.UndefinedColumn) column ""created_by"" of relation ""document_versions"" does not exist
+LINE 4: ...             file_type, content_hash, page_count, created_by
+                                                             ^
+
+[SQL: 
+                INSERT INTO document_versions (
+                    document_id, s3_bucket, s3_key, s3_version_id,
+                    file_type, content_hash, page_count, created_by
+                )
+                VALUES (
+                    %(document_id)s, %(bucket)s, %(key)s, %(version_id)s,
+                    %(file_type)s, %(content_hash)s, %(page_count)s, %(created_by)s
+                )
+                ON CONFLICT (document_id, content_hash)
+                DO UPDATE SET
+                    page_count = EXCLUDED.page_count,
+                    s3_bucket = EXCLUDED.s3_bucket,
+                    s3_key = EXCLUDED.s3_key,
+                    s3_version_id = EXCLUDED.s3_version_id
+                RETURNING id
+                ]
+[parameters: {'document_id': UUID('9b3f3f67-6344-4644-bc28-2bcff5bb3314'), 'bucket': 'doc-repository-dev', 'key': 'filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf', 'version_id': 'h1MZbXMFSDOI6IKLeSG1V5_Rx71m2EP8', 'file_type': 'pdf', 'content_hash': '6b4e2e06b68e25e96a4169b2cd237b6a756b99611759b7e200197e2fc1d70ba8', 'page_count': 10, 'created_by': 'a5655137-b72b-4a24-a270-5cfe63cf5ea0'}]
+(Background on this error at: https://sqlalche.me/e/20/f405)",1.444,,True,failed,ResourceClosedError: This result object does not return rows. It has been closed automatically.,0.354,,
+filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf,6O_e6aQj97KtEUr4DheHWXXRKlU1WlhT,2025-11-19T02:57:20+00:00,False,False,False,True,failed,"ProgrammingError: (psycopg2.errors.UndefinedColumn) column ""created_by"" of relation ""document_versions"" does not exist
+LINE 4: ...             file_type, content_hash, page_count, created_by
+                                                             ^
+
+[SQL: 
+                INSERT INTO document_versions (
+                    document_id, s3_bucket, s3_key, s3_version_id,
+                    file_type, content_hash, page_count, created_by
+                )
+                VALUES (
+                    %(document_id)s, %(bucket)s, %(key)s, %(version_id)s,
+                    %(file_type)s, %(content_hash)s, %(page_count)s, %(created_by)s
+                )
+                ON CONFLICT (document_id, content_hash)
+                DO UPDATE SET
+                    page_count = EXCLUDED.page_count,
+                    s3_bucket = EXCLUDED.s3_bucket,
+                    s3_key = EXCLUDED.s3_key,
+                    s3_version_id = EXCLUDED.s3_version_id
+                RETURNING id
+                ]
+[parameters: {'document_id': UUID('039a74f7-661a-43c5-9ffe-e83912d11c1f'), 'bucket': 'doc-repository-dev', 'key': 'filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf', 'version_id': '6O_e6aQj97KtEUr4DheHWXXRKlU1WlhT', 'file_type': 'pdf', 'content_hash': 'f17e90c4f58cba6ba531bb3c6f8087508a00cf3bc9d1f8324b86452ab4ef99ec', 'page_count': 21, 'created_by': 'a5655137-b72b-4a24-a270-5cfe63cf5ea0'}]
+(Background on this error at: https://sqlalche.me/e/20/f405)",0.92,,True,failed,ResourceClosedError: This result object does not return rows. It has been closed automatically.,0.48,,
+filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf,Zebq80R_ZKAmUQoSshyVP43Gi6YPdgNa,2025-11-19T02:57:21+00:00,False,False,False,True,failed,"ProgrammingError: (psycopg2.errors.UndefinedColumn) column ""created_by"" of relation ""document_versions"" does not exist
+LINE 4: ...             file_type, content_hash, page_count, created_by
+                                                             ^
+
+[SQL: 
+                INSERT INTO document_versions (
+                    document_id, s3_bucket, s3_key, s3_version_id,
+                    file_type, content_hash, page_count, created_by
+                )
+                VALUES (
+                    %(document_id)s, %(bucket)s, %(key)s, %(version_id)s,
+                    %(file_type)s, %(content_hash)s, %(page_count)s, %(created_by)s
+                )
+                ON CONFLICT (document_id, content_hash)
+                DO UPDATE SET
+                    page_count = EXCLUDED.page_count,
+                    s3_bucket = EXCLUDED.s3_bucket,
+                    s3_key = EXCLUDED.s3_key,
+                    s3_version_id = EXCLUDED.s3_version_id
+                RETURNING id
+                ]
+[parameters: {'document_id': UUID('cb35dd2f-6e1d-4126-b697-5ece4737d635'), 'bucket': 'doc-repository-dev', 'key': 'filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf', 'version_id': 'Zebq80R_ZKAmUQoSshyVP43Gi6YPdgNa', 'file_type': 'pdf', 'content_hash': '1b7c5c51889b555d30bc6b3a41bcb0f7c659153f65c8cee55c44e94eea9244ef', 'page_count': 9, 'created_by': 'a5655137-b72b-4a24-a270-5cfe63cf5ea0'}]
+(Background on this error at: https://sqlalche.me/e/20/f405)",0.936,,True,failed,ResourceClosedError: This result object does not return rows. It has been closed automatically.,0.391,,
+filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain.pdf,LXwNtxJdC.qQc.95O0eJhrqZlZGgLXTE,2025-11-19T02:57:19+00:00,False,False,False,True,failed,"ProgrammingError: (psycopg2.errors.UndefinedColumn) column ""created_by"" of relation ""document_versions"" does not exist
+LINE 4: ...             file_type, content_hash, page_count, created_by
+                                                             ^
+
+[SQL: 
+                INSERT INTO document_versions (
+                    document_id, s3_bucket, s3_key, s3_version_id,
+                    file_type, content_hash, page_count, created_by
+                )
+                VALUES (
+                    %(document_id)s, %(bucket)s, %(key)s, %(version_id)s,
+                    %(file_type)s, %(content_hash)s, %(page_count)s, %(created_by)s
+                )
+                ON CONFLICT (document_id, content_hash)
+                DO UPDATE SET
+                    page_count = EXCLUDED.page_count,
+                    s3_bucket = EXCLUDED.s3_bucket,
+                    s3_key = EXCLUDED.s3_key,
+                    s3_version_id = EXCLUDED.s3_version_id
+                RETURNING id
+                ]
+[parameters: {'document_id': UUID('39f632eb-247f-4f53-85d7-28c201114d20'), 'bucket': 'doc-repository-dev', 'key': 'filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain.pdf', 'version_id': 'LXwNtxJdC.qQc.95O0eJhrqZlZGgLXTE', 'file_type': 'pdf', 'content_hash': 'b05ea3953de317bb8f6e9d431da3c061925fd48f987b1c16b84082fe9135be37', 'page_count': 39, 'created_by': 'a5655137-b72b-4a24-a270-5cfe63cf5ea0'}]
+(Background on this error at: https://sqlalche.me/e/20/f405)",1.162,,True,failed,ResourceClosedError: This result object does not return rows. It has been closed automatically.,0.385,,
+filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA).pdf,8ApKEDRG5GWpZiKVVNB9qugeoXmsmpK2,2025-11-19T02:57:41+00:00,False,False,False,True,failed,"ProgrammingError: (psycopg2.errors.UndefinedColumn) column ""created_by"" of relation ""document_versions"" does not exist
+LINE 4: ...             file_type, content_hash, page_count, created_by
+                                                             ^
+
+[SQL: 
+                INSERT INTO document_versions (
+                    document_id, s3_bucket, s3_key, s3_version_id,
+                    file_type, content_hash, page_count, created_by
+                )
+                VALUES (
+                    %(document_id)s, %(bucket)s, %(key)s, %(version_id)s,
+                    %(file_type)s, %(content_hash)s, %(page_count)s, %(created_by)s
+                )
+                ON CONFLICT (document_id, content_hash)
+                DO UPDATE SET
+                    page_count = EXCLUDED.page_count,
+                    s3_bucket = EXCLUDED.s3_bucket,
+                    s3_key = EXCLUDED.s3_key,
+                    s3_version_id = EXCLUDED.s3_version_id
+                RETURNING id
+                ]
+[parameters: {'document_id': UUID('3da238e8-798f-4cf7-991f-75c51af7c294'), 'bucket': 'doc-repository-dev', 'key': 'filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA).pdf', 'version_id': '8ApKEDRG5GWpZiKVVNB9qugeoXmsmpK2', 'file_type': 'pdf', 'content_hash': 'db06292084ee44fd814f9474980a3cd8fb62ad9df0063ed130cff021f3d687f1', 'page_count': 17, 'created_by': 'a5655137-b72b-4a24-a270-5cfe63cf5ea0'}]
+(Background on this error at: https://sqlalche.me/e/20/f405)",1.373,,True,failed,ResourceClosedError: This result object does not return rows. It has been closed automatically.,0.726,,

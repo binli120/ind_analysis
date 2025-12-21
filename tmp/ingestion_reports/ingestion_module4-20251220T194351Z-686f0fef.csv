@@ -1,0 +1,91 @@
+key,version_id,last_modified,md_exists,status_completed,tox_data_exists,core_required,core_status,core_error,core_duration_seconds,document_version_id,tox_required,tox_status,tox_error,tox_duration_seconds,tox_source_document_id,tox_study_id
+"filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf",h1MZbXMFSDOI6IKLeSG1V5_Rx71m2EP8,2025-11-19T02:57:21+00:00,False,False,False,True,failed,"InternalError: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+                INSERT INTO document_ingestion_status (
+                    s3_bucket, s3_key, s3_version_id,
+                    content_hash, status, document_version_id, error_message
+                )
+                VALUES (%(bucket)s, %(key)s, %(version_id)s, %(hash)s, %(status)s, %(dvid)s, %(err)s)
+                ON CONFLICT (s3_bucket, s3_key, content_hash)
+                DO UPDATE SET
+                    status = EXCLUDED.status,
+                    document_version_id = COALESCE(EXCLUDED.document_version_id, document_ingestion_status.document_version_id),
+                    error_message = EXCLUDED.error_message,
+                    updated_at = now()
+                RETURNING id, status, document_version_id
+                ]
+[parameters: {'bucket': 'doc-repository-dev', 'key': 'filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf', 'version_id': 'h1MZbXMFSDOI6IKLeSG1V5_Rx71m2EP8', 'hash': '6b4e2e06b68e25e96a4169b2cd237b6a756b99611759b7e200197e2fc1d70ba8', 'status': 'failed', 'dvid': None, 'err': 'IntegrityError: (psycopg2.errors.NotNullViolation) null value in column ""content"" of relation ""documents"" violates not-null constraint\nDETAIL:  Fail ... (447 characters truncated) ... 09f70\', \'title\': \'Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf\'}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)'}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)",1.327,,True,failed,ResourceClosedError: This result object does not return rows. It has been closed automatically.,0.685,,
+filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf,6O_e6aQj97KtEUr4DheHWXXRKlU1WlhT,2025-11-19T02:57:20+00:00,False,False,False,True,failed,"InternalError: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+                INSERT INTO document_ingestion_status (
+                    s3_bucket, s3_key, s3_version_id,
+                    content_hash, status, document_version_id, error_message
+                )
+                VALUES (%(bucket)s, %(key)s, %(version_id)s, %(hash)s, %(status)s, %(dvid)s, %(err)s)
+                ON CONFLICT (s3_bucket, s3_key, content_hash)
+                DO UPDATE SET
+                    status = EXCLUDED.status,
+                    document_version_id = COALESCE(EXCLUDED.document_version_id, document_ingestion_status.document_version_id),
+                    error_message = EXCLUDED.error_message,
+                    updated_at = now()
+                RETURNING id, status, document_version_id
+                ]
+[parameters: {'bucket': 'doc-repository-dev', 'key': 'filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf', 'version_id': '6O_e6aQj97KtEUr4DheHWXXRKlU1WlhT', 'hash': 'f17e90c4f58cba6ba531bb3c6f8087508a00cf3bc9d1f8324b86452ab4ef99ec', 'status': 'failed', 'dvid': None, 'err': 'IntegrityError: (psycopg2.errors.NotNullViolation) null value in column ""content"" of relation ""documents"" violates not-null constraint\nDETAIL:  Fail ... (488 characters truncated) ...  the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf\'}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)'}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)",0.598,,True,failed,ResourceClosedError: This result object does not return rows. It has been closed automatically.,0.409,,
+filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf,Zebq80R_ZKAmUQoSshyVP43Gi6YPdgNa,2025-11-19T02:57:21+00:00,False,False,False,True,failed,"InternalError: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+                INSERT INTO document_ingestion_status (
+                    s3_bucket, s3_key, s3_version_id,
+                    content_hash, status, document_version_id, error_message
+                )
+                VALUES (%(bucket)s, %(key)s, %(version_id)s, %(hash)s, %(status)s, %(dvid)s, %(err)s)
+                ON CONFLICT (s3_bucket, s3_key, content_hash)
+                DO UPDATE SET
+                    status = EXCLUDED.status,
+                    document_version_id = COALESCE(EXCLUDED.document_version_id, document_ingestion_status.document_version_id),
+                    error_message = EXCLUDED.error_message,
+                    updated_at = now()
+                RETURNING id, status, document_version_id
+                ]
+[parameters: {'bucket': 'doc-repository-dev', 'key': 'filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf', 'version_id': 'Zebq80R_ZKAmUQoSshyVP43Gi6YPdgNa', 'hash': '1b7c5c51889b555d30bc6b3a41bcb0f7c659153f65c8cee55c44e94eea9244ef', 'status': 'failed', 'dvid': None, 'err': 'IntegrityError: (psycopg2.errors.NotNullViolation) null value in column ""content"" of relation ""documents"" violates not-null constraint\nDETAIL:  Fail ... (464 characters truncated) ... 'title\': \'Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf\'}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)'}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)",0.67,,True,failed,ResourceClosedError: This result object does not return rows. It has been closed automatically.,0.663,,
+filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain.pdf,LXwNtxJdC.qQc.95O0eJhrqZlZGgLXTE,2025-11-19T02:57:19+00:00,False,False,False,True,failed,"InternalError: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+                INSERT INTO document_ingestion_status (
+                    s3_bucket, s3_key, s3_version_id,
+                    content_hash, status, document_version_id, error_message
+                )
+                VALUES (%(bucket)s, %(key)s, %(version_id)s, %(hash)s, %(status)s, %(dvid)s, %(err)s)
+                ON CONFLICT (s3_bucket, s3_key, content_hash)
+                DO UPDATE SET
+                    status = EXCLUDED.status,
+                    document_version_id = COALESCE(EXCLUDED.document_version_id, document_ingestion_status.document_version_id),
+                    error_message = EXCLUDED.error_message,
+                    updated_at = now()
+                RETURNING id, status, document_version_id
+                ]
+[parameters: {'bucket': 'doc-repository-dev', 'key': 'filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain.pdf', 'version_id': 'LXwNtxJdC.qQc.95O0eJhrqZlZGgLXTE', 'hash': 'b05ea3953de317bb8f6e9d431da3c061925fd48f987b1c16b84082fe9135be37', 'status': 'failed', 'dvid': None, 'err': 'IntegrityError: (psycopg2.errors.NotNullViolation) null value in column ""content"" of relation ""documents"" violates not-null constraint\nDETAIL:  Fail ... (496 characters truncated) ... cy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain.pdf\'}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)'}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)",0.778,,True,failed,ResourceClosedError: This result object does not return rows. It has been closed automatically.,0.691,,
+filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA).pdf,8ApKEDRG5GWpZiKVVNB9qugeoXmsmpK2,2025-11-19T02:57:41+00:00,False,False,False,True,failed,"InternalError: (psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
+
+[SQL: 
+                INSERT INTO document_ingestion_status (
+                    s3_bucket, s3_key, s3_version_id,
+                    content_hash, status, document_version_id, error_message
+                )
+                VALUES (%(bucket)s, %(key)s, %(version_id)s, %(hash)s, %(status)s, %(dvid)s, %(err)s)
+                ON CONFLICT (s3_bucket, s3_key, content_hash)
+                DO UPDATE SET
+                    status = EXCLUDED.status,
+                    document_version_id = COALESCE(EXCLUDED.document_version_id, document_ingestion_status.document_version_id),
+                    error_message = EXCLUDED.error_message,
+                    updated_at = now()
+                RETURNING id, status, document_version_id
+                ]
+[parameters: {'bucket': 'doc-repository-dev', 'key': 'filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA).pdf', 'version_id': '8ApKEDRG5GWpZiKVVNB9qugeoXmsmpK2', 'hash': 'db06292084ee44fd814f9474980a3cd8fb62ad9df0063ed130cff021f3d687f1', 'status': 'failed', 'dvid': None, 'err': 'IntegrityError: (psycopg2.errors.NotNullViolation) null value in column ""content"" of relation ""documents"" violates not-null constraint\nDETAIL:  Fail ... (483 characters truncated) ... y of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA).pdf\'}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)'}]
+(Background on this error at: https://sqlalche.me/e/20/2j85)",0.685,,True,failed,ResourceClosedError: This result object does not return rows. It has been closed automatically.,1.597,,

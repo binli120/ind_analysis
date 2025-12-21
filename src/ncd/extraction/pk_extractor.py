@@ -61,6 +61,8 @@ def extract_pk_for_study(
     summary = PKStudySummarySchema(**raw)
 
     for em in summary.parameters:
+        if not em.parameter:
+            continue
         db.execute(
             sqltext("""
                 INSERT INTO ncd_exposure_metric (

@@ -8,11 +8,15 @@ from __future__ import annotations
 import itertools
 import json
 import logging
+import os
 import re
-from dataclasses import dataclass, field
+from concurrent.futures import ProcessPoolExecutor, TimeoutError
+import multiprocessing as mp
+from dataclasses import dataclass, field, asdict
 from importlib import import_module
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple
+from uuid import uuid4
 
 from pdf_analysis.ingest.pdf_text import extract_pages_text, iter_pages_text
 from pdf_analysis.ingest.tables import extract_tables, extract_tables_all
@@ -25,6 +29,53 @@ from pdf_analysis.validate import generate_quality_report
 from .config import PipelineConfig, RedisStreamingConfig
 
 logger = logging.getLogger(__name__)
+
+_TABLE_SUBPROCESS_ENGINES = {"camelot", "tabula"}
+_TABLE_SUBPROCESS_ENABLED = os.getenv("PDF_PIPELINE_TABLES_SUBPROCESS", "1").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+_TABLE_SUBPROCESS_TIMEOUT = int(os.getenv("PDF_PIPELINE_TABLES_TIMEOUT", "120"))
+
+
+def _table_extract_worker(
+    pdf_path: str,
+    engine: str,
+    pages: Optional[Sequence[int]],
+    max_pages: Optional[int],
+) -> List[Dict[str, Any]]:
+    from pdf_analysis.ingest.tables import extract_tables, extract_tables_all
+
+    path = Path(pdf_path)
+    if pages:
+        return extract_tables(path, engine=engine, pages=pages, max_pages=max_pages)
+    return extract_tables_all(path, engine=engine, max_pages=max_pages)
+
+
+def _run_table_engine_subprocess(
+    pdf_path: Path,
+    engine: str,
+    *,
+    pages: Optional[Sequence[int]],
+    max_pages: Optional[int],
+) -> List[Dict[str, Any]]:
+    ctx = mp.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=1, mp_context=ctx) as executor:
+        future = executor.submit(
+            _table_extract_worker,
+            str(pdf_path),
+            engine,
+            list(pages) if pages else None,
+            max_pages,
+        )
+        try:
+            return future.result(timeout=_TABLE_SUBPROCESS_TIMEOUT)
+        except TimeoutError:
+            logger.warning("Table extraction timed out for engine %s", engine)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Table extraction subprocess failed for %s: %s", engine, exc)
+    return []
 
 
 @dataclass(slots=True)
@@ -111,6 +162,18 @@ class PipelineChunk:
             "table_engines": list(self.table_engines),
             "tables": tables_payload,
         }
+
+
+@dataclass(slots=True)
+class DocumentChunk:
+    """Chunk of text/table content with page + positional anchors for LangChain."""
+
+    chunk_id: str
+    page: int
+    text: str
+    bbox: Optional[Dict[str, Any]]
+    offset_start: int
+    offset_end: int
 
 
 class PDFProcessingPipeline:
@@ -387,7 +450,7 @@ class PDFProcessingPipeline:
                         try:
                             text = page.extract_text(layout=True) or ""
                         except AttributeError as exc:
-                            if "graphicstate" in str(exc):
+                            if "graphicstate" in str(exc) or "original_path" in str(exc):
                                 self._pdfplumber_text_supported = False
                                 logger.warning(
                                     "pdfplumber text extraction disabled: %s", exc
@@ -396,7 +459,7 @@ class PDFProcessingPipeline:
                             raise
                         pages.append({"page_number": idx + 1, "text": text.strip()})
             except AttributeError as exc:
-                if "graphicstate" in str(exc):
+                if "graphicstate" in str(exc) or "original_path" in str(exc):
                     self._pdfplumber_text_supported = False
                     logger.warning("pdfplumber text extraction disabled: %s", exc)
                     return []
@@ -440,7 +503,7 @@ class PDFProcessingPipeline:
                         try:
                             text = page.extract_text(layout=True) or ""
                         except AttributeError as exc:
-                            if "graphicstate" in str(exc):
+                            if "graphicstate" in str(exc) or "original_path" in str(exc):
                                 self._pdfplumber_text_supported = False
                                 logger.warning(
                                     "pdfplumber text extraction disabled: %s",
@@ -622,16 +685,27 @@ class PDFProcessingPipeline:
         engines_used: List[str] = []
         for engine in self.config.structured.table_engines:
             try:
-                items = extract_tables_all(
-                    pdf_path,
-                    engine=engine,
-                    max_pages=self.config.text.max_pages,
-                )
+                if _TABLE_SUBPROCESS_ENABLED and engine in _TABLE_SUBPROCESS_ENGINES:
+                    items = _run_table_engine_subprocess(
+                        pdf_path,
+                        engine,
+                        pages=None,
+                        max_pages=self.config.text.max_pages,
+                    )
+                else:
+                    items = extract_tables_all(
+                        pdf_path,
+                        engine=engine,
+                        max_pages=self.config.text.max_pages,
+                    )
             except RuntimeError as exc:
                 self._handle_missing_dependency(engine, exc)
                 continue
             except ModuleNotFoundError as exc:  # pragma: no cover - defensive
                 self._handle_missing_dependency(engine, exc)
+                continue
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Table extraction failed for engine %s: %s", engine, exc)
                 continue
             if items:
                 tables.extend(items)
@@ -653,17 +727,28 @@ class PDFProcessingPipeline:
 
         for engine in self.config.structured.table_engines:
             try:
-                items = extract_tables(
-                    pdf_path,
-                    engine=engine,
-                    pages=page_numbers,
-                    max_pages=self.config.text.max_pages,
-                )
+                if _TABLE_SUBPROCESS_ENABLED and engine in _TABLE_SUBPROCESS_ENGINES:
+                    items = _run_table_engine_subprocess(
+                        pdf_path,
+                        engine,
+                        pages=page_numbers,
+                        max_pages=self.config.text.max_pages,
+                    )
+                else:
+                    items = extract_tables(
+                        pdf_path,
+                        engine=engine,
+                        pages=page_numbers,
+                        max_pages=self.config.text.max_pages,
+                    )
             except RuntimeError as exc:
                 self._handle_missing_dependency(engine, exc)
                 continue
             except ModuleNotFoundError as exc:  # pragma: no cover - defensive
                 self._handle_missing_dependency(engine, exc)
+                continue
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Table extraction failed for engine %s: %s", engine, exc)
                 continue
 
             if items:
@@ -755,24 +840,23 @@ class PDFProcessingPipeline:
             self._handle_missing_dependency("langchain", exc)
             return None
 
+        chunks = self._build_document_chunks(ctx)
+        ctx.extras["document_chunks"] = [asdict(chunk) for chunk in chunks]
+
         documents = [
             Document(
-                page_content=ctx.full_text(), metadata={"source": ctx.pdf_path.name}
+                page_content=chunk.text,
+                metadata={
+                    "chunk_id": chunk.chunk_id,
+                    "page": chunk.page,
+                    "offset_start": chunk.offset_start,
+                    "offset_end": chunk.offset_end,
+                    "source": ctx.pdf_path.name,
+                },
             )
+            for chunk in chunks
+            if chunk.text.strip()
         ]
-        if ctx.tables:
-            table_text = []
-            for table in ctx.tables:
-                df = table.get("dataframe")
-                if df is not None:
-                    table_text.append(df.to_csv(index=False))
-            if table_text:
-                documents.append(
-                    Document(
-                        page_content="\n\n".join(table_text),
-                        metadata={"source": f"{ctx.pdf_path.name}-tables"},
-                    )
-                )
 
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.config.llm.chunk_size,
@@ -794,7 +878,11 @@ class PDFProcessingPipeline:
         )
 
         chain = prompt | self._create_llm()
-        contexts = [split.page_content for split in splits]
+        contexts = []
+        for split in splits:
+            meta = split.metadata
+            label = f"[chunk_id={meta.get('chunk_id')} page={meta.get('page')}]"
+            contexts.append(f"{label}\n{split.page_content}")
         merged_context = "\n\n".join(contexts)
         return chain.invoke(
             {
@@ -802,6 +890,99 @@ class PDFProcessingPipeline:
                 "output_format": self.config.llm.output_format,
             }
         )
+
+    def _build_document_chunks(self, ctx: PipelineContext) -> List[DocumentChunk]:
+        """
+        Produce layout-aware-ish chunks for LangChain with stable anchors.
+        Heuristics:
+          - Split page text by heading-like lines (e.g., 4.2.1 Dose ...).
+          - Preserve per-page grouping; keep offsets for traceability.
+          - Emit tables as separate chunks using their CSV rendering.
+        """
+        chunks: List[DocumentChunk] = []
+        text_offset = 0
+        heading_pattern = re.compile(r"^\s*(\d+(\.\d+)+\s+)")
+
+        for page in ctx.pages:
+            raw_page_number = page.get("page_number")
+            try:
+                page_number = int(raw_page_number)
+            except (TypeError, ValueError):
+                page_number = 0
+            page_text = (page.get("text") or "").strip()
+            if not page_text:
+                continue
+
+            segments = self._split_by_headings(page_text, heading_pattern)
+            if not segments:
+                segments = [page_text]
+
+            for segment in segments:
+                segment_text = segment.strip()
+                if not segment_text:
+                    continue
+                start = text_offset
+                end = start + len(segment_text)
+                chunks.append(
+                    DocumentChunk(
+                        chunk_id=str(uuid4()),
+                        page=page_number,
+                        text=segment_text,
+                        bbox=None,
+                        offset_start=start,
+                        offset_end=end,
+                    )
+                )
+                text_offset = end + 1
+
+        for table in ctx.tables:
+            df = table.get("dataframe")
+            if df is None:
+                continue
+            table_text = df.to_csv(index=False)
+            if not table_text.strip():
+                continue
+            try:
+                page_number = int(table.get("page_number") or 0)
+            except (TypeError, ValueError):
+                page_number = 0
+            start = text_offset
+            end = start + len(table_text)
+            chunks.append(
+                DocumentChunk(
+                    chunk_id=str(uuid4()),
+                    page=page_number,
+                    text=table_text,
+                    bbox=table.get("bbox"),
+                    offset_start=start,
+                    offset_end=end,
+                )
+            )
+            text_offset = end + 1
+
+        return chunks
+
+    def _split_by_headings(
+        self, text: str, heading_pattern: re.Pattern[str]
+    ) -> List[str]:
+        """
+        Split text into logical sections using heading-like lines as boundaries.
+        """
+        lines = [line for line in text.splitlines() if line.strip()]
+        if not lines:
+            return []
+
+        segments: List[str] = []
+        buffer: List[str] = []
+        for line in lines:
+            if heading_pattern.match(line) and buffer:
+                segments.append("\n".join(buffer))
+                buffer = [line]
+            else:
+                buffer.append(line)
+        if buffer:
+            segments.append("\n".join(buffer))
+        return segments
 
     def _create_llm(self):
         if self.config.llm.factory is not None:

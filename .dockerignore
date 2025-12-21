@@ -14,7 +14,6 @@ tmp
 .data
 data
 dist
-build
 .coverage
 htmlcov
 .mypy_cache

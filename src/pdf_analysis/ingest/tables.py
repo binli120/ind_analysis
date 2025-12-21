@@ -83,7 +83,7 @@ def _safe_extract_tables(page, settings):
             return page.extract_tables()
         return page.extract_tables(settings)
     except AttributeError as exc:
-        if "graphicstate" in str(exc):
+        if "graphicstate" in str(exc) or "original_path" in str(exc):
             logger.warning(
                 "pdfplumber table extraction disabled due to compatibility issue: %s",
                 exc,

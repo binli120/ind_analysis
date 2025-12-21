@@ -1,0 +1,67 @@
+{
+  "run_id": "module4-20251220T031003Z-e8470ba0",
+  "started_at": "2025-12-20T03:10:03.532368+00:00",
+  "ended_at": "2025-12-20T03:10:04.866812+00:00",
+  "bucket": "doc-repository-dev",
+  "company": "filynai.com",
+  "project": "Lpathomab",
+  "module": 4,
+  "prefix": "filynai.com/Lpathomab/",
+  "dry_run": false,
+  "force": false,
+  "precheck_enabled": true,
+  "processed": 5,
+  "succeeded": 0,
+  "failed": 5,
+  "skipped": 0,
+  "error_summary": {
+    "TypeError": 5
+  },
+  "entries": [
+    {
+      "key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf",
+      "version_id": "h1MZbXMFSDOI6IKLeSG1V5_Rx71m2EP8",
+      "last_modified": "2025-11-19T02:57:21+00:00",
+      "status": "failed",
+      "document_version_id": "",
+      "error_message": "TypeError: download_file() got an unexpected keyword argument 'VersionId'",
+      "duration_seconds": 0.002
+    },
+    {
+      "key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf",
+      "version_id": "6O_e6aQj97KtEUr4DheHWXXRKlU1WlhT",
+      "last_modified": "2025-11-19T02:57:20+00:00",
+      "status": "failed",
+      "document_version_id": "",
+      "error_message": "TypeError: download_file() got an unexpected keyword argument 'VersionId'",
+      "duration_seconds": 0.001
+    },
+    {
+      "key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf",
+      "version_id": "Zebq80R_ZKAmUQoSshyVP43Gi6YPdgNa",
+      "last_modified": "2025-11-19T02:57:21+00:00",
+      "status": "failed",
+      "document_version_id": "",
+      "error_message": "TypeError: download_file() got an unexpected keyword argument 'VersionId'",
+      "duration_seconds": 0.001
+    },
+    {
+      "key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain.pdf",
+      "version_id": "LXwNtxJdC.qQc.95O0eJhrqZlZGgLXTE",
+      "last_modified": "2025-11-19T02:57:19+00:00",
+      "status": "failed",
+      "document_version_id": "",
+      "error_message": "TypeError: download_file() got an unexpected keyword argument 'VersionId'",
+      "duration_seconds": 0.001
+    },
+    {
+      "key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA).pdf",
+      "version_id": "8ApKEDRG5GWpZiKVVNB9qugeoXmsmpK2",
+      "last_modified": "2025-11-19T02:57:41+00:00",
+      "status": "failed",
+      "document_version_id": "",
+      "error_message": "TypeError: download_file() got an unexpected keyword argument 'VersionId'",
+      "duration_seconds": 0.001
+    }
+  ]
+}

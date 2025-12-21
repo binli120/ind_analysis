@@ -17,7 +17,7 @@ SRC_PATH = REPO_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from dictionary.pipeline import run_pipeline
+from ncd.pipeline import run_pipeline
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
