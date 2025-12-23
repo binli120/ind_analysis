@@ -17,6 +17,8 @@ from tempfile import NamedTemporaryFile
 from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
 from urllib.parse import urlencode
 
+import boto3
+from botocore.exceptions import ClientError
 import pandas as pd
 from fastapi import APIRouter, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
@@ -42,6 +44,17 @@ from pdf_analysis.transform.markdown_writer import (
     build_markdown_document,
 )
 from pdf_analysis.validate import generate_quality_report
+from ncd.ctd_materials import (
+    extract_markdown_images,
+    extract_markdown_tables,
+    fetch_ncd_payload,
+    fetch_project_name,
+    fetch_section_sources,
+    markdown_slice,
+    module4_sections_for_ctd,
+    section_number_matches,
+)
+from ncd.db import SessionLocal
 
 app = FastAPI(
     title="PDF Analysis API",
@@ -265,6 +278,17 @@ def _upload_metadata_json_to_s3(
 def _analysis_json_key(key: str) -> str:
     """Return the analysis sidecar key for a given S3 object key."""
     return f"{key}.analysis.json"
+
+
+def _read_s3_text(s3_client: Any, bucket: str, key: str) -> Optional[str]:
+    try:
+        obj = s3_client.get_object(Bucket=bucket, Key=key)
+    except ClientError:
+        return None
+    body = obj.get("Body")
+    if not body:
+        return None
+    return body.read().decode("utf-8")
 
 
 def _upload_analysis_json_to_s3(
@@ -1222,6 +1246,144 @@ async def get_template_sections(section: str, user_id: Optional[str] = None) -> 
             matches = merged
 
     return {"section": target, "entries": matches}
+
+
+@ncd_router.get("/ctd/2.6/section")
+async def get_ctd_section_materials(
+    section: str,
+    tenant_id: str,
+    project_id: str,
+    bucket: str,
+    include_tables: bool = True,
+    include_images: bool = True,
+) -> Dict[str, Any]:
+    """
+    Return Module 4 material and NCD data mapped to a single CTD 2.6 section.
+    """
+    target = section.strip()
+    if not target:
+        raise HTTPException(status_code=400, detail="section is required")
+    if not target.startswith("2.6."):
+        raise HTTPException(status_code=400, detail="section must start with 2.6.")
+    if not tenant_id or not project_id or not bucket:
+        raise HTTPException(status_code=400, detail="tenant_id, project_id, and bucket are required")
+
+    db = SessionLocal()
+    try:
+        project_name = fetch_project_name(db, project_id)
+        project_like = f"%/{project_name}/%" if project_name else "%"
+
+        mapping_entries = module4_sections_for_ctd(target)
+        filtered_mappings: List[Dict[str, Any]] = []
+        for entry in mapping_entries:
+            matched_targets = [
+                target_entry
+                for target_entry in entry.get("targets", [])
+                if target_entry.get("section") == target
+            ]
+            if not matched_targets:
+                continue
+            filtered = dict(entry)
+            filtered["matched_targets"] = matched_targets
+            filtered_mappings.append(filtered)
+
+        module4_sections = [entry["module4_section"] for entry in filtered_mappings]
+
+        sources = fetch_section_sources(
+            db,
+            tenant_id=tenant_id,
+            bucket=bucket,
+            project_like=project_like,
+            module4_sections=module4_sections,
+        )
+        ncd_payload = fetch_ncd_payload(
+            db,
+            project_id=project_id,
+            module4_sections=module4_sections,
+        )
+    finally:
+        db.close()
+
+    s3_client = boto3.client("s3")
+    markdown_cache: Dict[str, Optional[str]] = {}
+    response_sources: List[Dict[str, Any]] = []
+
+    for row in sources:
+        section_number = str(row.get("section_number") or "")
+        matched_module4 = [
+            module4
+            for module4 in module4_sections
+            if section_number_matches(section_number, module4)
+        ]
+        summary_text = row.get("summary_text")
+        if isinstance(summary_text, str) and summary_text.strip():
+            try:
+                summary_text = json.loads(summary_text)
+            except json.JSONDecodeError:
+                summary_text = {"summary": summary_text}
+
+        markdown_key = f"{row['s3_key']}.extracted.md"
+        markdown_s3_uri = f"s3://{row['s3_bucket']}/{markdown_key}"
+        pdf_s3_uri = f"s3://{row['s3_bucket']}/{row['s3_key']}"
+
+        tables_html: List[str] = []
+        images: List[str] = []
+        if include_tables or include_images:
+            markdown = markdown_cache.get(markdown_key)
+            if markdown is None:
+                markdown = _read_s3_text(s3_client, row["s3_bucket"], markdown_key)
+                markdown_cache[markdown_key] = markdown
+            if markdown:
+                slice_text = markdown_slice(
+                    markdown,
+                    int(row.get("char_start") or 0),
+                    int(row.get("char_end") or 0),
+                )
+                if include_tables:
+                    tables_html = extract_markdown_tables(slice_text)
+                if include_images:
+                    images = extract_markdown_images(slice_text, row["s3_bucket"], row["s3_key"])
+
+        response_sources.append(
+            {
+                "module4_sections": matched_module4,
+                "section_number": section_number,
+                "section_title": row.get("section_title"),
+                "summary": summary_text,
+                "keywords": row.get("keywords") or [],
+                "summary_type": row.get("summary_type"),
+                "summary_purpose": row.get("summary_purpose"),
+                "document_section_id": row.get("section_id"),
+                "document_version_id": row.get("document_version_id"),
+                "document_id": row.get("document_id"),
+                "slice": {
+                    "char_start": row.get("char_start"),
+                    "char_end": row.get("char_end"),
+                    "page_start": row.get("page_start"),
+                    "page_end": row.get("page_end"),
+                },
+                "s3": {
+                    "bucket": row.get("s3_bucket"),
+                    "key": row.get("s3_key"),
+                    "version_id": row.get("s3_version_id"),
+                    "pdf_s3_uri": pdf_s3_uri,
+                    "markdown_s3_uri": markdown_s3_uri,
+                },
+                "tables_html": tables_html,
+                "images": images,
+            }
+        )
+
+    return {
+        "section": target,
+        "project_id": project_id,
+        "tenant_id": tenant_id,
+        "bucket": bucket,
+        "project_name": project_name,
+        "mapping": filtered_mappings,
+        "sources": response_sources,
+        "ncd": ncd_payload,
+    }
 
 
 async def _analyze_uploaded_pdf(upload: UploadFile) -> Dict[str, Any]:
