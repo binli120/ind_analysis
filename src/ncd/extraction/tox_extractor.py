@@ -1,6 +1,9 @@
+from typing import List
+
 from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session
 
+from ncd.db_interface import NCDRepository
 from ncd.llm_client import LLMClient
 from ncd.schemas import ToxStudySummarySchema
 
@@ -10,6 +13,29 @@ toxicology studies for IND CTD Module 2.6.6.
 
 You must return valid JSON strictly following the provided schema.
 If data is missing, use null for that field and DO NOT invent values.
+"""
+
+TOX_POSITIVE_FINDINGS_PROMPT = """
+You are a senior nonclinical toxicologist. Extract only positive findings from
+the provided text. Positive findings are observed changes or treatment-related
+effects. Ignore negative or "no change" statements.
+
+Return JSON:
+{
+  "findings": [
+    {
+      "finding_term": "...",
+      "organ_system": "...",
+      "organ": "...",
+      "severity": "...",
+      "adverse": true/false/null,
+      "reversible": true/false/null,
+      "onset_day": number|null,
+      "dose_threshold_mg_per_kg": number|null,
+      "excerpt": "<exact quote from input>"
+    }
+  ]
+}
 """
 
 
@@ -43,7 +69,7 @@ def extract_tox_for_study(
     chunks = (
         db.execute(
             sqltext("""
-            SELECT tc.id, tc.raw_text
+            SELECT tc.id, tc.raw_text, tc.page_from, tc.page_to
             FROM ncd_text_chunk tc
             JOIN ncd_study s ON s.main_source_document_id = tc.source_document_id
             WHERE s.id = :sid
@@ -211,5 +237,98 @@ def extract_tox_for_study(
             },
         )
 
+    _extract_positive_findings(db, study_id, llm, chunks)
     db.commit()
     return summary
+
+
+def _extract_positive_findings(
+    db: Session,
+    study_id: str,
+    llm: LLMClient,
+    chunks: List[dict],
+) -> None:
+    if not chunks:
+        return
+    repo = NCDRepository(session=db)
+    document_version_id = repo.fetch_document_version_id_for_study(study_id=study_id)
+
+    db.execute(
+        sqltext(
+            """
+            DELETE FROM ncd_finding
+            WHERE study_id = :sid AND is_positive IS TRUE
+            """
+        ),
+        {"sid": study_id},
+    )
+
+    for chunk in chunks:
+        raw_text = chunk.get("raw_text") or ""
+        if not raw_text.strip():
+            continue
+        prompt = (
+            f"Study ID: {study_id}\n"
+            f"Chunk ID: {chunk.get('id')}\n"
+            f"Pages: {chunk.get('page_from')} - {chunk.get('page_to')}\n\n"
+            f"Text:\n\"\"\"{raw_text}\"\"\""
+        )
+        try:
+            payload = llm.extract_json(TOX_POSITIVE_FINDINGS_PROMPT, prompt)
+        except Exception:
+            continue
+        findings = payload.get("findings") if isinstance(payload, dict) else None
+        if not isinstance(findings, list):
+            continue
+        asset_ids: List[str] = []
+        page_from = chunk.get("page_from")
+        page_to = chunk.get("page_to")
+        if document_version_id and page_from and page_to:
+            asset_ids = repo.fetch_asset_ids_for_pages(
+                document_version_id=document_version_id,
+                page_start=int(page_from),
+                page_end=int(page_to),
+            )
+        for item in findings:
+            if not isinstance(item, dict):
+                continue
+            excerpt = str(item.get("excerpt") or "").strip()
+            finding_term = str(item.get("finding_term") or "").strip()
+            if not excerpt or not finding_term:
+                continue
+            db.execute(
+                sqltext(
+                    """
+                    INSERT INTO ncd_finding (
+                        study_id, organ_system, organ, finding_term,
+                        severity, adverse, reversible, onset_day,
+                        dose_threshold_mg_per_kg, noael_flag,
+                        source_chunk_id, context_text, context_page,
+                        context_asset_ids, is_positive
+                    ) VALUES (
+                        :sid, :org_sys, :org, :term,
+                        :sev, :adv, :rev, :onset,
+                        :dose_thr, :noael,
+                        :chunk_id, :context_text, :context_page,
+                        CAST(:asset_ids AS uuid[]), :is_positive
+                    )
+                    """
+                ),
+                {
+                    "sid": study_id,
+                    "org_sys": item.get("organ_system"),
+                    "org": item.get("organ"),
+                    "term": finding_term,
+                    "sev": item.get("severity"),
+                    "adv": item.get("adverse"),
+                    "rev": item.get("reversible"),
+                    "onset": item.get("onset_day"),
+                    "dose_thr": item.get("dose_threshold_mg_per_kg"),
+                    "noael": item.get("noael_flag"),
+                    "chunk_id": chunk.get("id"),
+                    "context_text": excerpt,
+                    "context_page": page_from,
+                    "asset_ids": asset_ids,
+                    "is_positive": True,
+                },
+            )

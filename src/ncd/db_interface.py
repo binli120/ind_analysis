@@ -39,6 +39,34 @@ class TextChunkRecord:
     embedding: Optional[Sequence[float]] = None
 
 
+@dataclass
+class DocumentAssetRecord:
+    asset_type: str
+    s3_bucket: str
+    s3_key: str
+    document_version_id: str
+    page_number: Optional[int] = None
+    index_on_page: Optional[int] = None
+    caption: Optional[str] = None
+    description: Optional[str] = None
+    keywords: Optional[Sequence[str]] = None
+    extra_attributes: Optional[dict] = None
+
+
+@dataclass
+class DocumentKeySectionRecord:
+    document_version_id: str
+    section_type: str
+    text: str
+    page_start: Optional[int] = None
+    page_end: Optional[int] = None
+    char_start: Optional[int] = None
+    char_end: Optional[int] = None
+    asset_ids: Optional[Sequence[str]] = None
+    model_name: Optional[str] = None
+    confidence: Optional[float] = None
+
+
 class NCDRepository:
     """Small helper for inserting document/pages/chunks into the NCD schema."""
 
@@ -731,6 +759,142 @@ class NCDRepository:
     # ------------------------------------------------------------------ #
     # Extraction + NCD persistence helpers
     # ------------------------------------------------------------------ #
+
+    def upsert_document_assets(
+        self, assets: Sequence[DocumentAssetRecord]
+    ) -> List[dict]:
+        if not assets:
+            return []
+        db = self.session
+        rows: List[dict] = []
+        for asset in assets:
+            row = db.execute(
+                sqltext(
+                    """
+                    INSERT INTO document_assets (
+                        document_version_id, asset_type,
+                        page_number, index_on_page,
+                        s3_bucket, s3_key,
+                        caption, description, keywords, extra_attributes
+                    ) VALUES (
+                        :dvid, :atype,
+                        :page_number, :index_on_page,
+                        :bucket, :key,
+                        :caption, :description, :keywords, CAST(:extra AS jsonb)
+                    )
+                    ON CONFLICT (document_version_id, asset_type, page_number, index_on_page, s3_key)
+                    DO UPDATE SET
+                        caption = EXCLUDED.caption,
+                        description = EXCLUDED.description,
+                        keywords = EXCLUDED.keywords,
+                        extra_attributes = EXCLUDED.extra_attributes
+                    RETURNING id, page_number, asset_type
+                    """
+                ),
+                {
+                    "dvid": asset.document_version_id,
+                    "atype": asset.asset_type,
+                    "page_number": asset.page_number,
+                    "index_on_page": asset.index_on_page,
+                    "bucket": asset.s3_bucket,
+                    "key": asset.s3_key,
+                    "caption": asset.caption,
+                    "description": asset.description,
+                    "keywords": list(asset.keywords or []),
+                    "extra": json.dumps(asset.extra_attributes or {}, ensure_ascii=True),
+                },
+            ).mappings().first()
+            if row:
+                rows.append(dict(row))
+        db.commit()
+        return rows
+
+    def replace_document_key_sections(
+        self, sections: Sequence[DocumentKeySectionRecord]
+    ) -> int:
+        if not sections:
+            return 0
+        db = self.session
+        document_version_id = sections[0].document_version_id
+        db.execute(
+            sqltext(
+                """
+                DELETE FROM document_key_sections
+                WHERE document_version_id = :dvid
+                """
+            ),
+            {"dvid": document_version_id},
+        )
+        for section in sections:
+            db.execute(
+                sqltext(
+                    """
+                    INSERT INTO document_key_sections (
+                        document_version_id, section_type, text,
+                        page_start, page_end, char_start, char_end,
+                        asset_ids, model_name, confidence
+                    ) VALUES (
+                        :dvid, :stype, :text,
+                        :page_start, :page_end, :char_start, :char_end,
+                        CAST(:asset_ids AS uuid[]), :model_name, :confidence
+                    )
+                    """
+                ),
+                {
+                    "dvid": section.document_version_id,
+                    "stype": section.section_type,
+                    "text": section.text,
+                    "page_start": section.page_start,
+                    "page_end": section.page_end,
+                    "char_start": section.char_start,
+                    "char_end": section.char_end,
+                    "asset_ids": list(section.asset_ids or []),
+                    "model_name": section.model_name,
+                    "confidence": section.confidence,
+                },
+            )
+        db.commit()
+        return len(sections)
+
+    def fetch_asset_ids_for_pages(
+        self,
+        *,
+        document_version_id: str,
+        page_start: int | None,
+        page_end: int | None,
+    ) -> List[str]:
+        if page_start is None or page_end is None:
+            return []
+        db = self.session
+        rows = db.execute(
+            sqltext(
+                """
+                SELECT id
+                FROM document_assets
+                WHERE document_version_id = :dvid
+                  AND page_number BETWEEN :pstart AND :pend
+                """
+            ),
+            {"dvid": document_version_id, "pstart": page_start, "pend": page_end},
+        ).scalars().all()
+        return [str(row) for row in rows]
+
+    def fetch_document_version_id_for_study(self, *, study_id: str) -> str | None:
+        db = self.session
+        row = db.execute(
+            sqltext(
+                """
+                SELECT dv.id
+                FROM ncd_study s
+                JOIN ncd_source_document sd ON s.main_source_document_id = sd.id
+                JOIN document_versions dv ON dv.content_hash = sd.sha256
+                WHERE s.id = :sid
+                LIMIT 1
+                """
+            ),
+            {"sid": study_id},
+        ).scalar()
+        return str(row) if row else None
     def create_extraction_run(
         self,
         *,

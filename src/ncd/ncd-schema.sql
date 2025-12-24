@@ -119,8 +119,18 @@ CREATE TABLE IF NOT EXISTS ncd_finding (
                                            dose_threshold_mg_per_kg NUMERIC,
                                            noael_flag              BOOLEAN,
                                            source_chunk_id         UUID REFERENCES ncd_text_chunk(id),
+                                           context_text            TEXT,
+                                           context_page            INT,
+                                           context_asset_ids       UUID[],
+                                           is_positive             BOOLEAN,
                                            extra_attributes        JSONB DEFAULT '{}'::jsonb
 );
+
+ALTER TABLE ncd_finding
+    ADD COLUMN IF NOT EXISTS context_text TEXT,
+    ADD COLUMN IF NOT EXISTS context_page INT,
+    ADD COLUMN IF NOT EXISTS context_asset_ids UUID[],
+    ADD COLUMN IF NOT EXISTS is_positive BOOLEAN;
 
 CREATE TABLE IF NOT EXISTS ncd_study_safety_summary (
                                                         id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -276,6 +286,72 @@ CREATE TABLE IF NOT EXISTS document_versions (
 
 CREATE INDEX IF NOT EXISTS idx_document_versions_document
     ON document_versions(document_id);
+
+-- ============================================================
+-- DOCUMENT ASSETS (TABLES / IMAGES)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS document_assets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    document_version_id UUID NOT NULL
+        REFERENCES document_versions(id) ON DELETE CASCADE,
+
+    asset_type TEXT NOT NULL CHECK (asset_type IN ('table', 'image')),
+    page_number INT NULL,
+    index_on_page INT NULL,
+
+    s3_bucket TEXT NOT NULL,
+    s3_key TEXT NOT NULL,
+
+    caption TEXT NULL,
+    description TEXT NULL,
+    keywords TEXT[] NOT NULL DEFAULT '{}',
+    extra_attributes JSONB DEFAULT '{}'::jsonb,
+
+    created_at TIMESTAMPTZ DEFAULT now(),
+
+    UNIQUE (document_version_id, asset_type, page_number, index_on_page, s3_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_document_assets_document
+    ON document_assets(document_version_id);
+
+CREATE INDEX IF NOT EXISTS idx_document_assets_type
+    ON document_assets(asset_type);
+
+CREATE INDEX IF NOT EXISTS idx_document_assets_keywords
+    ON document_assets USING GIN (keywords);
+
+-- ============================================================
+-- SUMMARY / CONCLUSION PASSAGES
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS document_key_sections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    document_version_id UUID NOT NULL
+        REFERENCES document_versions(id) ON DELETE CASCADE,
+
+    section_type TEXT NOT NULL CHECK (section_type IN ('summary', 'conclusion')),
+
+    text TEXT NOT NULL,
+
+    page_start INT NULL,
+    page_end INT NULL,
+    char_start INT NULL,
+    char_end INT NULL,
+
+    asset_ids UUID[] NOT NULL DEFAULT '{}',
+
+    model_name TEXT NULL,
+    confidence FLOAT NULL,
+
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_document_key_sections_document
+    ON document_key_sections(document_version_id);
 
 -- ============================================================
 -- DOCUMENT COMMENTS (THREADED)
@@ -494,7 +570,7 @@ CREATE TABLE IF NOT EXISTS ncd_ingestion_pipeline_status (
     s3_version_id TEXT NULL,
 
     content_hash TEXT NOT NULL,
-    pipeline TEXT NOT NULL CHECK (pipeline IN ('core','langchain','tox')),
+    pipeline TEXT NOT NULL CHECK (pipeline IN ('core','langchain','tox','section-summary','context')),
     status TEXT NOT NULL CHECK (
         status IN ('pending','processing','completed','failed','skipped')
     ),

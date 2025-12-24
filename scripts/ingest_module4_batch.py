@@ -593,6 +593,30 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Respect summary prechecks (disable default force).",
     )
     parser.add_argument(
+        "--context",
+        action="store_true",
+        default=True,
+        help="Generate context assets + summary/conclusion passages.",
+    )
+    parser.add_argument(
+        "--no-context",
+        action="store_false",
+        dest="context",
+        help="Disable context extraction (overrides default on).",
+    )
+    parser.add_argument(
+        "--force-context",
+        action="store_true",
+        default=True,
+        help="Re-run context extraction even if completed.",
+    )
+    parser.add_argument(
+        "--no-force-context",
+        action="store_false",
+        dest="force_context",
+        help="Respect context prechecks (disable default force).",
+    )
+    parser.add_argument(
         "--summary-min-chars",
         type=int,
         default=None,
@@ -651,19 +675,23 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
     langchain_required = False
     tox_required = False
     summary_required = False
+    context_required = False
 
     core_status = "skipped"
     langchain_status = "skipped"
     tox_status = "skipped"
     summary_status = "skipped"
+    context_status = "skipped"
     core_error = ""
     langchain_error = ""
     tox_error = ""
     summary_error = ""
+    context_error = ""
     core_duration = 0.0
     langchain_duration = 0.0
     tox_duration = 0.0
     summary_duration = 0.0
+    context_duration = 0.0
     document_version_id = ""
     tox_source_document_id = ""
     tox_study_id = ""
@@ -702,6 +730,12 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                         s3_version_id=version_id,
                         pipeline="section-summary",
                     )
+                    context_status_row = repo.fetch_pipeline_status_for_key(
+                        s3_bucket=args.bucket,
+                        s3_key=key,
+                        s3_version_id=version_id,
+                        pipeline="context",
+                    )
                     status_completed = bool(
                         core_status_row and core_status_row.get("status") == "completed"
                     )
@@ -717,6 +751,8 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                         langchain_status = str(langchain_status_row.get("status") or langchain_status)
                     if summary_status_row:
                         summary_status = str(summary_status_row.get("status") or summary_status)
+                    if context_status_row:
+                        context_status = str(context_status_row.get("status") or context_status)
                 except Exception as exc:
                     status_completed = False
                     core_error = _format_error(exc)
@@ -741,6 +777,12 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                 summary_required = False
             if args.force_section_summary:
                 summary_required = True
+
+            context_required = bool(args.context)
+            if context_required and context_status == "completed" and not args.force_context:
+                context_required = False
+            if args.force_context:
+                context_required = True
             if summary_required and not document_version_id:
                 core_required = True
 
@@ -785,6 +827,10 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                 "summary_error": summary_error,
                 "summary_duration_seconds": summary_duration,
                 "summary_count": summary_count,
+                "context_required": context_required,
+                "context_status": "dry_run",
+                "context_error": context_error,
+                "context_duration_seconds": context_duration,
                 "document_version_id": document_version_id,
                 "tox_required": tox_required,
                 "tox_status": "dry_run",
@@ -795,7 +841,7 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                 "meta_key": meta_key,
             }
 
-        if (core_required or langchain_required) and args.mode in {"auto", "core"}:
+        if (core_required or langchain_required or context_required) and args.mode in {"auto", "core"}:
             started = datetime.now(timezone.utc)
             try:
                 result = process_message(
@@ -809,13 +855,17 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                     force=bool(args.force or args.force_core),
                     run_core=core_required,
                     run_langchain=langchain_required,
+                    run_context=context_required,
                 )
                 core_status = result.get("core_status", core_status)
                 langchain_status = result.get("langchain_status", langchain_status)
+                context_status = result.get("context_status", context_status)
                 core_error = result.get("core_error") or core_error
                 langchain_error = result.get("langchain_error") or langchain_error
+                context_error = result.get("context_error") or context_error
                 core_duration = float(result.get("core_duration_seconds") or core_duration)
                 langchain_duration = float(result.get("langchain_duration_seconds") or langchain_duration)
+                context_duration = float(result.get("context_duration_seconds") or context_duration)
                 if result.get("document_version_id"):
                     document_version_id = str(result.get("document_version_id"))
             except Exception as exc:
@@ -825,6 +875,9 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                 if langchain_required:
                     langchain_status = "failed"
                     langchain_error = _format_error(exc)
+                if context_required:
+                    context_status = "failed"
+                    context_error = _format_error(exc)
             core_duration = max(core_duration, (datetime.now(timezone.utc) - started).total_seconds())
             if not content_hash:
                 try:
@@ -1062,6 +1115,7 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                     "quality_key": f"{key}.quality.json",
                     "core_status": core_status,
                     "langchain_status": langchain_status,
+                    "context_status": context_status,
                     "section_summary_status": summary_status,
                     "section_summary_count": summary_count,
                     "tox_status": tox_status,
@@ -1084,6 +1138,10 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
             "langchain_status": langchain_status,
             "langchain_error": langchain_error,
             "langchain_duration_seconds": round(langchain_duration, 3),
+            "context_required": context_required,
+            "context_status": context_status,
+            "context_error": context_error,
+            "context_duration_seconds": round(context_duration, 3),
             "summary_required": summary_required,
             "summary_status": summary_status,
             "summary_error": summary_error,
@@ -1207,6 +1265,8 @@ def main(argv: list[str]) -> int:
     core_failed = 0
     langchain_runs = 0
     langchain_failed = 0
+    context_runs = 0
+    context_failed = 0
     summary_runs = 0
     summary_failed = 0
     tox_runs = 0
@@ -1233,12 +1293,14 @@ def main(argv: list[str]) -> int:
             required = (
                 entry.get("core_required")
                 or entry.get("langchain_required")
+                or entry.get("context_required")
                 or entry.get("summary_required")
                 or entry.get("tox_required")
             )
             failed = (
                 (entry.get("core_required") and entry.get("core_status") == "failed")
                 or (entry.get("langchain_required") and entry.get("langchain_status") == "failed")
+                or (entry.get("context_required") and entry.get("context_status") == "failed")
                 or (entry.get("summary_required") and entry.get("summary_status") == "failed")
                 or (entry.get("tox_required") and entry.get("tox_status") == "failed")
             )
@@ -1251,6 +1313,10 @@ def main(argv: list[str]) -> int:
                 langchain_runs += 1
                 if entry.get("langchain_status") == "failed":
                     langchain_failed += 1
+            if entry.get("context_required"):
+                context_runs += 1
+                if entry.get("context_status") == "failed":
+                    context_failed += 1
             if entry.get("summary_required"):
                 summary_runs += 1
                 if entry.get("summary_status") == "failed":
@@ -1270,6 +1336,7 @@ def main(argv: list[str]) -> int:
             for err in (
                 entry.get("core_error"),
                 entry.get("langchain_error"),
+                entry.get("context_error"),
                 entry.get("summary_error"),
                 entry.get("tox_error"),
             ):
@@ -1288,6 +1355,8 @@ def main(argv: list[str]) -> int:
                     print(f"  core_error: {entry['core_error']}", file=sys.stderr)
                 if entry.get("langchain_error"):
                     print(f"  langchain_error: {entry['langchain_error']}", file=sys.stderr)
+                if entry.get("context_error"):
+                    print(f"  context_error: {entry['context_error']}", file=sys.stderr)
                 if entry.get("summary_error"):
                     print(f"  summary_error: {entry['summary_error']}", file=sys.stderr)
                 if entry.get("tox_error"):
@@ -1320,6 +1389,8 @@ def main(argv: list[str]) -> int:
         "core_failed": core_failed,
         "langchain_runs": langchain_runs,
         "langchain_failed": langchain_failed,
+        "context_runs": context_runs,
+        "context_failed": context_failed,
         "summary_runs": summary_runs,
         "summary_failed": summary_failed,
         "tox_runs": tox_runs,
@@ -1349,6 +1420,10 @@ def main(argv: list[str]) -> int:
                 "langchain_status",
                 "langchain_error",
                 "langchain_duration_seconds",
+                "context_required",
+                "context_status",
+                "context_error",
+                "context_duration_seconds",
                 "summary_required",
                 "summary_status",
                 "summary_error",
@@ -1397,8 +1472,17 @@ def main(argv: list[str]) -> int:
         print(f"[WARN] Unable to persist run report to DB: {exc}", file=sys.stderr)
 
     print(
-        "\nCompleted. processed=%d failed=%d skipped=%d core_runs=%d langchain_runs=%d summary_runs=%d tox_runs=%d"
-        % (doc_processed, doc_failed, doc_skipped, core_runs, langchain_runs, summary_runs, tox_runs)
+        "\nCompleted. processed=%d failed=%d skipped=%d core_runs=%d langchain_runs=%d context_runs=%d summary_runs=%d tox_runs=%d"
+        % (
+            doc_processed,
+            doc_failed,
+            doc_skipped,
+            core_runs,
+            langchain_runs,
+            context_runs,
+            summary_runs,
+            tox_runs,
+        )
     )
     print(f"Report JSON: {report_json_path}")
     print(f"Report CSV:  {report_csv_path}")

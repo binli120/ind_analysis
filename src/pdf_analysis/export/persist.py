@@ -14,6 +14,26 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def ensure_unique_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy with unique column names to avoid record-orient errors."""
+    columns = [str(c) if c is not None else "" for c in df.columns]
+    counts: dict[str, int] = {}
+    unique_cols: list[str] = []
+    for col in columns:
+        base = col or "column"
+        count = counts.get(base, 0) + 1
+        counts[base] = count
+        if count == 1:
+            unique_cols.append(base)
+        else:
+            unique_cols.append(f"{base}_{count}")
+    if unique_cols == columns:
+        return df
+    fixed = df.copy()
+    fixed.columns = unique_cols
+    return fixed
+
+
 def save_tables(
         pdf_path: Path, tables: List[Dict[str, Any]], outdir: Path
 ) -> List[Dict[str, Any]]:
@@ -30,6 +50,7 @@ def save_tables(
 
         # Clean up column names/values
         df = df.fillna("").astype(str)
+        df = ensure_unique_columns(df)
 
         csv_path = outdir / f"{stem}.p{pno}.t{idx}.csv"
         json_path = outdir / f"{stem}.p{pno}.t{idx}.json"

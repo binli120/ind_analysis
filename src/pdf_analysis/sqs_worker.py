@@ -16,6 +16,8 @@ from typing import Any, Dict, List, Optional
 
 import boto3
 
+from pdf_analysis.export.persist import ensure_unique_columns, save_tables
+from pdf_analysis.ingest.images import extract_images
 from pdf_analysis.pipeline.pipeline import PDFProcessingPipeline, PipelineContext
 from pdf_analysis.pipeline.config import PipelineConfig
 from pdf_analysis.pipeline.langchain_extraction import (
@@ -27,11 +29,25 @@ from pdf_analysis.pipeline.langchain_chains import (
     build_pk_chain,
     build_study_segmentation_chain,
 )
-from ncd.db_interface import NCDRepository
+from ncd.db_interface import (
+    DocumentAssetRecord,
+    DocumentKeySectionRecord,
+    NCDRepository,
+)
+from ncd.extraction.content_extractor import (
+    describe_image_asset,
+    describe_table_asset,
+    extract_key_sections_from_pages,
+)
+from ncd.llm_client import LLMClient
 
 s3 = boto3.client("s3")
 
 ENABLE_LANGCHAIN = os.getenv("ENABLE_LANGCHAIN", "true").lower() == "true"
+ENABLE_CONTEXT_PIPELINE = os.getenv("ENABLE_CONTEXT_PIPELINE", "true").lower() == "true"
+CONTEXT_DISABLE_IMAGES = os.getenv("CONTEXT_DISABLE_IMAGES", "").lower() in {"1", "true", "yes"}
+CONTEXT_DISABLE_ASSET_LLM = os.getenv("CONTEXT_DISABLE_ASSET_LLM", "").lower() in {"1", "true", "yes"}
+CONTEXT_DISABLE_KEY_SECTIONS = os.getenv("CONTEXT_DISABLE_KEY_SECTIONS", "").lower() in {"1", "true", "yes"}
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 DEFAULT_TENANT_ID = os.getenv("DEFAULT_TENANT_ID")
 DEFAULT_USER_ID = os.getenv("DEFAULT_USER_ID")
@@ -58,6 +74,7 @@ def process_message(
     force: bool = False,
     run_core: bool = True,
     run_langchain: bool = True,
+    run_context: bool = True,
 ) -> Dict[str, Any]:
     bucket = payload["bucket"]
     key = payload["key"]
@@ -74,8 +91,11 @@ def process_message(
     langchain_status = "skipped"
     core_error: Optional[str] = None
     langchain_error: Optional[str] = None
+    context_status = "skipped"
+    context_error: Optional[str] = None
     core_duration = 0.0
     langchain_duration = 0.0
+    context_duration = 0.0
     repo = NCDRepository()
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -195,6 +215,122 @@ def process_message(
                 document_id = repo.fetch_document_id_for_version(document_version_id)
 
             lc_result: Dict[str, Any] | None = None
+            if run_context and ENABLE_CONTEXT_PIPELINE:
+                try:
+                    try:
+                        context_status_row = repo.fetch_pipeline_status(
+                            s3_bucket=bucket,
+                            s3_key=key,
+                            content_hash=content_hash,
+                            pipeline="context",
+                        )
+                    except Exception:
+                        context_status_row = None
+                    context_skip = False
+                    if (
+                        context_status_row
+                        and context_status_row.get("status") == "completed"
+                        and not force
+                    ):
+                        context_skip = True
+                    if not context_skip:
+                        if not document_version_id:
+                            raise RuntimeError("document_version_id is required for context pipeline")
+                        started = datetime.now(timezone.utc)
+                        repo.upsert_pipeline_status(
+                            s3_bucket=bucket,
+                            s3_key=key,
+                            s3_version_id=version_id,
+                            content_hash=content_hash,
+                            pipeline="context",
+                            status="processing",
+                            document_version_id=document_version_id,
+                        )
+                        _require_openai_api_key()
+                        if pipeline_result is None:
+                            pdf_pipeline = _build_pipeline()
+                            pipeline_result = pdf_pipeline.run(local_pdf)
+
+                        assets = _build_document_assets(
+                            local_pdf,
+                            pipeline_result.pages,
+                            pipeline_result.tables,
+                            bucket=bucket,
+                            key=key,
+                            llm=None if CONTEXT_DISABLE_ASSET_LLM else LLMClient(),
+                        )
+                        asset_rows = repo.upsert_document_assets(
+                            [
+                                DocumentAssetRecord(document_version_id=document_version_id, **asset)
+                                for asset in assets
+                            ]
+                        )
+                        assets_by_page: Dict[int, List[str]] = {}
+                        for row in asset_rows:
+                            page_no = row.get("page_number")
+                            if page_no is None:
+                                continue
+                            assets_by_page.setdefault(int(page_no), []).append(str(row.get("id")))
+
+                        if not CONTEXT_DISABLE_KEY_SECTIONS:
+                            llm_client = LLMClient()
+                            key_sections = extract_key_sections_from_pages(
+                                llm_client, pipeline_result.pages
+                            )
+                            section_records: List[DocumentKeySectionRecord] = []
+                            for section in key_sections:
+                                page_start = section.get("page_start")
+                                page_end = section.get("page_end")
+                                asset_ids: List[str] = []
+                                if page_start and page_end:
+                                    for page_no in range(int(page_start), int(page_end) + 1):
+                                        asset_ids.extend(assets_by_page.get(page_no, []))
+                                section_records.append(
+                                    DocumentKeySectionRecord(
+                                        document_version_id=document_version_id,
+                                        section_type=section.get("section_type"),
+                                        text=section.get("text"),
+                                        page_start=page_start,
+                                        page_end=page_end,
+                                        char_start=section.get("char_start"),
+                                        char_end=section.get("char_end"),
+                                        asset_ids=asset_ids,
+                                        model_name=llm_client.model_name,
+                                        confidence=section.get("confidence"),
+                                    )
+                                )
+                            repo.replace_document_key_sections(section_records)
+                        context_status = "completed"
+                        context_duration = (datetime.now(timezone.utc) - started).total_seconds()
+                        repo.upsert_pipeline_status(
+                            s3_bucket=bucket,
+                            s3_key=key,
+                            s3_version_id=version_id,
+                            content_hash=content_hash,
+                            pipeline="context",
+                            status="completed",
+                            document_version_id=document_version_id,
+                        )
+                    else:
+                        context_status = "skipped_existing"
+                except Exception as exc:
+                    context_error = _format_error(exc)
+                    context_status = "failed"
+                    try:
+                        repo.upsert_pipeline_status(
+                            s3_bucket=bucket,
+                            s3_key=key,
+                            s3_version_id=version_id,
+                            content_hash=content_hash,
+                            pipeline="context",
+                            status="failed",
+                            document_version_id=document_version_id,
+                            error_message=context_error,
+                        )
+                    except Exception:
+                        pass
+            elif run_context and not ENABLE_CONTEXT_PIPELINE:
+                context_status = "skipped"
             if run_langchain:
                 try:
                     if not ENABLE_LANGCHAIN:
@@ -287,6 +423,9 @@ def process_message(
                 "langchain_status": langchain_status,
                 "langchain_error": langchain_error,
                 "langchain_duration_seconds": round(langchain_duration, 3),
+                "context_status": context_status,
+                "context_error": context_error,
+                "context_duration_seconds": round(context_duration, 3),
                 "langchain": lc_result,
                 "status": "completed" if core_status == "completed" else core_status,
             }
@@ -327,6 +466,17 @@ def process_message(
                 document_version_id=document_version_id,
                 error_message=err_msg,
             )
+        if content_hash and run_context and context_status == "processing":
+            repo.upsert_pipeline_status(
+                s3_bucket=bucket,
+                s3_key=key,
+                s3_version_id=version_id,
+                content_hash=content_hash,
+                pipeline="context",
+                status="failed",
+                document_version_id=document_version_id,
+                error_message=err_msg,
+            )
         raise
 
 
@@ -345,7 +495,7 @@ def _infer_file_type(key: str) -> str:
 
 def _require_openai_api_key() -> None:
     if not os.getenv("OPENAI_API_KEY"):
-        raise RuntimeError("OPENAI_API_KEY is required when ENABLE_LANGCHAIN=true")
+        raise RuntimeError("OPENAI_API_KEY is required when ENABLE_LANGCHAIN or ENABLE_CONTEXT_PIPELINE is true")
 
 
 def _format_error(exc: Exception, limit: int = 2000) -> str:
@@ -353,6 +503,147 @@ def _format_error(exc: Exception, limit: int = 2000) -> str:
     if len(message) > limit:
         return f"{message[:limit - 3]}..."
     return message
+
+
+def _build_document_assets(
+    pdf_path: Path,
+    pages: List[Dict[str, Any]],
+    tables: List[Dict[str, Any]],
+    *,
+    bucket: str,
+    key: str,
+    llm: LLMClient | None,
+) -> List[Dict[str, Any]]:
+    assets: List[Dict[str, Any]] = []
+    page_text: Dict[int, str] = {}
+    for page in pages:
+        try:
+            page_no = int(page.get("page_number") or 0)
+        except (TypeError, ValueError):
+            continue
+        page_text[page_no] = str(page.get("text") or "")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tables_dir = Path(tmpdir) / "tables"
+        tables_dir.mkdir(parents=True, exist_ok=True)
+        if tables:
+            manifest = save_tables(pdf_path, tables, tables_dir)
+            table_map = {
+                (t.get("page_number"), t.get("index_on_page")): t
+                for t in tables
+            }
+            for entry in manifest:
+                page_number = entry.get("page_number")
+                index_on_page = entry.get("index_on_page")
+                csv_name = entry.get("csv")
+                json_name = entry.get("json")
+                if not csv_name or not json_name:
+                    continue
+                csv_path = tables_dir / csv_name
+                json_path = tables_dir / json_name
+                csv_key = f"{key}.tables/{csv_name}"
+                json_key = f"{key}.tables/{json_name}"
+                s3.upload_file(str(csv_path), bucket, csv_key, ExtraArgs={"ContentType": "text/csv"})
+                s3.upload_file(
+                    str(json_path),
+                    bucket,
+                    json_key,
+                    ExtraArgs={"ContentType": "application/json"},
+                )
+                df = None
+                table = table_map.get((page_number, index_on_page))
+                if table:
+                    df = table.get("dataframe")
+                preview_df = None
+                if df is not None:
+                    preview_df = ensure_unique_columns(df.fillna("").astype(str))
+                description = None
+                keywords: List[str] = []
+                if llm and preview_df is not None:
+                    try:
+                        context = describe_table_asset(
+                            llm,
+                            page_number=page_number,
+                            index_on_page=index_on_page,
+                            columns=list(preview_df.columns),
+                            preview_rows=preview_df.head(5).to_dict(orient="records"),
+                            page_text=page_text.get(int(page_number or 0), ""),
+                        )
+                        description = context.get("description")
+                        keywords = context.get("keywords") or []
+                    except Exception:
+                        description = None
+                        keywords = []
+                assets.append(
+                    {
+                        "asset_type": "table",
+                        "page_number": page_number,
+                        "index_on_page": index_on_page,
+                        "s3_bucket": bucket,
+                        "s3_key": csv_key,
+                        "caption": f"Table p{page_number} t{index_on_page}",
+                        "description": description,
+                        "keywords": keywords,
+                        "extra_attributes": {
+                            "json_key": json_key,
+                            "engine": table.get("engine") if table else None,
+                            "columns": list(preview_df.columns) if preview_df is not None else [],
+                            "row_count": int(preview_df.shape[0]) if preview_df is not None else 0,
+                        },
+                    }
+                )
+
+        if not CONTEXT_DISABLE_IMAGES:
+            images_dir = Path(tmpdir) / "images"
+            images = extract_images(pdf_path, images_dir)
+            for image in images:
+                file_path = image.get("file_path")
+                if not file_path:
+                    continue
+                page_number = image.get("page_number")
+                index_on_page = image.get("index_on_page")
+                caption = image.get("caption")
+                file_name = Path(file_path).name
+                image_key = f"{key}.images/{file_name}"
+                s3.upload_file(
+                    file_path,
+                    bucket,
+                    image_key,
+                    ExtraArgs={"ContentType": "image/png"},
+                )
+                description = None
+                keywords: List[str] = []
+                if llm:
+                    try:
+                        context = describe_image_asset(
+                            llm,
+                            page_number=page_number,
+                            index_on_page=index_on_page,
+                            caption=caption,
+                            page_text=page_text.get(int(page_number or 0), ""),
+                        )
+                        description = context.get("description")
+                        keywords = context.get("keywords") or []
+                    except Exception:
+                        description = None
+                        keywords = []
+                assets.append(
+                    {
+                        "asset_type": "image",
+                        "page_number": page_number,
+                        "index_on_page": index_on_page,
+                        "s3_bucket": bucket,
+                        "s3_key": image_key,
+                        "caption": caption,
+                        "description": description,
+                        "keywords": keywords,
+                        "extra_attributes": {
+                            "bbox": image.get("bbox"),
+                            "file_name": file_name,
+                        },
+                    }
+                )
+    return assets
 
 
 def _build_pipeline() -> PDFProcessingPipeline:
