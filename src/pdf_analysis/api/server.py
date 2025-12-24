@@ -24,6 +24,7 @@ from fastapi import APIRouter, FastAPI, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 from rapidfuzz import fuzz
+from sqlalchemy import text as sqltext
 
 from pdf_analysis.ingest.pdf_text import extract_pages_text
 from pdf_analysis.ingest.tables import extract_tables_all
@@ -47,11 +48,15 @@ from pdf_analysis.validate import generate_quality_report
 from ncd.ctd_materials import (
     extract_markdown_images,
     extract_markdown_tables,
+    fetch_assets_for_sections,
+    fetch_key_sections_for_sections,
     fetch_ncd_payload,
     fetch_project_name,
     fetch_section_sources,
     markdown_slice,
     module4_sections_for_ctd,
+    module4_sections_for_ctd_targets,
+    resolve_ctd_targets,
     section_number_matches,
 )
 from ncd.db import SessionLocal
@@ -289,6 +294,20 @@ def _read_s3_text(s3_client: Any, bucket: str, key: str) -> Optional[str]:
     if not body:
         return None
     return body.read().decode("utf-8")
+
+
+def _normalize_extra_attributes(value: Any) -> Dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
 
 
 def _upload_analysis_json_to_s3(
@@ -1383,6 +1402,235 @@ async def get_ctd_section_materials(
         "mapping": filtered_mappings,
         "sources": response_sources,
         "ncd": ncd_payload,
+    }
+
+
+async def _get_assets_by_type(
+    *,
+    section: str,
+    tenant_id: str,
+    project_id: str,
+    bucket: str,
+    asset_type: str,
+    limit: int,
+) -> Dict[str, Any]:
+    target = section.strip()
+    if not target:
+        raise HTTPException(status_code=400, detail="section is required")
+    if not (target.startswith("2.4") or target.startswith("2.6")):
+        raise HTTPException(status_code=400, detail="section must start with 2.4 or 2.6")
+    if not tenant_id or not project_id or not bucket:
+        raise HTTPException(status_code=400, detail="tenant_id, project_id, and bucket are required")
+
+    db = SessionLocal()
+    try:
+        project_name = fetch_project_name(db, project_id)
+        project_like = f"%/{project_name}/%" if project_name else "%"
+
+        module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(target)
+        if target.startswith("2.6."):
+            exact_sections = set()
+            filtered_mappings: List[Dict[str, Any]] = []
+            for entry in mapping_entries:
+                matched_targets = [
+                    t for t in entry.get("targets", []) if t.get("section") == target
+                ]
+                if matched_targets:
+                    filtered = dict(entry)
+                    filtered["matched_targets"] = matched_targets
+                    filtered_mappings.append(filtered)
+                    exact_sections.add(entry.get("module4_section"))
+            module4_sections = sorted(s for s in exact_sections if s)
+            mapping_entries = filtered_mappings
+
+        assets = fetch_assets_for_sections(
+            db,
+            tenant_id=tenant_id,
+            bucket=bucket,
+            project_like=project_like,
+            module4_sections=module4_sections,
+            asset_type=asset_type,
+        )
+    finally:
+        db.close()
+
+    payload: List[Dict[str, Any]] = []
+    for row in assets[: max(0, limit)]:
+        payload.append(
+            {
+                "id": row.get("id"),
+                "asset_type": row.get("asset_type"),
+                "page_number": row.get("page_number"),
+                "index_on_page": row.get("index_on_page"),
+                "s3_bucket": row.get("s3_bucket"),
+                "s3_key": row.get("s3_key"),
+                "caption": row.get("caption"),
+                "description": row.get("description"),
+                "keywords": row.get("keywords") or [],
+                "extra_attributes": _normalize_extra_attributes(row.get("extra_attributes")),
+                "document_version_id": row.get("document_version_id"),
+                "document_s3_key": row.get("document_s3_key"),
+            }
+        )
+
+    return {
+        "ctd_section": target,
+        "ctd_targets": targets,
+        "module4_sections": module4_sections,
+        "mapping": mapping_entries,
+        "assets": payload,
+    }
+
+
+@ncd_router.get("/assets/image")
+async def get_assets_images(
+    section: str,
+    tenant_id: str,
+    project_id: str,
+    bucket: str,
+    limit: int = 500,
+) -> Dict[str, Any]:
+    return await _get_assets_by_type(
+        section=section,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        bucket=bucket,
+        asset_type="image",
+        limit=limit,
+    )
+
+
+@ncd_router.get("/assets/table")
+async def get_assets_tables(
+    section: str,
+    tenant_id: str,
+    project_id: str,
+    bucket: str,
+    limit: int = 500,
+) -> Dict[str, Any]:
+    return await _get_assets_by_type(
+        section=section,
+        tenant_id=tenant_id,
+        project_id=project_id,
+        bucket=bucket,
+        asset_type="table",
+        limit=limit,
+    )
+
+
+@ncd_router.get("/assets/contents")
+async def get_assets_contents(
+    section: str,
+    tenant_id: str,
+    project_id: str,
+    bucket: str,
+    content_type: Optional[str] = None,
+    include_assets: bool = True,
+) -> Dict[str, Any]:
+    target = section.strip()
+    if not target:
+        raise HTTPException(status_code=400, detail="section is required")
+    if not (target.startswith("2.4") or target.startswith("2.6")):
+        raise HTTPException(status_code=400, detail="section must start with 2.4 or 2.6")
+    if content_type and content_type not in {"summary", "conclusion"}:
+        raise HTTPException(status_code=400, detail="content_type must be summary or conclusion")
+    if not tenant_id or not project_id or not bucket:
+        raise HTTPException(status_code=400, detail="tenant_id, project_id, and bucket are required")
+
+    db = SessionLocal()
+    try:
+        project_name = fetch_project_name(db, project_id)
+        project_like = f"%/{project_name}/%" if project_name else "%"
+
+        module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(target)
+        if target.startswith("2.6."):
+            exact_sections = set()
+            filtered_mappings: List[Dict[str, Any]] = []
+            for entry in mapping_entries:
+                matched_targets = [
+                    t for t in entry.get("targets", []) if t.get("section") == target
+                ]
+                if matched_targets:
+                    filtered = dict(entry)
+                    filtered["matched_targets"] = matched_targets
+                    filtered_mappings.append(filtered)
+                    exact_sections.add(entry.get("module4_section"))
+            module4_sections = sorted(s for s in exact_sections if s)
+            mapping_entries = filtered_mappings
+
+        key_sections = fetch_key_sections_for_sections(
+            db,
+            tenant_id=tenant_id,
+            bucket=bucket,
+            project_like=project_like,
+            module4_sections=module4_sections,
+            section_type=content_type,
+        )
+        assets_by_id: Dict[str, Dict[str, Any]] = {}
+        if include_assets:
+            asset_ids: List[str] = []
+            for row in key_sections:
+                for asset_id in row.get("asset_ids") or []:
+                    asset_ids.append(str(asset_id))
+            if asset_ids:
+                assets = (
+                    db.execute(
+                        sqltext(
+                            """
+                            SELECT id, asset_type, page_number, index_on_page,
+                                   s3_bucket, s3_key, caption, description, keywords,
+                                   extra_attributes, document_version_id
+                            FROM document_assets
+                            WHERE id = ANY(:ids)
+                            """
+                        ),
+                        {"ids": asset_ids},
+                    )
+                    .mappings()
+                    .all()
+                )
+                for asset in assets:
+                    payload = dict(asset)
+                    payload["extra_attributes"] = _normalize_extra_attributes(
+                        payload.get("extra_attributes")
+                    )
+                    assets_by_id[str(payload["id"])] = payload
+    finally:
+        db.close()
+
+    contents: List[Dict[str, Any]] = []
+    for row in key_sections:
+        asset_list: List[Dict[str, Any]] = []
+        if include_assets:
+            for asset_id in row.get("asset_ids") or []:
+                payload = assets_by_id.get(str(asset_id))
+                if payload:
+                    asset_list.append(payload)
+        contents.append(
+            {
+                "id": row.get("id"),
+                "section_type": row.get("section_type"),
+                "text": row.get("text"),
+                "page_start": row.get("page_start"),
+                "page_end": row.get("page_end"),
+                "char_start": row.get("char_start"),
+                "char_end": row.get("char_end"),
+                "asset_ids": row.get("asset_ids") or [],
+                "assets": asset_list,
+                "model_name": row.get("model_name"),
+                "confidence": row.get("confidence"),
+                "document_version_id": row.get("document_version_id"),
+                "s3_bucket": row.get("s3_bucket"),
+                "document_s3_key": row.get("document_s3_key"),
+            }
+        )
+
+    return {
+        "ctd_section": target,
+        "ctd_targets": targets,
+        "module4_sections": module4_sections,
+        "mapping": mapping_entries,
+        "contents": contents,
     }
 
 

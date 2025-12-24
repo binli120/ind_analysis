@@ -356,6 +356,39 @@ Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and r
 
   Adjust `--output` or `--indent` as needed. The script loads the FastAPI app defined in `pdf_analysis.api.server`, so ensure optional dependencies (e.g., boto3, openai) are available if you’ve enabled related routes.
 
+### NCD Assets Endpoints (2.4 / 2.6)
+
+- Fetch assets and summary/conclusion passages aligned to CTD sections:
+
+  ```shell
+  curl -G \
+    --data-urlencode "section=2.6.6.2" \
+    --data-urlencode "tenant_id=YOUR_TENANT_ID" \
+    --data-urlencode "project_id=YOUR_PROJECT_ID" \
+    --data-urlencode "bucket=doc-repository-dev" \
+    "http://localhost:8000/ncd/assets/image"
+
+  curl -G \
+    --data-urlencode "section=2.6.6.2" \
+    --data-urlencode "tenant_id=YOUR_TENANT_ID" \
+    --data-urlencode "project_id=YOUR_PROJECT_ID" \
+    --data-urlencode "bucket=doc-repository-dev" \
+    "http://localhost:8000/ncd/assets/table"
+
+  curl -G \
+    --data-urlencode "section=2.6.6.2" \
+    --data-urlencode "tenant_id=YOUR_TENANT_ID" \
+    --data-urlencode "project_id=YOUR_PROJECT_ID" \
+    --data-urlencode "bucket=doc-repository-dev" \
+    --data-urlencode "content_type=summary" \
+    "http://localhost:8000/ncd/assets/contents"
+  ```
+
+### Postman Collections
+
+- Import the collection for the new assets endpoints: `postman/postman_ncd_assets.json`.
+- Existing collections live under `postman/` (e.g., labeling and template APIs).
+
 ## Build & Test Helper
 
 - Use the helper script to install dependencies, run static checks, and execute tests in one shot:

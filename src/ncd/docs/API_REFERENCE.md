@@ -17,6 +17,10 @@ This summarizes the main FastAPI routes exposed by `pdf_analysis.api.server` tha
 - `GET /ncd/template?section=2.4.1` — Return template entries from `ind_24_26_template.json` matching the section/subsection. Passing a parent section returns all subsections under it; passing a subsection returns that entry only.
 - `POST /ncd/template/override` — Upsert a user-specific template override. Body: `user_id`, `section`, optional `subsection`, `payload` (template JSON). Stores into `ncd_template_override` (assumes table exists).
 - `GET /ncd/template?section=...&user_id=...` — When `user_id` is provided, merges user overrides from `ncd_template_override` (override wins) before returning entries.
+- `GET /ncd/ctd/2.6/section` — Return Module 4 sources + NCD payload for a single 2.6 section. Query: `section`, `tenant_id`, `project_id`, `bucket`, optional `include_tables`, `include_images`.
+- `GET /ncd/assets/image` — Return image assets + context for a CTD 2.4/2.6 section. Query: `section`, `tenant_id`, `project_id`, `bucket`, optional `limit`.
+- `GET /ncd/assets/table` — Return table assets + context for a CTD 2.4/2.6 section. Query: `section`, `tenant_id`, `project_id`, `bucket`, optional `limit`.
+- `GET /ncd/assets/contents` — Return summary/conclusion passages (from `document_key_sections`) with linked assets. Query: `section`, `tenant_id`, `project_id`, `bucket`, optional `content_type` (summary|conclusion), `include_assets`.
 
 ## Dev/QA (router: dev)
 - `POST /dev/label-local` — Local upload labeling (no S3 side effects); returns section guess, confidence, method, and top candidates.

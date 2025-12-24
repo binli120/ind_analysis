@@ -1,0 +1,164 @@
+{
+  "info": {
+    "_postman_id": "d4f1d3c6-8c9e-4c97-baa7-b2d4e8df8c4f",
+    "name": "NCD Assets APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Postman collection for the /ncd/assets endpoints (tables, images, summary/conclusion passages)."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "tenant_id",
+      "value": "YOUR_TENANT_ID"
+    },
+    {
+      "key": "project_id",
+      "value": "YOUR_PROJECT_ID"
+    },
+    {
+      "key": "bucket",
+      "value": "doc-repository-dev"
+    },
+    {
+      "key": "section",
+      "value": "2.6.6.2"
+    },
+    {
+      "key": "limit",
+      "value": "200"
+    },
+    {
+      "key": "content_type",
+      "value": "summary"
+    }
+  ],
+  "item": [
+    {
+      "name": "Assets - Images",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/ncd/assets/image?section={{section}}&tenant_id={{tenant_id}}&project_id={{project_id}}&bucket={{bucket}}&limit={{limit}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ncd",
+            "assets",
+            "image"
+          ],
+          "query": [
+            {
+              "key": "section",
+              "value": "{{section}}"
+            },
+            {
+              "key": "tenant_id",
+              "value": "{{tenant_id}}"
+            },
+            {
+              "key": "project_id",
+              "value": "{{project_id}}"
+            },
+            {
+              "key": "bucket",
+              "value": "{{bucket}}"
+            },
+            {
+              "key": "limit",
+              "value": "{{limit}}"
+            }
+          ]
+        },
+        "description": "Fetch image assets for a CTD 2.4/2.6 section. Returns asset links + context."
+      }
+    },
+    {
+      "name": "Assets - Tables",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/ncd/assets/table?section={{section}}&tenant_id={{tenant_id}}&project_id={{project_id}}&bucket={{bucket}}&limit={{limit}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ncd",
+            "assets",
+            "table"
+          ],
+          "query": [
+            {
+              "key": "section",
+              "value": "{{section}}"
+            },
+            {
+              "key": "tenant_id",
+              "value": "{{tenant_id}}"
+            },
+            {
+              "key": "project_id",
+              "value": "{{project_id}}"
+            },
+            {
+              "key": "bucket",
+              "value": "{{bucket}}"
+            },
+            {
+              "key": "limit",
+              "value": "{{limit}}"
+            }
+          ]
+        },
+        "description": "Fetch table assets for a CTD 2.4/2.6 section. Returns CSV/JSON links + context."
+      }
+    },
+    {
+      "name": "Assets - Contents (Summary/Conclusion)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/ncd/assets/contents?section={{section}}&tenant_id={{tenant_id}}&project_id={{project_id}}&bucket={{bucket}}&content_type={{content_type}}&include_assets=true",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ncd",
+            "assets",
+            "contents"
+          ],
+          "query": [
+            {
+              "key": "section",
+              "value": "{{section}}"
+            },
+            {
+              "key": "tenant_id",
+              "value": "{{tenant_id}}"
+            },
+            {
+              "key": "project_id",
+              "value": "{{project_id}}"
+            },
+            {
+              "key": "bucket",
+              "value": "{{bucket}}"
+            },
+            {
+              "key": "content_type",
+              "value": "{{content_type}}"
+            },
+            {
+              "key": "include_assets",
+              "value": "true"
+            }
+          ]
+        },
+        "description": "Return summary/conclusion passages with linked assets for a CTD section."
+      }
+    }
+  ]
+}
