@@ -382,6 +382,13 @@ Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and r
     --data-urlencode "bucket=doc-repository-dev" \
     --data-urlencode "content_type=summary" \
     "http://localhost:8000/ncd/assets/contents"
+
+  curl -G \
+    --data-urlencode "element=2.4.5-a" \
+    --data-urlencode "tenant_id=YOUR_TENANT_ID" \
+    --data-urlencode "project_id=YOUR_PROJECT_ID" \
+    --data-urlencode "bucket=doc-repository-dev" \
+    "http://localhost:8000/ncd/ctd/2.4/element"
   ```
 
 ### Postman Collections

@@ -5,11 +5,11 @@
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
+
+from ncd.ctd_template import load_template_entries
 
 FAST_FIELD = "Fast extraction method (keywords/tables/regex)"
 _SECTION_RE = re.compile(r"^2\.\d+(?:\.\d+)*$")
@@ -26,26 +26,11 @@ class FastExtractRule:
     compiled_regex: List[re.Pattern[str]]
 
 
-def _template_paths() -> List[Path]:
-    base = Path(__file__).resolve().parents[2]
-    return [
-        base / "summary" / "ind_24_26_template.json",
-        base / "ncd" / "ind_24_26_template.json",
-    ]
-
-
 def _load_template_entries() -> List[dict]:
-    for path in _template_paths():
-        if not path.exists():
-            continue
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        entries: List[dict] = []
-        if isinstance(payload, dict):
-            for value in payload.values():
-                if isinstance(value, list):
-                    entries.extend(item for item in value if isinstance(item, dict))
-        return entries
-    return []
+    try:
+        return load_template_entries()
+    except Exception:
+        return []
 
 
 def _split_terms(raw: str) -> List[str]:
@@ -78,6 +63,10 @@ def _parse_fast_method(text: str) -> tuple[List[str], List[str], List[str]]:
                 regex_patterns.append(pattern)
             continue
     return keywords, table_cues, regex_patterns
+
+
+def parse_fast_method(text: str) -> tuple[List[str], List[str], List[str]]:
+    return _parse_fast_method(text)
 
 
 def _compile_patterns(patterns: Sequence[str]) -> List[re.Pattern[str]]:

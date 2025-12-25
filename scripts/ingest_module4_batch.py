@@ -38,7 +38,8 @@ if str(REPO_ROOT) not in sys.path:
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from ncd.db_interface import NCDRepository
+from ncd.ctd_elements import build_ctd_element_reference, list_template_elements
+from ncd.db_interface import CTDSectionReferenceRecord, NCDRepository
 from ncd.llm_client import LLMClient
 from ncd.pipeline_runner import run_pdf_ingest_and_extract
 from ncd.ingestion.pdf_ingestion import sha256_file
@@ -1470,6 +1471,44 @@ def main(argv: list[str]) -> int:
         )
     except Exception as exc:
         print(f"[WARN] Unable to persist run report to DB: {exc}", file=sys.stderr)
+
+    if (
+        not args.dry_run
+        and args.mode in {"auto", "core"}
+        and args.project_id
+        and args.tenant_id
+        and (summary_runs > 0 or context_runs > 0)
+    ):
+        try:
+            repo = NCDRepository()
+            db = repo.session
+            for element in list_template_elements():
+                payload = build_ctd_element_reference(
+                    db,
+                    tenant_id=args.tenant_id,
+                    project_id=args.project_id,
+                    bucket=args.bucket,
+                    element_number=element,
+                )
+                repo.upsert_ctd_section_reference(
+                    record=CTDSectionReferenceRecord(
+                        tenant_id=args.tenant_id,
+                        project_id=args.project_id,
+                        bucket=args.bucket,
+                        element_number=element,
+                        section_number=payload.get("section_number"),
+                        template_payload=payload.get("template") or {},
+                        module4_sections=payload.get("module4_sections") or [],
+                        payload=payload,
+                    )
+                )
+        except Exception as exc:
+            print(f"[WARN] Unable to refresh 2.4 element references: {exc}", file=sys.stderr)
+        finally:
+            try:
+                repo.close()
+            except Exception:
+                pass
 
     print(
         "\nCompleted. processed=%d failed=%d skipped=%d core_runs=%d langchain_runs=%d context_runs=%d summary_runs=%d tox_runs=%d"

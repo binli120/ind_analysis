@@ -33,9 +33,70 @@
     {
       "key": "content_type",
       "value": "summary"
+    },
+    {
+      "key": "element",
+      "value": "2.4.5-a"
+    },
+    {
+      "key": "summary_id",
+      "value": ""
+    },
+    {
+      "key": "previous_summary_id",
+      "value": ""
+    },
+    {
+      "key": "user_prompt",
+      "value": ""
+    },
+    {
+      "key": "user_comment",
+      "value": ""
+    },
+    {
+      "key": "final_text",
+      "value": ""
     }
   ],
   "item": [
+    {
+      "name": "CTD 2.4 Element Reference",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/ncd/ctd/2.4/element?element={{element}}&tenant_id={{tenant_id}}&project_id={{project_id}}&bucket={{bucket}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ncd",
+            "ctd",
+            "2.4",
+            "element"
+          ],
+          "query": [
+            {
+              "key": "element",
+              "value": "{{element}}"
+            },
+            {
+              "key": "tenant_id",
+              "value": "{{tenant_id}}"
+            },
+            {
+              "key": "project_id",
+              "value": "{{project_id}}"
+            },
+            {
+              "key": "bucket",
+              "value": "{{bucket}}"
+            }
+          ]
+        },
+        "description": "Fetch cached data for a 2.4 element (template + sources + assets)."
+      }
+    },
     {
       "name": "Assets - Images",
       "request": {
@@ -158,6 +219,63 @@
           ]
         },
         "description": "Return summary/conclusion passages with linked assets for a CTD section."
+      }
+    },
+    {
+      "name": "Assets - Section Summary (Draft)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"section\": \"{{section}}\",\n  \"tenant_id\": \"{{tenant_id}}\",\n  \"project_id\": \"{{project_id}}\",\n  \"bucket\": \"{{bucket}}\",\n  \"user_prompt\": \"{{user_prompt}}\",\n  \"user_comment\": \"{{user_comment}}\",\n  \"previous_summary_id\": \"{{previous_summary_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ncd/assets/summary",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ncd",
+            "assets",
+            "summary"
+          ]
+        },
+        "description": "Generate a draft summary for a CTD section using template + source data."
+      }
+    },
+    {
+      "name": "Assets - Section Summary (Approve)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tenant_id\": \"{{tenant_id}}\",\n  \"project_id\": \"{{project_id}}\",\n  \"bucket\": \"{{bucket}}\",\n  \"summary_id\": \"{{summary_id}}\",\n  \"section\": \"{{section}}\",\n  \"final_text\": \"{{final_text}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ncd/assets/summary/approve",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ncd",
+            "assets",
+            "summary",
+            "approve"
+          ]
+        },
+        "description": "Approve a draft summary with final text for a CTD section."
       }
     }
   ]

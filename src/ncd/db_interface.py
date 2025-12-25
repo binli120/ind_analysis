@@ -68,6 +68,34 @@ class DocumentKeySectionRecord:
     confidence: Optional[float] = None
 
 
+@dataclass
+class CTDSectionReferenceRecord:
+    tenant_id: str
+    project_id: str
+    bucket: str
+    element_number: str
+    section_number: Optional[str] = None
+    template_payload: Optional[dict] = None
+    module4_sections: Optional[Sequence[str]] = None
+    payload: Optional[dict] = None
+
+
+@dataclass
+class CTDSectionSummaryRecord:
+    tenant_id: str
+    project_id: str
+    bucket: str
+    section_number: str
+    summary_text: str
+    status: str = "draft"
+    element_numbers: Optional[Sequence[str]] = None
+    user_prompt: Optional[str] = None
+    user_comment: Optional[str] = None
+    previous_id: Optional[str] = None
+    model_name: Optional[str] = None
+    embedding: Optional[Sequence[float]] = None
+
+
 class NCDRepository:
     """Small helper for inserting document/pages/chunks into the NCD schema."""
 
@@ -127,6 +155,11 @@ class NCDRepository:
         if "year" in lowered:
             return value * 365
         return value
+
+    @staticmethod
+    def _vector_literal(embedding: Sequence[float]) -> str:
+        clean = [float(value) for value in embedding]
+        return "[" + ",".join(f"{value:.6f}" for value in clean) + "]"
 
     # ------------------------------------------------------------------ #
     # Source document + pages
@@ -887,6 +920,250 @@ class NCDRepository:
             )
         db.commit()
         return len(sections)
+
+    def fetch_ctd_section_reference(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        bucket: str,
+        element_number: str,
+    ) -> Optional[dict]:
+        db = self.session
+        row = (
+            db.execute(
+                sqltext(
+                    """
+                    SELECT id, tenant_id, project_id, bucket, element_number,
+                           section_number, template_payload, module4_sections,
+                           payload, created_at, updated_at
+                    FROM ncd_ctd_section_reference
+                    WHERE tenant_id = :tenant_id
+                      AND project_id = :project_id
+                      AND bucket = :bucket
+                      AND element_number = :element_number
+                    LIMIT 1
+                    """
+                ),
+                {
+                    "tenant_id": tenant_id,
+                    "project_id": project_id,
+                    "bucket": bucket,
+                    "element_number": element_number,
+                },
+            )
+            .mappings()
+            .first()
+        )
+        return dict(row) if row else None
+
+    def upsert_ctd_section_reference(
+        self,
+        *,
+        record: CTDSectionReferenceRecord,
+    ) -> str:
+        db = self.session
+        template_payload = record.template_payload or {}
+        payload = record.payload or {}
+        module4_sections = list(record.module4_sections or [])
+        ref_id = db.execute(
+            sqltext(
+                """
+                INSERT INTO ncd_ctd_section_reference (
+                    tenant_id, project_id, bucket, element_number,
+                    section_number, template_payload, module4_sections,
+                    payload
+                ) VALUES (
+                    :tenant_id, :project_id, :bucket, :element_number,
+                    :section_number, CAST(:template_payload AS jsonb),
+                    CAST(:module4_sections AS text[]), CAST(:payload AS jsonb)
+                )
+                ON CONFLICT (tenant_id, project_id, bucket, element_number)
+                DO UPDATE SET
+                    section_number = EXCLUDED.section_number,
+                    template_payload = EXCLUDED.template_payload,
+                    module4_sections = EXCLUDED.module4_sections,
+                    payload = EXCLUDED.payload,
+                    updated_at = now()
+                RETURNING id
+                """
+            ),
+            {
+                "tenant_id": record.tenant_id,
+                "project_id": record.project_id,
+                "bucket": record.bucket,
+                "element_number": record.element_number,
+                "section_number": record.section_number,
+                "template_payload": json.dumps(template_payload, ensure_ascii=True),
+                "module4_sections": module4_sections,
+                "payload": json.dumps(payload, ensure_ascii=True),
+            },
+        ).scalar()
+        if ref_id is None:
+            raise RuntimeError("Failed to upsert ncd_ctd_section_reference")
+        db.commit()
+        return str(ref_id)
+
+    def fetch_ctd_section_summary(
+        self,
+        *,
+        summary_id: str,
+    ) -> Optional[dict]:
+        if not self._table_exists("ncd_ctd_section_summary"):
+            return None
+        db = self.session
+        row = (
+            db.execute(
+                sqltext(
+                    """
+                    SELECT id, tenant_id, project_id, bucket, section_number,
+                           element_numbers, summary_text, final_text,
+                           status, user_prompt, user_comment, previous_id,
+                           model_name, embedding, created_at, updated_at
+                    FROM ncd_ctd_section_summary
+                    WHERE id = :summary_id
+                    LIMIT 1
+                    """
+                ),
+                {"summary_id": summary_id},
+            )
+            .mappings()
+            .first()
+        )
+        return dict(row) if row else None
+
+    def fetch_latest_ctd_section_summary(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        bucket: str,
+        section_number: str,
+        status: Optional[str] = None,
+    ) -> Optional[dict]:
+        if not self._table_exists("ncd_ctd_section_summary"):
+            return None
+        db = self.session
+        row = (
+            db.execute(
+                sqltext(
+                    """
+                    SELECT id, tenant_id, project_id, bucket, section_number,
+                           element_numbers, summary_text, final_text,
+                           status, user_prompt, user_comment, previous_id,
+                           model_name, embedding, created_at, updated_at
+                    FROM ncd_ctd_section_summary
+                    WHERE tenant_id = :tenant_id
+                      AND project_id = :project_id
+                      AND bucket = :bucket
+                      AND section_number = :section_number
+                      AND (:status IS NULL OR status = :status)
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """
+                ),
+                {
+                    "tenant_id": tenant_id,
+                    "project_id": project_id,
+                    "bucket": bucket,
+                    "section_number": section_number,
+                    "status": status,
+                },
+            )
+            .mappings()
+            .first()
+        )
+        return dict(row) if row else None
+
+    def insert_ctd_section_summary(
+        self,
+        *,
+        record: CTDSectionSummaryRecord,
+    ) -> str:
+        if not self._table_exists("ncd_ctd_section_summary"):
+            raise RuntimeError("ncd_ctd_section_summary table is missing")
+        db = self.session
+        embedding_literal = (
+            self._vector_literal(record.embedding) if record.embedding else None
+        )
+        summary_id = db.execute(
+            sqltext(
+                """
+                INSERT INTO ncd_ctd_section_summary (
+                    tenant_id, project_id, bucket, section_number,
+                    element_numbers, summary_text, final_text,
+                    status, user_prompt, user_comment, previous_id,
+                    model_name, embedding
+                ) VALUES (
+                    :tenant_id, :project_id, :bucket, :section_number,
+                    CAST(:element_numbers AS text[]), :summary_text, :final_text,
+                    :status, :user_prompt, :user_comment, :previous_id,
+                    :model_name, CAST(:embedding AS vector)
+                )
+                RETURNING id
+                """
+            ),
+            {
+                "tenant_id": record.tenant_id,
+                "project_id": record.project_id,
+                "bucket": record.bucket,
+                "section_number": record.section_number,
+                "element_numbers": list(record.element_numbers or []),
+                "summary_text": record.summary_text,
+                "final_text": None,
+                "status": record.status,
+                "user_prompt": record.user_prompt,
+                "user_comment": record.user_comment,
+                "previous_id": record.previous_id,
+                "model_name": record.model_name,
+                "embedding": embedding_literal,
+            },
+        ).scalar()
+        if summary_id is None:
+            raise RuntimeError("Failed to insert ncd_ctd_section_summary")
+        db.commit()
+        return str(summary_id)
+
+    def approve_ctd_section_summary(
+        self,
+        *,
+        summary_id: str,
+        final_text: str,
+        model_name: Optional[str] = None,
+    ) -> Optional[dict]:
+        if not self._table_exists("ncd_ctd_section_summary"):
+            return None
+        db = self.session
+        row = (
+            db.execute(
+                sqltext(
+                    """
+                    UPDATE ncd_ctd_section_summary
+                    SET final_text = :final_text,
+                        status = 'approved',
+                        model_name = COALESCE(:model_name, model_name),
+                        updated_at = now()
+                    WHERE id = :summary_id
+                    RETURNING id, tenant_id, project_id, bucket, section_number,
+                              element_numbers, summary_text, final_text,
+                              status, user_prompt, user_comment, previous_id,
+                              model_name, embedding, created_at, updated_at
+                    """
+                ),
+                {
+                    "summary_id": summary_id,
+                    "final_text": final_text,
+                    "model_name": model_name,
+                },
+            )
+            .mappings()
+            .first()
+        )
+        if row:
+            db.commit()
+            return dict(row)
+        db.commit()
+        return None
 
     def fetch_asset_ids_for_pages(
         self,

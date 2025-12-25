@@ -25,6 +25,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 from rapidfuzz import fuzz
 from sqlalchemy import text as sqltext
+from sqlalchemy.orm import Session
 
 from pdf_analysis.ingest.pdf_text import extract_pages_text
 from pdf_analysis.ingest.tables import extract_tables_all
@@ -35,6 +36,10 @@ from pdf_analysis.service.document_summarizer import (
     embed_topics_into_markdown,
     format_summary_text,
 )
+try:  # Optional OpenAI dependency for section summary embeddings.
+    from openai import OpenAI
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    OpenAI = None  # type: ignore[misc]
 
 try:
     from pdf_analysis.service.embedding_store import SupabaseEmbeddingStore
@@ -45,6 +50,7 @@ from pdf_analysis.transform.markdown_writer import (
     build_markdown_document,
 )
 from pdf_analysis.validate import generate_quality_report
+from ncd.ctd_elements import build_ctd_element_reference
 from ncd.ctd_materials import (
     extract_markdown_images,
     extract_markdown_tables,
@@ -59,7 +65,15 @@ from ncd.ctd_materials import (
     resolve_ctd_targets,
     section_number_matches,
 )
+from ncd.ctd_template import load_template_entries, normalize_element_number
 from ncd.db import SessionLocal
+from ncd.config import settings
+from ncd.db_interface import (
+    CTDSectionReferenceRecord,
+    CTDSectionSummaryRecord,
+    NCDRepository,
+)
+from ncd.llm_client import LLMClient
 
 app = FastAPI(
     title="PDF Analysis API",
@@ -171,6 +185,29 @@ class TemplateOverrideRequest(BaseModel):
     aws_region: Optional[str] = None
 
 
+class CTDSectionSummaryRequest(BaseModel):
+    """Request payload for generating a CTD section summary draft."""
+
+    section: str
+    tenant_id: str
+    project_id: str
+    bucket: str
+    user_prompt: Optional[str] = None
+    user_comment: Optional[str] = None
+    previous_summary_id: Optional[str] = None
+
+
+class CTDSectionSummaryApproveRequest(BaseModel):
+    """Request payload for approving a CTD section summary."""
+
+    tenant_id: str
+    project_id: str
+    bucket: str
+    final_text: str
+    summary_id: Optional[str] = None
+    section: Optional[str] = None
+
+
 try:
     _metadata_generator = OpenAIMetadataGenerator()
 except Exception:  # pragma: no cover - optional dependency or missing key
@@ -189,6 +226,38 @@ if SupabaseEmbeddingStore:
         _embedding_store = None
 else:  # pragma: no cover - optional dependency missing
     _embedding_store = None
+
+
+_EMBEDDING_CLIENT: Optional[OpenAI] = None
+
+
+def _get_embedding_client() -> Optional[OpenAI]:
+    if OpenAI is None:
+        return None
+    api_key = os.getenv("OPENAI_API_KEY") or settings.llm_api_key
+    if not api_key or api_key == "YOUR_API_KEY":
+        return None
+    global _EMBEDDING_CLIENT
+    if _EMBEDDING_CLIENT is None:
+        _EMBEDDING_CLIENT = OpenAI(api_key=api_key)
+    return _EMBEDDING_CLIENT
+
+
+def _generate_embedding(text: str) -> Optional[List[float]]:
+    client = _get_embedding_client()
+    if not client:
+        return None
+    try:
+        response = client.embeddings.create(
+            model=settings.embedding_model_name,
+            input=text,
+        )
+    except Exception as exc:  # pragma: no cover - network/API failure
+        logger.warning("Failed to generate section summary embedding: %s", exc)
+        return None
+    if not response.data:
+        return None
+    return list(response.data[0].embedding)
 
 
 def _metadata_json_key(key: str) -> str:
@@ -335,7 +404,6 @@ def _upload_analysis_json_to_s3(
 # ---------------------------------------------------------------------------
 _IND_TEMPLATE_SECTIONS: List[Dict[str, str]] | None = None
 _IND_TEMPLATE_ENTRIES: List[Dict[str, Any]] | None = None
-_IND_TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "ncd" / "ind_24_26_template.json"
 
 
 def _load_ind_template_sections() -> List[Dict[str, str]]:
@@ -344,21 +412,12 @@ def _load_ind_template_sections() -> List[Dict[str, str]]:
     if _IND_TEMPLATE_SECTIONS is not None:
         return _IND_TEMPLATE_SECTIONS
 
-    template_path = _IND_TEMPLATE_PATH
     try:
-        raw = json.loads(template_path.read_text())
+        entries = load_template_entries()
     except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("Unable to load template %s: %s", template_path, exc)
+        logger.warning("Unable to load IND template: %s", exc)
         _IND_TEMPLATE_SECTIONS = []
         return _IND_TEMPLATE_SECTIONS
-
-    entries: List[Dict[str, Any]] = []
-    if isinstance(raw, list):
-        entries = [entry for entry in raw if isinstance(entry, dict)]
-    elif isinstance(raw, dict):
-        for value in raw.values():
-            if isinstance(value, list):
-                entries.extend([entry for entry in value if isinstance(entry, dict)])
 
     sections: List[Dict[str, str]] = []
     for entry in entries:
@@ -389,39 +448,33 @@ def _load_ind_template_entries() -> List[Dict[str, Any]]:
         return _IND_TEMPLATE_ENTRIES
 
     try:
-        raw = json.loads(_IND_TEMPLATE_PATH.read_text())
+        source_entries = load_template_entries()
     except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("Unable to load template %s: %s", _IND_TEMPLATE_PATH, exc)
+        logger.warning("Unable to load IND template: %s", exc)
         _IND_TEMPLATE_ENTRIES = []
         return _IND_TEMPLATE_ENTRIES
 
     entries: List[Dict[str, Any]] = []
-    source_blocks = []
-    if isinstance(raw, list):
-        source_blocks.append(raw)
-    elif isinstance(raw, dict):
-        for value in raw.values():
-            if isinstance(value, list):
-                source_blocks.append(value)
-
-    for block in source_blocks:
-        for entry in block:
-            if not isinstance(entry, dict):
-                continue
-            section_id = str(entry.get("Section") or "").strip()
-            subsection = str(entry.get("Subsection") or "").strip()
-            if not section_id and not subsection:
-                continue
-            entries.append(
-                {
-                    "section": section_id,
-                    "subsection": subsection or None,
-                    "section_header": entry.get("Section Header"),
-                    "subsection_header": entry.get("Subsection Header"),
-                    "content": entry.get("Content"),
-                    "raw": entry,
-                }
-            )
+    for entry in source_entries:
+        if not isinstance(entry, dict):
+            continue
+        section_id = str(entry.get("Section") or "").strip()
+        subsection = str(entry.get("Subsection") or "").strip()
+        if not section_id and not subsection:
+            continue
+        element_raw = str(entry.get("Subsection Element Numbering") or "").strip()
+        element_number = normalize_element_number(element_raw)
+        entries.append(
+            {
+                "section": section_id,
+                "subsection": subsection or None,
+                "element_number": element_number or None,
+                "section_header": entry.get("Section Header"),
+                "subsection_header": entry.get("Subsection Header"),
+                "content": entry.get("Content"),
+                "raw": entry,
+            }
+        )
 
     _IND_TEMPLATE_ENTRIES = entries
     return _IND_TEMPLATE_ENTRIES
@@ -1211,10 +1264,14 @@ async def get_template_sections(section: str, user_id: Optional[str] = None) -> 
     entries = _load_ind_template_entries()
     matches: List[Dict[str, Any]] = []
     target_lower = target.lower()
+    target_element = normalize_element_number(target)
     for entry in entries:
         sec = (entry.get("section") or "").lower()
         sub = (entry.get("subsection") or "").lower()
-        if sub and sub == target_lower:
+        element_number = (entry.get("element_number") or "").lower()
+        if element_number and target_element and element_number == target_element:
+            matches.append(entry)
+        elif sub and sub == target_lower:
             matches.append(entry)
         elif sec and sec == target_lower:
             matches.append(entry)
@@ -1265,6 +1322,75 @@ async def get_template_sections(section: str, user_id: Optional[str] = None) -> 
             matches = merged
 
     return {"section": target, "entries": matches}
+
+
+@ncd_router.get("/ctd/2.4/element")
+async def get_ctd_element_reference(
+    element: str,
+    tenant_id: str,
+    project_id: str,
+    bucket: str,
+    refresh: bool = False,
+) -> Dict[str, Any]:
+    normalized = normalize_element_number(element)
+    if not normalized:
+        raise HTTPException(status_code=400, detail="element is required")
+    if not normalized.startswith("2.4."):
+        raise HTTPException(status_code=400, detail="element must start with 2.4.")
+    if not tenant_id or not project_id or not bucket:
+        raise HTTPException(status_code=400, detail="tenant_id, project_id, and bucket are required")
+
+    db = SessionLocal()
+    repo = NCDRepository(session=db)
+    try:
+        cached = None
+        if not refresh:
+            cached = repo.fetch_ctd_section_reference(
+                tenant_id=tenant_id,
+                project_id=project_id,
+                bucket=bucket,
+                element_number=normalized,
+            )
+        if cached and cached.get("payload"):
+            payload = cached.get("payload")
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except json.JSONDecodeError:
+                    payload = {"payload": payload}
+            if isinstance(payload, dict):
+                payload["cache"] = {
+                    "cached": True,
+                    "updated_at": cached.get("updated_at"),
+                }
+            return payload
+
+        payload = build_ctd_element_reference(
+            db,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            bucket=bucket,
+            element_number=normalized,
+        )
+        try:
+            repo.upsert_ctd_section_reference(
+                record=CTDSectionReferenceRecord(
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    bucket=bucket,
+                    element_number=normalized,
+                    section_number=payload.get("section_number"),
+                    template_payload=payload.get("template") or {},
+                    module4_sections=payload.get("module4_sections") or [],
+                    payload=payload,
+                )
+            )
+        except Exception as exc:  # pragma: no cover - cache failure should not block response
+            logger.warning("Failed to cache CTD element reference: %s", exc)
+        payload["cache"] = {"cached": False, "updated_at": None}
+        return payload
+    finally:
+        db.close()
 
 
 @ncd_router.get("/ctd/2.6/section")
@@ -1403,6 +1529,250 @@ async def get_ctd_section_materials(
         "sources": response_sources,
         "ncd": ncd_payload,
     }
+
+
+def _truncate_text(text: Optional[str], max_chars: int = 4000) -> str:
+    if not text:
+        return ""
+    cleaned = text.strip()
+    if len(cleaned) <= max_chars:
+        return cleaned
+    return cleaned[:max_chars].rstrip() + " ...[truncated]"
+
+
+def _normalize_summary(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        trimmed = value.strip()
+        if not trimmed:
+            return ""
+        try:
+            return json.loads(trimmed)
+        except json.JSONDecodeError:
+            return trimmed
+    return value
+
+
+def _summary_to_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return json.dumps(value, ensure_ascii=True)
+
+
+def _slim_sources(sources: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    payload: List[Dict[str, Any]] = []
+    for row in sources:
+        summary = _normalize_summary(row.get("summary") or row.get("summary_text"))
+        payload.append(
+            {
+                "section_number": row.get("section_number"),
+                "section_title": row.get("section_title"),
+                "summary": summary,
+                "summary_text": _summary_to_text(summary),
+                "keywords": row.get("keywords") or [],
+                "summary_type": row.get("summary_type"),
+                "summary_purpose": row.get("summary_purpose"),
+                "document_section_id": row.get("document_section_id") or row.get("section_id"),
+                "document_version_id": row.get("document_version_id"),
+                "document_id": row.get("document_id"),
+            }
+        )
+    return payload
+
+
+def _slim_key_sections(sections: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    payload: List[Dict[str, Any]] = []
+    for row in sections:
+        payload.append(
+            {
+                "section_type": row.get("section_type"),
+                "text": _truncate_text(row.get("text")),
+                "page_start": row.get("page_start"),
+                "page_end": row.get("page_end"),
+                "char_start": row.get("char_start"),
+                "char_end": row.get("char_end"),
+                "asset_ids": row.get("asset_ids") or [],
+                "document_version_id": row.get("document_version_id"),
+            }
+        )
+    return payload
+
+
+def _template_entries_for_section(section: str) -> List[Dict[str, Any]]:
+    entries = _load_ind_template_entries()
+    matches: List[Dict[str, Any]] = []
+    target = section.strip()
+    if not target:
+        return matches
+    target_lower = target.lower()
+    target_element = normalize_element_number(target)
+    for entry in entries:
+        sec = (entry.get("section") or "").lower()
+        sub = (entry.get("subsection") or "").lower()
+        element_number = (entry.get("element_number") or "").lower()
+        if element_number and target_element and element_number == target_element:
+            matches.append(entry)
+        elif sub and sub == target_lower:
+            matches.append(entry)
+        elif sec and sec == target_lower:
+            matches.append(entry)
+        elif sec and sec.startswith(target_lower):
+            matches.append(entry)
+    return matches
+
+
+def _element_entries_for_section(section: str) -> List[str]:
+    if section.strip() != "2.4.5":
+        return []
+    return [f"{section}-a", f"{section}-b", f"{section}-c"]
+
+
+def _build_section_summary_context(
+    db: Session,
+    *,
+    section: str,
+    tenant_id: str,
+    project_id: str,
+    bucket: str,
+) -> tuple[Dict[str, Any], List[str]]:
+    project_name = fetch_project_name(db, project_id)
+    project_like = f"%/{project_name}/%" if project_name else "%"
+
+    module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(section)
+    if section.startswith("2.6."):
+        exact_sections = set()
+        filtered_mappings: List[Dict[str, Any]] = []
+        for entry in mapping_entries:
+            matched_targets = [
+                target_entry
+                for target_entry in entry.get("targets", [])
+                if target_entry.get("section") == section
+            ]
+            if matched_targets:
+                filtered = dict(entry)
+                filtered["matched_targets"] = matched_targets
+                filtered_mappings.append(filtered)
+                exact_sections.add(entry.get("module4_section"))
+        module4_sections = sorted(s for s in exact_sections if s)
+        mapping_entries = filtered_mappings
+
+    sources = fetch_section_sources(
+        db,
+        tenant_id=tenant_id,
+        bucket=bucket,
+        project_like=project_like,
+        module4_sections=module4_sections,
+    )
+    key_sections = fetch_key_sections_for_sections(
+        db,
+        tenant_id=tenant_id,
+        bucket=bucket,
+        project_like=project_like,
+        module4_sections=module4_sections,
+        section_type=None,
+    )
+
+    element_numbers = _element_entries_for_section(section)
+    element_payloads: List[Dict[str, Any]] = []
+    used_elements: List[str] = []
+    for element in element_numbers:
+        try:
+            payload = build_ctd_element_reference(
+                db,
+                tenant_id=tenant_id,
+                project_id=project_id,
+                bucket=bucket,
+                element_number=element,
+                include_assets=False,
+                include_key_sections=True,
+            )
+        except ValueError:
+            continue
+        element_payloads.append(
+            {
+                "element_number": payload.get("element_number"),
+                "section_number": payload.get("section_number"),
+                "module4_sections": payload.get("module4_sections") or [],
+                "template": payload.get("template") or {},
+                "sources": _slim_sources(payload.get("sources") or []),
+                "key_sections": _slim_key_sections(payload.get("key_sections") or []),
+            }
+        )
+        if payload.get("element_number"):
+            used_elements.append(str(payload.get("element_number")))
+
+    context = {
+        "section": section,
+        "ctd_targets": targets,
+        "module4_sections": module4_sections,
+        "mapping": mapping_entries,
+        "template_entries": _template_entries_for_section(section),
+        "section_sources": _slim_sources([dict(row) for row in sources]),
+        "section_key_sections": _slim_key_sections([dict(row) for row in key_sections]),
+        "elements": element_payloads,
+    }
+    return context, used_elements
+
+
+def _format_embedding_for_prompt(embedding: Any) -> str:
+    if not embedding:
+        return ""
+    values: List[float] = []
+    if isinstance(embedding, str):
+        cleaned = embedding.strip()
+        if cleaned.startswith("[") and cleaned.endswith("]"):
+            cleaned = cleaned[1:-1]
+        if cleaned:
+            try:
+                values = [float(value) for value in cleaned.split(",") if value.strip()]
+            except ValueError:
+                values = []
+    else:
+        try:
+            values = [float(value) for value in embedding]
+        except (TypeError, ValueError):
+            values = []
+    if not values:
+        return ""
+    return "[" + ",".join(f"{value:.6f}" for value in values) + "]"
+
+
+def _build_section_summary_prompt(
+    *,
+    section: str,
+    context: Dict[str, Any],
+    user_prompt: Optional[str],
+    user_comment: Optional[str],
+    previous_summary: Optional[str],
+    previous_embedding: Any,
+) -> tuple[str, str]:
+    system_prompt = (
+        "You are an expert nonclinical regulatory writer. "
+        "Generate CTD Module 2.4/2.6 section summaries using only the provided data. "
+        "Do not invent data. If key data is missing, state what is missing."
+    )
+    instructions = user_prompt.strip() if user_prompt else (
+        "Use the template guidance and data to produce a concise section summary."
+    )
+    parts = [
+        f"CTD Section: {section}",
+        f"Instructions: {instructions}",
+    ]
+    if user_comment:
+        if previous_summary:
+            parts.append(f"Previous summary:\n{previous_summary}")
+        embedding_text = _format_embedding_for_prompt(previous_embedding)
+        if embedding_text:
+            parts.append(f"Previous summary embedding: {embedding_text}")
+        parts.append(f"User comment:\n{user_comment}")
+        parts.append("Revise the summary to address the comment.")
+
+    context_json = json.dumps(context, ensure_ascii=True, indent=2)
+    parts.append(f"Context data (JSON):\n{context_json}")
+    return system_prompt, "\n\n".join(parts)
 
 
 async def _get_assets_by_type(
@@ -1631,6 +2001,179 @@ async def get_assets_contents(
         "module4_sections": module4_sections,
         "mapping": mapping_entries,
         "contents": contents,
+    }
+
+
+@ncd_router.post("/assets/summary")
+async def create_ctd_section_summary(
+    payload: CTDSectionSummaryRequest,
+) -> Dict[str, Any]:
+    section = payload.section.strip()
+    if not section:
+        raise HTTPException(status_code=400, detail="section is required")
+    if not (section.startswith("2.4") or section.startswith("2.6")):
+        raise HTTPException(status_code=400, detail="section must start with 2.4 or 2.6")
+    if not payload.tenant_id or not payload.project_id or not payload.bucket:
+        raise HTTPException(status_code=400, detail="tenant_id, project_id, and bucket are required")
+
+    db = SessionLocal()
+    repo = NCDRepository(session=db)
+    try:
+        context, element_numbers = _build_section_summary_context(
+            db,
+            section=section,
+            tenant_id=payload.tenant_id,
+            project_id=payload.project_id,
+            bucket=payload.bucket,
+        )
+        has_context = bool(
+            context.get("elements")
+            or context.get("section_sources")
+            or context.get("section_key_sections")
+            or context.get("template_entries")
+        )
+        if not has_context:
+            raise HTTPException(status_code=404, detail="No data found for the requested section")
+
+        previous_summary_id = payload.previous_summary_id
+        previous_summary: Optional[str] = None
+        previous_embedding: Any = None
+        if payload.user_comment:
+            if previous_summary_id:
+                previous = repo.fetch_ctd_section_summary(summary_id=previous_summary_id)
+            else:
+                previous = repo.fetch_latest_ctd_section_summary(
+                    tenant_id=payload.tenant_id,
+                    project_id=payload.project_id,
+                    bucket=payload.bucket,
+                    section_number=section,
+                )
+            if not previous:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Previous summary not found for user_comment",
+                )
+            if (
+                str(previous.get("tenant_id")) != payload.tenant_id
+                or str(previous.get("project_id")) != payload.project_id
+                or str(previous.get("bucket")) != payload.bucket
+            ):
+                raise HTTPException(status_code=404, detail="Previous summary not found")
+            previous_summary_id = str(previous.get("id"))
+            previous_summary = previous.get("final_text") or previous.get("summary_text")
+            previous_embedding = previous.get("embedding")
+
+        system_prompt, user_prompt = _build_section_summary_prompt(
+            section=section,
+            context=context,
+            user_prompt=payload.user_prompt,
+            user_comment=payload.user_comment,
+            previous_summary=previous_summary,
+            previous_embedding=previous_embedding,
+        )
+        llm = LLMClient()
+        try:
+            summary_text = llm.generate_text(system_prompt, user_prompt).strip()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to generate summary: {exc}",
+            ) from exc
+        if not summary_text:
+            raise HTTPException(status_code=500, detail="Summary generation returned empty output")
+
+        embedding = _generate_embedding(summary_text)
+        try:
+            summary_id = repo.insert_ctd_section_summary(
+                record=CTDSectionSummaryRecord(
+                    tenant_id=payload.tenant_id,
+                    project_id=payload.project_id,
+                    bucket=payload.bucket,
+                    section_number=section,
+                    summary_text=summary_text,
+                    status="draft",
+                    element_numbers=element_numbers,
+                    user_prompt=payload.user_prompt,
+                    user_comment=payload.user_comment,
+                    previous_id=previous_summary_id,
+                    model_name=llm.model_name,
+                    embedding=embedding,
+                )
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to store section summary: {exc}",
+            ) from exc
+    finally:
+        db.close()
+
+    return {
+        "summary_id": summary_id,
+        "section": section,
+        "status": "draft",
+        "summary_text": summary_text,
+        "element_numbers": element_numbers,
+        "previous_summary_id": previous_summary_id,
+    }
+
+
+@ncd_router.post("/assets/summary/approve")
+async def approve_ctd_section_summary(
+    payload: CTDSectionSummaryApproveRequest,
+) -> Dict[str, Any]:
+    if not payload.final_text or not payload.final_text.strip():
+        raise HTTPException(status_code=400, detail="final_text is required")
+    if not payload.tenant_id or not payload.project_id or not payload.bucket:
+        raise HTTPException(status_code=400, detail="tenant_id, project_id, and bucket are required")
+
+    summary_id = payload.summary_id
+    section = payload.section.strip() if payload.section else ""
+
+    db = SessionLocal()
+    repo = NCDRepository(session=db)
+    try:
+        if summary_id:
+            existing = repo.fetch_ctd_section_summary(summary_id=summary_id)
+        else:
+            if not section:
+                raise HTTPException(
+                    status_code=400,
+                    detail="summary_id or section is required",
+                )
+            existing = repo.fetch_latest_ctd_section_summary(
+                tenant_id=payload.tenant_id,
+                project_id=payload.project_id,
+                bucket=payload.bucket,
+                section_number=section,
+                status="draft",
+            )
+            summary_id = str(existing.get("id")) if existing else None
+
+        if not existing or not summary_id:
+            raise HTTPException(status_code=404, detail="Summary not found")
+        if (
+            str(existing.get("tenant_id")) != payload.tenant_id
+            or str(existing.get("project_id")) != payload.project_id
+            or str(existing.get("bucket")) != payload.bucket
+        ):
+            raise HTTPException(status_code=404, detail="Summary not found")
+
+        updated = repo.approve_ctd_section_summary(
+            summary_id=summary_id,
+            final_text=payload.final_text.strip(),
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Summary not found")
+    finally:
+        db.close()
+
+    return {
+        "summary_id": summary_id,
+        "section": updated.get("section_number"),
+        "status": updated.get("status"),
+        "summary_text": updated.get("summary_text"),
+        "final_text": updated.get("final_text"),
     }
 
 

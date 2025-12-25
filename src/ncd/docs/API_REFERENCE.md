@@ -17,6 +17,7 @@ This summarizes the main FastAPI routes exposed by `pdf_analysis.api.server` tha
 - `GET /ncd/template?section=2.4.1` — Return template entries from `ind_24_26_template.json` matching the section/subsection. Passing a parent section returns all subsections under it; passing a subsection returns that entry only.
 - `POST /ncd/template/override` — Upsert a user-specific template override. Body: `user_id`, `section`, optional `subsection`, `payload` (template JSON). Stores into `ncd_template_override` (assumes table exists).
 - `GET /ncd/template?section=...&user_id=...` — When `user_id` is provided, merges user overrides from `ncd_template_override` (override wins) before returning entries.
+- `GET /ncd/ctd/2.4/element` — Return cached Module 4 sources + assets for a single 2.4 element. Query: `element` (e.g., `2.4.5-a`), `tenant_id`, `project_id`, `bucket`, optional `refresh`.
 - `GET /ncd/ctd/2.6/section` — Return Module 4 sources + NCD payload for a single 2.6 section. Query: `section`, `tenant_id`, `project_id`, `bucket`, optional `include_tables`, `include_images`.
 - `GET /ncd/assets/image` — Return image assets + context for a CTD 2.4/2.6 section. Query: `section`, `tenant_id`, `project_id`, `bucket`, optional `limit`.
 - `GET /ncd/assets/table` — Return table assets + context for a CTD 2.4/2.6 section. Query: `section`, `tenant_id`, `project_id`, `bucket`, optional `limit`.
@@ -27,7 +28,7 @@ This summarizes the main FastAPI routes exposed by `pdf_analysis.api.server` tha
 - `GET  /dev/sections` — List known template sections loaded from `src/ncd/ind_24_26_template.json`.
 
 ## Notes
-- Template-driven labels come from `src/ncd/ind_24_26_template.json` (Modules 2.4/2.6).
+- Template-driven labels come from `src/summary/ind_24_26_template.json` (fallback `src/ncd/ind_24_26_template.json`).
 - Text sampling is minimal (default first 5 pages) with pdfminer → OCR → PyMuPDF → pdfplumber fallbacks; filename hints are used when present (e.g., `4.2.1.1.pdf`).
 - Optional LLM refinement requires `OPENAI_API_KEY` and infra extras installed.
 - S3 routes require `boto3` (`poetry install --with infra`). Default bucket can be set via `S3_BUCKET`.

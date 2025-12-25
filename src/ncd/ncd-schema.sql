@@ -354,6 +354,80 @@ CREATE INDEX IF NOT EXISTS idx_document_key_sections_document
     ON document_key_sections(document_version_id);
 
 -- ============================================================
+-- CTD 2.4 ELEMENT REFERENCES (CACHE)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS ncd_ctd_section_reference (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    tenant_id UUID NOT NULL
+        REFERENCES tenants(id),
+
+    project_id UUID NOT NULL
+        REFERENCES projects(id),
+
+    bucket TEXT NOT NULL,
+
+    element_number TEXT NOT NULL,
+    section_number TEXT NULL,
+
+    template_payload JSONB NOT NULL,
+    module4_sections TEXT[] NOT NULL DEFAULT '{}',
+    payload JSONB NOT NULL,
+
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+
+    UNIQUE (tenant_id, project_id, bucket, element_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ncd_ctd_section_reference_element
+    ON ncd_ctd_section_reference(element_number);
+
+CREATE INDEX IF NOT EXISTS idx_ncd_ctd_section_reference_project
+    ON ncd_ctd_section_reference(project_id);
+
+-- ============================================================
+-- CTD SECTION SUMMARY DRAFTS + APPROVALS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS ncd_ctd_section_summary (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    tenant_id UUID NOT NULL
+        REFERENCES tenants(id),
+
+    project_id UUID NOT NULL
+        REFERENCES projects(id),
+
+    bucket TEXT NOT NULL,
+    section_number TEXT NOT NULL,
+    element_numbers TEXT[] NOT NULL DEFAULT '{}',
+
+    summary_text TEXT NOT NULL,
+    final_text TEXT NULL,
+
+    status TEXT NOT NULL CHECK (status IN ('draft', 'approved')),
+
+    user_prompt TEXT NULL,
+    user_comment TEXT NULL,
+    previous_id UUID NULL
+        REFERENCES ncd_ctd_section_summary(id),
+
+    model_name TEXT NULL,
+    embedding VECTOR(1536),
+
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ncd_ctd_section_summary_section
+    ON ncd_ctd_section_summary(tenant_id, project_id, bucket, section_number);
+
+CREATE INDEX IF NOT EXISTS idx_ncd_ctd_section_summary_status
+    ON ncd_ctd_section_summary(status);
+
+-- ============================================================
 -- DOCUMENT COMMENTS (THREADED)
 -- ============================================================
 
