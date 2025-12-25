@@ -235,7 +235,7 @@ class LangChainExtractionPipeline:
         Run the study segmentation chain to identify per-study page spans.
         """
         joined_text = self._render_chunks_for_prompt(chunks)
-        response = self.study_segmentation_chain.invoke({"text": joined_text})
+        response = self.study_segmentation_chain.invoke({"context": joined_text})
         raw_segments = self._normalize_list(response, field_name="studies")
         segments: List[StudySegment] = []
         for raw in raw_segments:

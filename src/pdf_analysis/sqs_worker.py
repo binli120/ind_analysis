@@ -39,6 +39,7 @@ from ncd.extraction.content_extractor import (
     describe_table_asset,
     extract_key_sections_from_pages,
 )
+from ncd.extraction.fast_extract import match_fast_extract
 from ncd.llm_client import LLMClient
 
 s3 = boto3.client("s3")
@@ -574,6 +575,15 @@ def _build_document_assets(
                     except Exception:
                         description = None
                         keywords = []
+                caption = f"Table p{page_number} t{index_on_page}"
+                fast_matches = match_fast_extract(
+                    page_text.get(int(page_number or 0), ""),
+                    section_prefixes=("2.4", "2.6"),
+                    extra_texts=[
+                        caption,
+                        " ".join(list(preview_df.columns)) if preview_df is not None else "",
+                    ],
+                )
                 assets.append(
                     {
                         "asset_type": "table",
@@ -581,7 +591,7 @@ def _build_document_assets(
                         "index_on_page": index_on_page,
                         "s3_bucket": bucket,
                         "s3_key": csv_key,
-                        "caption": f"Table p{page_number} t{index_on_page}",
+                        "caption": caption,
                         "description": description,
                         "keywords": keywords,
                         "extra_attributes": {
@@ -589,6 +599,7 @@ def _build_document_assets(
                             "engine": table.get("engine") if table else None,
                             "columns": list(preview_df.columns) if preview_df is not None else [],
                             "row_count": int(preview_df.shape[0]) if preview_df is not None else 0,
+                            "fast_extract": fast_matches,
                         },
                     }
                 )
@@ -627,6 +638,11 @@ def _build_document_assets(
                     except Exception:
                         description = None
                         keywords = []
+                fast_matches = match_fast_extract(
+                    page_text.get(int(page_number or 0), ""),
+                    section_prefixes=("2.4", "2.6"),
+                    extra_texts=[caption or ""],
+                )
                 assets.append(
                     {
                         "asset_type": "image",
@@ -640,6 +656,7 @@ def _build_document_assets(
                         "extra_attributes": {
                             "bbox": image.get("bbox"),
                             "file_name": file_name,
+                            "fast_extract": fast_matches,
                         },
                     }
                 )

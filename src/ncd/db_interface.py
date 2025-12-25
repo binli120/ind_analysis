@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Iterable, List, Optional, Sequence
 
 import json
+import re
 
 from sqlalchemy import text as sqltext
 from sqlalchemy.engine import Engine
@@ -76,6 +77,7 @@ class NCDRepository:
         self._session: Session | None = None
         self._documents_has_content: bool | None = None
         self._documents_embedding_info: dict | None = None
+        self._table_exists_cache: dict[str, bool] = {}
 
     def __enter__(self) -> "NCDRepository":
         return self
@@ -95,6 +97,36 @@ class NCDRepository:
         if self._session is not None:
             self._session.close()
         self._session = None
+
+    def _table_exists(self, table_name: str) -> bool:
+        cached = self._table_exists_cache.get(table_name)
+        if cached is not None:
+            return cached
+        db = self.session
+        exists = db.execute(
+            sqltext("SELECT to_regclass(:table_name)"),
+            {"table_name": table_name},
+        ).scalar()
+        present = exists is not None
+        self._table_exists_cache[table_name] = present
+        return present
+
+    @staticmethod
+    def _parse_duration_days(duration: str | None) -> Optional[int]:
+        if not duration:
+            return None
+        match = re.search(r"(\d+)", duration)
+        if not match:
+            return None
+        value = int(match.group(1))
+        lowered = duration.lower()
+        if "week" in lowered:
+            return value * 7
+        if "month" in lowered:
+            return value * 30
+        if "year" in lowered:
+            return value * 365
+        return value
 
     # ------------------------------------------------------------------ #
     # Source document + pages
@@ -944,14 +976,78 @@ class NCDRepository:
         Insert a study if missing; return its UUID.
         """
         db = self.session
+        if self._table_exists("ncd_studies"):
+            inserted = db.execute(
+                sqltext(
+                    """
+                    INSERT INTO ncd_studies (
+                        study_id, study_type, species, route, duration, source_document_id
+                    )
+                    VALUES (:sid, :stype, :species, :route, :duration, :src_doc)
+                    ON CONFLICT (study_id) DO NOTHING
+                    RETURNING id
+                    """
+                ),
+                {
+                    "sid": study_id,
+                    "stype": study_type,
+                    "species": species,
+                    "route": route,
+                    "duration": duration,
+                    "src_doc": source_document_id,
+                },
+            ).scalar()
+            if inserted:
+                db.commit()
+                return str(inserted)
+
+            existing = db.execute(
+                sqltext(
+                    """
+                    SELECT id FROM ncd_studies WHERE study_id = :sid
+                    """
+                ),
+                {"sid": study_id},
+            ).scalar()
+            if existing is None:
+                raise RuntimeError("Failed to upsert study")
+            return str(existing)
+
+        if not self._table_exists("ncd_study"):
+            raise RuntimeError("Missing ncd_study/ncd_studies table for study upsert")
+
+        duration_days = self._parse_duration_days(duration)
+        extra_attributes = {}
+        if duration and duration_days is None:
+            extra_attributes["duration_raw"] = duration
+        if source_document_id:
+            extra_attributes["legacy_document_id"] = source_document_id
+
+        existing = db.execute(
+            sqltext(
+                """
+                SELECT id
+                FROM ncd_study
+                WHERE sponsor_study_id = :sid
+                LIMIT 1
+                """
+            ),
+            {"sid": study_id},
+        ).scalar()
+        if existing:
+            return str(existing)
+
         inserted = db.execute(
             sqltext(
                 """
-                INSERT INTO ncd_studies (
-                    study_id, study_type, species, route, duration, source_document_id
+                INSERT INTO ncd_study (
+                    sponsor_study_id, study_type, species, route,
+                    duration_days, extra_attributes
                 )
-                VALUES (:sid, :stype, :species, :route, :duration, :src_doc)
-                ON CONFLICT (study_id) DO NOTHING
+                VALUES (
+                    :sid, :stype, :species, :route,
+                    :duration_days, CAST(:extra AS jsonb)
+                )
                 RETURNING id
                 """
             ),
@@ -960,25 +1056,14 @@ class NCDRepository:
                 "stype": study_type,
                 "species": species,
                 "route": route,
-                "duration": duration,
-                "src_doc": source_document_id,
+                "duration_days": duration_days,
+                "extra": json.dumps(extra_attributes) if extra_attributes else "{}",
             },
         ).scalar()
-        if inserted:
-            db.commit()
-            return str(inserted)
-
-        existing = db.execute(
-            sqltext(
-                """
-                SELECT id FROM ncd_studies WHERE study_id = :sid
-                """
-            ),
-            {"sid": study_id},
-        ).scalar()
-        if existing is None:
+        if inserted is None:
             raise RuntimeError("Failed to upsert study")
-        return str(existing)
+        db.commit()
+        return str(inserted)
 
     def insert_noael(
         self,
@@ -992,6 +1077,8 @@ class NCDRepository:
         value: str | None,
     ) -> str:
         db = self.session
+        if not self._table_exists("ncd_noael"):
+            raise RuntimeError("Missing ncd_noael table; run legacy NCD schema for LangChain NOAEL extraction.")
         noael_id = db.execute(
             sqltext(
                 """
@@ -1027,6 +1114,8 @@ class NCDRepository:
         dose_group: str | None,
     ) -> str:
         db = self.session
+        if not self._table_exists("ncd_pk_parameters"):
+            raise RuntimeError("Missing ncd_pk_parameters table; run legacy NCD schema for LangChain PK extraction.")
         pk_id = db.execute(
             sqltext(
                 """

@@ -1,9 +1,11 @@
+import os
 from typing import List
 
 from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session
 
 from ncd.db_interface import NCDRepository
+from ncd.extraction.fast_extract import match_fast_extract
 from ncd.llm_client import LLMClient
 from ncd.schemas import ToxStudySummarySchema
 
@@ -37,6 +39,12 @@ Return JSON:
   ]
 }
 """
+
+ENABLE_TOX_FAST_EXTRACT = os.getenv("TOX_FAST_EXTRACT", "1").lower() not in {
+    "0",
+    "false",
+    "no",
+}
 
 
 def build_tox_extraction_user_prompt(study_text: str, study_id: str) -> str:
@@ -267,6 +275,12 @@ def _extract_positive_findings(
         raw_text = chunk.get("raw_text") or ""
         if not raw_text.strip():
             continue
+        if ENABLE_TOX_FAST_EXTRACT:
+            fast_matches = match_fast_extract(
+                raw_text, section_prefixes=("2.6.6", "2.6.7")
+            )
+            if not fast_matches:
+                continue
         prompt = (
             f"Study ID: {study_id}\n"
             f"Chunk ID: {chunk.get('id')}\n"
