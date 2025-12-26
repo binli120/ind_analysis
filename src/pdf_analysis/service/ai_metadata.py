@@ -222,6 +222,9 @@ def _collect_text_fragments(content: Any) -> List[str]:
         text_payload = block_payload.get("text")
         if text_payload is None and hasattr(block, "text"):
             text_payload = block.text
+        if text_payload is None and "content" in block_payload:
+            fragments.extend(_collect_text_fragments(block_payload.get("content")))
+            continue
         if isinstance(text_payload, dict):
             value = text_payload.get("value") or text_payload.get("text")
         else:

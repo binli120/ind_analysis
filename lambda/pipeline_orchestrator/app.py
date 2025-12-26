@@ -58,7 +58,7 @@ _KNOWN_STAGES = [
 ]
 
 
-def handler(event: Dict[str, Any]) -> Dict[str, Any]:
+def handler(event: Dict[str, Any], _context: Any | None = None) -> Dict[str, Any]:
     """Process S3 and SNS events to keep document pipeline status in sync."""
     logger.debug("Received event: %s", json.dumps(event))
     if "Records" not in event:

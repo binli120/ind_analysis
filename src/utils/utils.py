@@ -2,7 +2,10 @@
 # Author: Bin Lee
 # Email: blee@filynai.com
 
-from datetime import timezone, datetime
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any, Dict
 
 
 def _extract_event_time(record: Dict[str, Any]) -> str:
