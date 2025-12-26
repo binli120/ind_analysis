@@ -269,7 +269,7 @@ def _get_embedding_client() -> Optional[OpenAI]:
     return _EMBEDDING_CLIENT
 
 
-def _generate_embedding(text: str) -> Optional[List[float]]:
+def _generate_embedding(text: str, expected_dim: int = 1536) -> Optional[List[float]]:
     client = _get_embedding_client()
     if not client:
         return None
@@ -283,7 +283,15 @@ def _generate_embedding(text: str) -> Optional[List[float]]:
         return None
     if not response.data:
         return None
-    return list(response.data[0].embedding)
+    embedding = list(response.data[0].embedding)
+    if expected_dim and len(embedding) != expected_dim:
+        logger.warning(
+            "Embedding dimension mismatch (expected %s, got %s); skipping storage.",
+            expected_dim,
+            len(embedding),
+        )
+        return None
+    return embedding
 
 
 def _metadata_json_key(key: str) -> str:
@@ -1719,8 +1727,9 @@ def _build_section_summary_context(
                 filtered["matched_targets"] = matched_targets
                 filtered_mappings.append(filtered)
                 exact_sections.add(entry.get("module4_section"))
-        module4_sections = sorted(s for s in exact_sections if s)
-        mapping_entries = filtered_mappings
+        if filtered_mappings:
+            module4_sections = sorted(s for s in exact_sections if s)
+            mapping_entries = filtered_mappings
 
     sources = fetch_section_sources(
         db,
@@ -1833,7 +1842,7 @@ def _build_section_summary_prompt(
         parts.append(f"User comment:\n{user_comment}")
         parts.append("Revise the summary to address the comment.")
 
-    context_json = json.dumps(context, ensure_ascii=True, indent=2)
+    context_json = json.dumps(context, ensure_ascii=True, indent=2, default=str)
     parts.append(f"Context data (JSON):\n{context_json}")
     return system_prompt, "\n\n".join(parts)
 
@@ -1898,11 +1907,12 @@ def _build_tabulated_context(
     bucket: str,
     max_table_rows: int = 10,
     max_tables: int = 50,
-) -> Dict[str, Any]:
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
     project_name = fetch_project_name(db, project_id)
     project_like = f"%/{project_name}/%" if project_name else "%"
 
     module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(section)
+    mapping_filter = "prefix"
     if section.startswith("2.6."):
         exact_sections = set()
         filtered_mappings: List[Dict[str, Any]] = []
@@ -1917,8 +1927,10 @@ def _build_tabulated_context(
                 filtered["matched_targets"] = matched_targets
                 filtered_mappings.append(filtered)
                 exact_sections.add(entry.get("module4_section"))
-        module4_sections = sorted(s for s in exact_sections if s)
-        mapping_entries = filtered_mappings
+        if filtered_mappings:
+            module4_sections = sorted(s for s in exact_sections if s)
+            mapping_entries = filtered_mappings
+            mapping_filter = "exact"
 
     sources = fetch_section_sources(
         db,
@@ -1990,6 +2002,48 @@ def _build_tabulated_context(
             }
         )
 
+    preview_row_total = sum(len(asset.get("preview_rows") or []) for asset in table_assets)
+    table_assets_with_preview = sum(1 for asset in table_assets if asset.get("preview_rows"))
+    table_assets_with_json = sum(1 for asset in table_assets if asset.get("json_key"))
+    warnings: List[str] = []
+    if not project_name:
+        warnings.append("Project name not found; project_like fallback '%' used.")
+    if not module4_sections:
+        warnings.append("No Module 4 sections matched the CTD target; check mapping or use a subsection.")
+    if not mapping_entries:
+        warnings.append("No CTD mapping entries matched the request.")
+    if not sources:
+        warnings.append("No section sources found for the matched Module 4 sections.")
+    if not assets:
+        warnings.append("No table assets found for the matched Module 4 sections.")
+
+    debug = {
+        "project_name": project_name,
+        "project_like": project_like,
+        "mapping_filter": mapping_filter,
+        "ctd_targets": targets,
+        "module4_sections_count": len(module4_sections),
+        "mapping_count": len(mapping_entries),
+        "section_sources_count": len(sources),
+        "table_assets_count": len(assets),
+        "table_assets_included": len(table_assets),
+        "table_assets_with_json_key": table_assets_with_json,
+        "table_assets_with_preview_rows": table_assets_with_preview,
+        "table_preview_row_count": preview_row_total,
+        "table_specs_count": len(table_specs),
+        "warnings": warnings,
+        "table_asset_samples": [
+            {
+                "id": asset.get("id"),
+                "s3_key": asset.get("s3_key"),
+                "json_key": asset.get("json_key"),
+                "row_count": asset.get("row_count"),
+                "preview_rows_count": len(asset.get("preview_rows") or []),
+            }
+            for asset in table_assets[:3]
+        ],
+    }
+
     return {
         "section": section,
         "ctd_targets": targets,
@@ -1998,7 +2052,7 @@ def _build_tabulated_context(
         "table_specs": table_specs,
         "table_assets": table_assets,
         "section_sources": _slim_sources([dict(row) for row in sources]),
-    }
+    }, debug
 
 
 def _merge_tabulated_tables(
@@ -2061,7 +2115,7 @@ def _build_tabulated_prompt(
         parts.append(f"User comment:\n{user_comment}")
         parts.append("Revise the tables to address the comment.")
 
-    context_json = json.dumps(context, ensure_ascii=True, indent=2)
+    context_json = json.dumps(context, ensure_ascii=True, indent=2, default=str)
     parts.append(f"Context data (JSON):\n{context_json}")
     return system_prompt, "\n\n".join(parts)
 
@@ -2101,8 +2155,9 @@ async def _get_assets_by_type(
                     filtered["matched_targets"] = matched_targets
                     filtered_mappings.append(filtered)
                     exact_sections.add(entry.get("module4_section"))
-            module4_sections = sorted(s for s in exact_sections if s)
-            mapping_entries = filtered_mappings
+            if filtered_mappings:
+                module4_sections = sorted(s for s in exact_sections if s)
+                mapping_entries = filtered_mappings
 
         assets = fetch_assets_for_sections(
             db,
@@ -2216,8 +2271,9 @@ async def get_assets_contents(
                     filtered["matched_targets"] = matched_targets
                     filtered_mappings.append(filtered)
                     exact_sections.add(entry.get("module4_section"))
-            module4_sections = sorted(s for s in exact_sections if s)
-            mapping_entries = filtered_mappings
+            if filtered_mappings:
+                module4_sections = sorted(s for s in exact_sections if s)
+                mapping_entries = filtered_mappings
 
         key_sections = fetch_key_sections_for_sections(
             db,
@@ -2493,7 +2549,7 @@ async def create_ctd_tabulated_summary(
     repo = NCDRepository(session=db)
     try:
         use_llm = payload.use_llm if payload.use_llm is not None else True
-        context = _build_tabulated_context(
+        context, debug_info = _build_tabulated_context(
             db,
             section=section,
             tenant_id=payload.tenant_id,
@@ -2626,7 +2682,9 @@ async def create_ctd_tabulated_summary(
             "section_sources": context.get("section_sources") or [],
             "module4_sections": context.get("module4_sections") or [],
             "mapping": context.get("mapping") or [],
+            "ctd_targets": context.get("ctd_targets") or [],
         },
+        "debug": debug_info,
         "previous_tabulated_id": previous_tabulated_id,
     }
 
