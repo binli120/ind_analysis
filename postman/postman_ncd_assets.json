@@ -43,7 +43,15 @@
       "value": ""
     },
     {
+      "key": "tabulated_id",
+      "value": ""
+    },
+    {
       "key": "previous_summary_id",
+      "value": ""
+    },
+    {
+      "key": "previous_tabulated_id",
       "value": ""
     },
     {
@@ -55,8 +63,16 @@
       "value": ""
     },
     {
+      "key": "use_llm",
+      "value": "true"
+    },
+    {
       "key": "final_text",
       "value": ""
+    },
+    {
+      "key": "final_payload",
+      "value": "{\n  \"section\": \"{{section}}\",\n  \"tables\": []\n}"
     }
   ],
   "item": [
@@ -276,6 +292,63 @@
           ]
         },
         "description": "Approve a draft summary with final text for a CTD section."
+      }
+    },
+    {
+      "name": "Assets - Tabulated Summary (Draft)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"section\": \"{{section}}\",\n  \"tenant_id\": \"{{tenant_id}}\",\n  \"project_id\": \"{{project_id}}\",\n  \"bucket\": \"{{bucket}}\",\n  \"use_llm\": {{use_llm}},\n  \"user_prompt\": \"{{user_prompt}}\",\n  \"user_comment\": \"{{user_comment}}\",\n  \"previous_tabulated_id\": \"{{previous_tabulated_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ncd/assets/tabulated",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ncd",
+            "assets",
+            "tabulated"
+          ]
+        },
+        "description": "Generate a draft tabulated summary for a CTD 2.6 section."
+      }
+    },
+    {
+      "name": "Assets - Tabulated Summary (Approve)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tenant_id\": \"{{tenant_id}}\",\n  \"project_id\": \"{{project_id}}\",\n  \"bucket\": \"{{bucket}}\",\n  \"summary_id\": \"{{tabulated_id}}\",\n  \"section\": \"{{section}}\",\n  \"final_payload\": {{final_payload}}\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/ncd/assets/tabulated/approve",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ncd",
+            "assets",
+            "tabulated",
+            "approve"
+          ]
+        },
+        "description": "Approve a draft tabulated summary with final tables."
       }
     }
   ]

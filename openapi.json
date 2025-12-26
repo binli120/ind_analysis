@@ -1055,6 +1055,92 @@
         }
       }
     },
+    "/ncd/assets/tabulated": {
+      "post": {
+        "tags": [
+          "ncd"
+        ],
+        "summary": "Create Ctd Tabulated Summary",
+        "operationId": "create_ctd_tabulated_summary_ncd_assets_tabulated_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CTDTabulatedSummaryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Create Ctd Tabulated Summary Ncd Assets Tabulated Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ncd/assets/tabulated/approve": {
+      "post": {
+        "tags": [
+          "ncd"
+        ],
+        "summary": "Approve Ctd Tabulated Summary",
+        "operationId": "approve_ctd_tabulated_summary_ncd_assets_tabulated_approve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CTDTabulatedSummaryApproveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Approve Ctd Tabulated Summary Ncd Assets Tabulated Approve Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/dev/label-local": {
       "post": {
         "tags": [
@@ -1389,6 +1475,132 @@
         ],
         "title": "CTDSectionSummaryRequest",
         "description": "Request payload for generating a CTD section summary draft."
+      },
+      "CTDTabulatedSummaryApproveRequest": {
+        "properties": {
+          "tenant_id": {
+            "type": "string",
+            "title": "Tenant Id"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "bucket": {
+            "type": "string",
+            "title": "Bucket"
+          },
+          "final_payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Final Payload"
+          },
+          "summary_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Id"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tenant_id",
+          "project_id",
+          "bucket",
+          "final_payload"
+        ],
+        "title": "CTDTabulatedSummaryApproveRequest",
+        "description": "Request payload for approving a CTD tabulated summary."
+      },
+      "CTDTabulatedSummaryRequest": {
+        "properties": {
+          "section": {
+            "type": "string",
+            "title": "Section"
+          },
+          "tenant_id": {
+            "type": "string",
+            "title": "Tenant Id"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "bucket": {
+            "type": "string",
+            "title": "Bucket"
+          },
+          "use_llm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Use Llm",
+            "default": true
+          },
+          "user_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Prompt"
+          },
+          "user_comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Comment"
+          },
+          "previous_tabulated_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Tabulated Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "section",
+          "tenant_id",
+          "project_id",
+          "bucket"
+        ],
+        "title": "CTDTabulatedSummaryRequest",
+        "description": "Request payload for generating a CTD tabulated summary draft."
       },
       "HTTPValidationError": {
         "properties": {

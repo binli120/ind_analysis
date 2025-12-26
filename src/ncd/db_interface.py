@@ -96,6 +96,21 @@ class CTDSectionSummaryRecord:
     embedding: Optional[Sequence[float]] = None
 
 
+@dataclass
+class CTDTabulatedSummaryRecord:
+    tenant_id: str
+    project_id: str
+    bucket: str
+    section_number: str
+    table_payload: dict
+    status: str = "draft"
+    user_prompt: Optional[str] = None
+    user_comment: Optional[str] = None
+    previous_id: Optional[str] = None
+    model_name: Optional[str] = None
+    embedding: Optional[Sequence[float]] = None
+
+
 class NCDRepository:
     """Small helper for inserting document/pages/chunks into the NCD schema."""
 
@@ -1153,6 +1168,165 @@ class NCDRepository:
                 {
                     "summary_id": summary_id,
                     "final_text": final_text,
+                    "model_name": model_name,
+                },
+            )
+            .mappings()
+            .first()
+        )
+        if row:
+            db.commit()
+            return dict(row)
+        db.commit()
+        return None
+
+    def fetch_ctd_tabulated_summary(
+        self,
+        *,
+        summary_id: str,
+    ) -> Optional[dict]:
+        if not self._table_exists("ncd_ctd_tabulated_summary"):
+            return None
+        db = self.session
+        row = (
+            db.execute(
+                sqltext(
+                    """
+                    SELECT id, tenant_id, project_id, bucket, section_number,
+                           table_payload, final_payload, status, user_prompt,
+                           user_comment, previous_id, model_name, embedding,
+                           created_at, updated_at
+                    FROM ncd_ctd_tabulated_summary
+                    WHERE id = :summary_id
+                    LIMIT 1
+                    """
+                ),
+                {"summary_id": summary_id},
+            )
+            .mappings()
+            .first()
+        )
+        return dict(row) if row else None
+
+    def fetch_latest_ctd_tabulated_summary(
+        self,
+        *,
+        tenant_id: str,
+        project_id: str,
+        bucket: str,
+        section_number: str,
+        status: Optional[str] = None,
+    ) -> Optional[dict]:
+        if not self._table_exists("ncd_ctd_tabulated_summary"):
+            return None
+        db = self.session
+        row = (
+            db.execute(
+                sqltext(
+                    """
+                    SELECT id, tenant_id, project_id, bucket, section_number,
+                           table_payload, final_payload, status, user_prompt,
+                           user_comment, previous_id, model_name, embedding,
+                           created_at, updated_at
+                    FROM ncd_ctd_tabulated_summary
+                    WHERE tenant_id = :tenant_id
+                      AND project_id = :project_id
+                      AND bucket = :bucket
+                      AND section_number = :section_number
+                      AND (:status IS NULL OR status = :status)
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """
+                ),
+                {
+                    "tenant_id": tenant_id,
+                    "project_id": project_id,
+                    "bucket": bucket,
+                    "section_number": section_number,
+                    "status": status,
+                },
+            )
+            .mappings()
+            .first()
+        )
+        return dict(row) if row else None
+
+    def insert_ctd_tabulated_summary(
+        self,
+        *,
+        record: CTDTabulatedSummaryRecord,
+    ) -> str:
+        if not self._table_exists("ncd_ctd_tabulated_summary"):
+            raise RuntimeError("ncd_ctd_tabulated_summary table is missing")
+        db = self.session
+        embedding_literal = (
+            self._vector_literal(record.embedding) if record.embedding else None
+        )
+        summary_id = db.execute(
+            sqltext(
+                """
+                INSERT INTO ncd_ctd_tabulated_summary (
+                    tenant_id, project_id, bucket, section_number,
+                    table_payload, final_payload, status, user_prompt,
+                    user_comment, previous_id, model_name, embedding
+                ) VALUES (
+                    :tenant_id, :project_id, :bucket, :section_number,
+                    CAST(:table_payload AS jsonb), CAST(:final_payload AS jsonb),
+                    :status, :user_prompt, :user_comment, :previous_id,
+                    :model_name, CAST(:embedding AS vector)
+                )
+                RETURNING id
+                """
+            ),
+            {
+                "tenant_id": record.tenant_id,
+                "project_id": record.project_id,
+                "bucket": record.bucket,
+                "section_number": record.section_number,
+                "table_payload": json.dumps(record.table_payload, ensure_ascii=True),
+                "final_payload": None,
+                "status": record.status,
+                "user_prompt": record.user_prompt,
+                "user_comment": record.user_comment,
+                "previous_id": record.previous_id,
+                "model_name": record.model_name,
+                "embedding": embedding_literal,
+            },
+        ).scalar()
+        if summary_id is None:
+            raise RuntimeError("Failed to insert ncd_ctd_tabulated_summary")
+        db.commit()
+        return str(summary_id)
+
+    def approve_ctd_tabulated_summary(
+        self,
+        *,
+        summary_id: str,
+        final_payload: dict,
+        model_name: Optional[str] = None,
+    ) -> Optional[dict]:
+        if not self._table_exists("ncd_ctd_tabulated_summary"):
+            return None
+        db = self.session
+        row = (
+            db.execute(
+                sqltext(
+                    """
+                    UPDATE ncd_ctd_tabulated_summary
+                    SET final_payload = CAST(:final_payload AS jsonb),
+                        status = 'approved',
+                        model_name = COALESCE(:model_name, model_name),
+                        updated_at = now()
+                    WHERE id = :summary_id
+                    RETURNING id, tenant_id, project_id, bucket, section_number,
+                              table_payload, final_payload, status, user_prompt,
+                              user_comment, previous_id, model_name, embedding,
+                              created_at, updated_at
+                    """
+                ),
+                {
+                    "summary_id": summary_id,
+                    "final_payload": json.dumps(final_payload, ensure_ascii=True),
                     "model_name": model_name,
                 },
             )

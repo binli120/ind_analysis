@@ -16,6 +16,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
 from urllib.parse import urlencode
+import uuid
 
 import boto3
 from botocore.exceptions import ClientError
@@ -71,6 +72,7 @@ from ncd.config import settings
 from ncd.db_interface import (
     CTDSectionReferenceRecord,
     CTDSectionSummaryRecord,
+    CTDTabulatedSummaryRecord,
     NCDRepository,
 )
 from ncd.llm_client import LLMClient
@@ -204,6 +206,30 @@ class CTDSectionSummaryApproveRequest(BaseModel):
     project_id: str
     bucket: str
     final_text: str
+    summary_id: Optional[str] = None
+    section: Optional[str] = None
+
+
+class CTDTabulatedSummaryRequest(BaseModel):
+    """Request payload for generating a CTD tabulated summary draft."""
+
+    section: str
+    tenant_id: str
+    project_id: str
+    bucket: str
+    use_llm: Optional[bool] = True
+    user_prompt: Optional[str] = None
+    user_comment: Optional[str] = None
+    previous_tabulated_id: Optional[str] = None
+
+
+class CTDTabulatedSummaryApproveRequest(BaseModel):
+    """Request payload for approving a CTD tabulated summary."""
+
+    tenant_id: str
+    project_id: str
+    bucket: str
+    final_payload: Dict[str, Any]
     summary_id: Optional[str] = None
     section: Optional[str] = None
 
@@ -1562,6 +1588,43 @@ def _summary_to_text(value: Any) -> str:
     return json.dumps(value, ensure_ascii=True)
 
 
+def _normalize_json_dict(value: Any) -> Dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _require_uuid(value: str, field_name: str) -> str:
+    if not value:
+        raise HTTPException(status_code=400, detail=f"{field_name} is required")
+    try:
+        uuid.UUID(str(value))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail=f"{field_name} must be a UUID")
+    return value
+
+
+def _normalize_optional_uuid(value: Optional[str], field_name: str) -> Optional[str]:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise HTTPException(status_code=400, detail=f"{field_name} must be a UUID")
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    try:
+        uuid.UUID(cleaned)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail=f"{field_name} must be a UUID")
+    return cleaned
+
+
 def _slim_sources(sources: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     payload: List[Dict[str, Any]] = []
     for row in sources:
@@ -1769,6 +1832,234 @@ def _build_section_summary_prompt(
             parts.append(f"Previous summary embedding: {embedding_text}")
         parts.append(f"User comment:\n{user_comment}")
         parts.append("Revise the summary to address the comment.")
+
+    context_json = json.dumps(context, ensure_ascii=True, indent=2)
+    parts.append(f"Context data (JSON):\n{context_json}")
+    return system_prompt, "\n\n".join(parts)
+
+
+def _parse_columns_header(value: Any) -> List[str]:
+    if not isinstance(value, str):
+        return []
+    return [item.strip() for item in value.split(";") if item.strip()]
+
+
+def _tabulated_template_entries_for_section(section: str) -> List[Dict[str, Any]]:
+    entries = _load_ind_template_entries()
+    matches: List[Dict[str, Any]] = []
+    target = section.strip()
+    if not target:
+        return matches
+    target_lower = target.lower()
+    for entry in entries:
+        raw = entry.get("raw") or {}
+        if not isinstance(raw, dict):
+            continue
+        if not (raw.get("Table Description Boilerplate") or raw.get("Columns Headers")):
+            continue
+        sec = str(entry.get("section") or "").strip()
+        sub = str(entry.get("subsection") or "").strip()
+        if sub and sub.lower() == target_lower:
+            matches.append(entry)
+            continue
+        if sec and sec.lower() == target_lower:
+            matches.append(entry)
+            continue
+        if sec and sec.lower().startswith(target_lower):
+            matches.append(entry)
+    return matches
+
+
+def _read_table_json_preview(
+    s3_client: Any,
+    *,
+    bucket: str,
+    key: str,
+    max_rows: int,
+) -> List[Dict[str, Any]]:
+    raw = _read_s3_text(s3_client, bucket, key)
+    if not raw:
+        return []
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if isinstance(payload, list):
+        return [row for row in payload[:max_rows] if isinstance(row, dict)]
+    return []
+
+
+def _build_tabulated_context(
+    db: Session,
+    *,
+    section: str,
+    tenant_id: str,
+    project_id: str,
+    bucket: str,
+    max_table_rows: int = 10,
+    max_tables: int = 50,
+) -> Dict[str, Any]:
+    project_name = fetch_project_name(db, project_id)
+    project_like = f"%/{project_name}/%" if project_name else "%"
+
+    module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(section)
+    if section.startswith("2.6."):
+        exact_sections = set()
+        filtered_mappings: List[Dict[str, Any]] = []
+        for entry in mapping_entries:
+            matched_targets = [
+                target_entry
+                for target_entry in entry.get("targets", [])
+                if target_entry.get("section") == section
+            ]
+            if matched_targets:
+                filtered = dict(entry)
+                filtered["matched_targets"] = matched_targets
+                filtered_mappings.append(filtered)
+                exact_sections.add(entry.get("module4_section"))
+        module4_sections = sorted(s for s in exact_sections if s)
+        mapping_entries = filtered_mappings
+
+    sources = fetch_section_sources(
+        db,
+        tenant_id=tenant_id,
+        bucket=bucket,
+        project_like=project_like,
+        module4_sections=module4_sections,
+    )
+
+    assets = fetch_assets_for_sections(
+        db,
+        tenant_id=tenant_id,
+        bucket=bucket,
+        project_like=project_like,
+        module4_sections=module4_sections,
+        asset_type="table",
+    )
+
+    s3_client = boto3.client("s3")
+    table_assets: List[Dict[str, Any]] = []
+    for row in assets[: max(0, max_tables)]:
+        extra = _normalize_extra_attributes(row.get("extra_attributes"))
+        json_key = extra.get("json_key")
+        preview_rows: List[Dict[str, Any]] = []
+        if json_key:
+            preview_rows = _read_table_json_preview(
+                s3_client,
+                bucket=row.get("s3_bucket") or bucket,
+                key=json_key,
+                max_rows=max_table_rows,
+            )
+        table_assets.append(
+            {
+                "id": row.get("id"),
+                "s3_bucket": row.get("s3_bucket"),
+                "s3_key": row.get("s3_key"),
+                "json_key": json_key,
+                "caption": row.get("caption"),
+                "description": row.get("description"),
+                "keywords": row.get("keywords") or [],
+                "page_number": row.get("page_number"),
+                "index_on_page": row.get("index_on_page"),
+                "extra_attributes": extra,
+                "columns": extra.get("columns") or [],
+                "row_count": extra.get("row_count"),
+                "preview_rows": preview_rows,
+            }
+        )
+
+    template_entries = _tabulated_template_entries_for_section(section)
+    table_specs: List[Dict[str, Any]] = []
+    for entry in template_entries:
+        raw = entry.get("raw") or {}
+        if not isinstance(raw, dict):
+            continue
+        columns_header = raw.get("Columns Headers")
+        table_specs.append(
+            {
+                "section": entry.get("section"),
+                "subsection": entry.get("subsection"),
+                "subsection_header": entry.get("subsection_header"),
+                "ind_requirement": raw.get("IND Requirement"),
+                "table_description": raw.get("Table Description Boilerplate"),
+                "row_content": raw.get("Row Content"),
+                "columns_header": columns_header,
+                "columns": _parse_columns_header(columns_header),
+                "column_examples": raw.get("Column Example Values"),
+                "column_mapping": raw.get("Column Value in Module 4 Location Mapping"),
+            }
+        )
+
+    return {
+        "section": section,
+        "ctd_targets": targets,
+        "module4_sections": module4_sections,
+        "mapping": mapping_entries,
+        "table_specs": table_specs,
+        "table_assets": table_assets,
+        "section_sources": _slim_sources([dict(row) for row in sources]),
+    }
+
+
+def _merge_tabulated_tables(
+    table_specs: Sequence[Dict[str, Any]],
+    tables: Sequence[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    tables_by_subsection = {
+        str(table.get("subsection") or ""): table for table in tables if isinstance(table, dict)
+    }
+    merged: List[Dict[str, Any]] = []
+    for spec in table_specs:
+        subsection = str(spec.get("subsection") or "")
+        existing = tables_by_subsection.get(subsection, {})
+        merged.append(
+            {
+                "subsection": subsection,
+                "subsection_header": spec.get("subsection_header"),
+                "description": spec.get("table_description"),
+                "columns": existing.get("columns") or spec.get("columns") or [],
+                "rows": existing.get("rows") or [],
+                "notes": existing.get("notes") or "",
+            }
+        )
+    return merged
+
+
+def _build_tabulated_prompt(
+    *,
+    section: str,
+    context: Dict[str, Any],
+    user_prompt: Optional[str],
+    user_comment: Optional[str],
+    previous_tables: Optional[Dict[str, Any]],
+    previous_embedding: Any,
+) -> tuple[str, str]:
+    system_prompt = (
+        "You are an expert nonclinical regulatory writer. "
+        "Generate CTD Module 2.6 tabulated summaries using only the provided data. "
+        "Return JSON only."
+    )
+    instructions = user_prompt.strip() if user_prompt else (
+        "Use the table specs to populate rows from the available table assets and summaries. "
+        "If data is missing, leave rows empty and add notes."
+    )
+    parts = [
+        f"CTD Section: {section}",
+        f"Instructions: {instructions}",
+        "Return JSON with schema: "
+        '{"section": "<section>", "tables": [{"subsection": "...", '
+        '"subsection_header": "...", "columns": ["..."], "rows": ['
+        '{"<col>": "<value>"}], "notes": ""}]}.',
+        "Use the table specs' column headers exactly for the columns list and row keys.",
+    ]
+    if user_comment:
+        if previous_tables:
+            parts.append(f"Previous tables JSON:\n{json.dumps(previous_tables, ensure_ascii=True, indent=2)}")
+        embedding_text = _format_embedding_for_prompt(previous_embedding)
+        if embedding_text:
+            parts.append(f"Previous tables embedding: {embedding_text}")
+        parts.append(f"User comment:\n{user_comment}")
+        parts.append("Revise the tables to address the comment.")
 
     context_json = json.dumps(context, ensure_ascii=True, indent=2)
     parts.append(f"Context data (JSON):\n{context_json}")
@@ -2013,8 +2304,10 @@ async def create_ctd_section_summary(
         raise HTTPException(status_code=400, detail="section is required")
     if not (section.startswith("2.4") or section.startswith("2.6")):
         raise HTTPException(status_code=400, detail="section must start with 2.4 or 2.6")
-    if not payload.tenant_id or not payload.project_id or not payload.bucket:
-        raise HTTPException(status_code=400, detail="tenant_id, project_id, and bucket are required")
+    _require_uuid(payload.tenant_id, "tenant_id")
+    _require_uuid(payload.project_id, "project_id")
+    if not payload.bucket:
+        raise HTTPException(status_code=400, detail="bucket is required")
 
     db = SessionLocal()
     repo = NCDRepository(session=db)
@@ -2035,7 +2328,10 @@ async def create_ctd_section_summary(
         if not has_context:
             raise HTTPException(status_code=404, detail="No data found for the requested section")
 
-        previous_summary_id = payload.previous_summary_id
+        previous_summary_id = _normalize_optional_uuid(
+            payload.previous_summary_id,
+            "previous_summary_id",
+        )
         previous_summary: Optional[str] = None
         previous_embedding: Any = None
         if payload.user_comment:
@@ -2124,10 +2420,12 @@ async def approve_ctd_section_summary(
 ) -> Dict[str, Any]:
     if not payload.final_text or not payload.final_text.strip():
         raise HTTPException(status_code=400, detail="final_text is required")
-    if not payload.tenant_id or not payload.project_id or not payload.bucket:
-        raise HTTPException(status_code=400, detail="tenant_id, project_id, and bucket are required")
+    _require_uuid(payload.tenant_id, "tenant_id")
+    _require_uuid(payload.project_id, "project_id")
+    if not payload.bucket:
+        raise HTTPException(status_code=400, detail="bucket is required")
 
-    summary_id = payload.summary_id
+    summary_id = _normalize_optional_uuid(payload.summary_id, "summary_id")
     section = payload.section.strip() if payload.section else ""
 
     db = SessionLocal()
@@ -2174,6 +2472,223 @@ async def approve_ctd_section_summary(
         "status": updated.get("status"),
         "summary_text": updated.get("summary_text"),
         "final_text": updated.get("final_text"),
+    }
+
+
+@ncd_router.post("/assets/tabulated")
+async def create_ctd_tabulated_summary(
+    payload: CTDTabulatedSummaryRequest,
+) -> Dict[str, Any]:
+    section = payload.section.strip()
+    if not section:
+        raise HTTPException(status_code=400, detail="section is required")
+    if not section.startswith("2.6"):
+        raise HTTPException(status_code=400, detail="section must start with 2.6")
+    _require_uuid(payload.tenant_id, "tenant_id")
+    _require_uuid(payload.project_id, "project_id")
+    if not payload.bucket:
+        raise HTTPException(status_code=400, detail="bucket is required")
+
+    db = SessionLocal()
+    repo = NCDRepository(session=db)
+    try:
+        use_llm = payload.use_llm if payload.use_llm is not None else True
+        context = _build_tabulated_context(
+            db,
+            section=section,
+            tenant_id=payload.tenant_id,
+            project_id=payload.project_id,
+            bucket=payload.bucket,
+        )
+        table_specs = context.get("table_specs") or []
+        if not table_specs:
+            raise HTTPException(status_code=404, detail="No tabulated template entries found")
+
+        previous_tabulated_id = _normalize_optional_uuid(
+            payload.previous_tabulated_id,
+            "previous_tabulated_id",
+        )
+        previous_tables: Optional[Dict[str, Any]] = None
+        previous_embedding: Any = None
+        if payload.user_comment or previous_tabulated_id:
+            if previous_tabulated_id:
+                previous = repo.fetch_ctd_tabulated_summary(summary_id=previous_tabulated_id)
+            else:
+                previous = repo.fetch_latest_ctd_tabulated_summary(
+                    tenant_id=payload.tenant_id,
+                    project_id=payload.project_id,
+                    bucket=payload.bucket,
+                    section_number=section,
+                )
+            if not previous:
+                detail = (
+                    "Previous tabulated summary not found for user_comment"
+                    if payload.user_comment
+                    else "Previous tabulated summary not found"
+                )
+                raise HTTPException(status_code=404, detail=detail)
+            if (
+                str(previous.get("tenant_id")) != payload.tenant_id
+                or str(previous.get("project_id")) != payload.project_id
+                or str(previous.get("bucket")) != payload.bucket
+            ):
+                raise HTTPException(status_code=404, detail="Previous tabulated summary not found")
+            previous_tabulated_id = str(previous.get("id"))
+            previous_tables = _normalize_json_dict(previous.get("table_payload"))
+            previous_embedding = previous.get("embedding")
+
+        llm_model_name: Optional[str] = None
+        if not use_llm:
+            tables = []
+            if previous_tables:
+                tables = previous_tables.get("tables") if isinstance(previous_tables, dict) else []
+            if not isinstance(tables, list):
+                tables = []
+            merged_tables = _merge_tabulated_tables(table_specs, tables)
+            for spec, table in zip(table_specs, merged_tables):
+                if table.get("notes"):
+                    continue
+                notes: List[str] = []
+                description = spec.get("table_description")
+                row_content = spec.get("row_content")
+                if description:
+                    notes.append(str(description))
+                if row_content:
+                    notes.append(str(row_content))
+                if payload.user_prompt:
+                    notes.append(f"User prompt: {payload.user_prompt}")
+                if payload.user_comment:
+                    notes.append(f"User comment: {payload.user_comment}")
+                if notes:
+                    table["notes"] = " ".join(note.strip() for note in notes if note.strip())
+            llm_model_name = "template-only"
+        else:
+            system_prompt, user_prompt = _build_tabulated_prompt(
+                section=section,
+                context=context,
+                user_prompt=payload.user_prompt,
+                user_comment=payload.user_comment,
+                previous_tables=previous_tables,
+                previous_embedding=previous_embedding,
+            )
+            llm = LLMClient()
+            llm_model_name = llm.model_name
+            try:
+                response = llm.extract_json(system_prompt, user_prompt)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to generate tabulated summary: {exc}",
+                ) from exc
+
+            tables = response.get("tables") if isinstance(response, dict) else []
+            if not isinstance(tables, list):
+                tables = []
+            merged_tables = _merge_tabulated_tables(table_specs, tables)
+        table_payload = {
+            "section": section,
+            "tables": merged_tables,
+        }
+
+        embedding = _generate_embedding(json.dumps(table_payload, ensure_ascii=True))
+        try:
+            summary_id = repo.insert_ctd_tabulated_summary(
+                record=CTDTabulatedSummaryRecord(
+                    tenant_id=payload.tenant_id,
+                    project_id=payload.project_id,
+                    bucket=payload.bucket,
+                    section_number=section,
+                    table_payload=table_payload,
+                    status="draft",
+                    user_prompt=payload.user_prompt,
+                    user_comment=payload.user_comment,
+                    previous_id=previous_tabulated_id,
+                    model_name=llm_model_name,
+                    embedding=embedding,
+                )
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to store tabulated summary: {exc}",
+            ) from exc
+    finally:
+        db.close()
+
+    return {
+        "tabulated_id": summary_id,
+        "section": section,
+        "status": "draft",
+        "tables": merged_tables,
+        "context": {
+            "table_specs": table_specs,
+            "table_assets": context.get("table_assets") or [],
+            "section_sources": context.get("section_sources") or [],
+            "module4_sections": context.get("module4_sections") or [],
+            "mapping": context.get("mapping") or [],
+        },
+        "previous_tabulated_id": previous_tabulated_id,
+    }
+
+
+@ncd_router.post("/assets/tabulated/approve")
+async def approve_ctd_tabulated_summary(
+    payload: CTDTabulatedSummaryApproveRequest,
+) -> Dict[str, Any]:
+    if not payload.final_payload:
+        raise HTTPException(status_code=400, detail="final_payload is required")
+    _require_uuid(payload.tenant_id, "tenant_id")
+    _require_uuid(payload.project_id, "project_id")
+    if not payload.bucket:
+        raise HTTPException(status_code=400, detail="bucket is required")
+
+    summary_id = _normalize_optional_uuid(payload.summary_id, "summary_id")
+    section = payload.section.strip() if payload.section else ""
+
+    db = SessionLocal()
+    repo = NCDRepository(session=db)
+    try:
+        if summary_id:
+            existing = repo.fetch_ctd_tabulated_summary(summary_id=summary_id)
+        else:
+            if not section:
+                raise HTTPException(
+                    status_code=400,
+                    detail="summary_id or section is required",
+                )
+            existing = repo.fetch_latest_ctd_tabulated_summary(
+                tenant_id=payload.tenant_id,
+                project_id=payload.project_id,
+                bucket=payload.bucket,
+                section_number=section,
+                status="draft",
+            )
+            summary_id = str(existing.get("id")) if existing else None
+
+        if not existing or not summary_id:
+            raise HTTPException(status_code=404, detail="Tabulated summary not found")
+        if (
+            str(existing.get("tenant_id")) != payload.tenant_id
+            or str(existing.get("project_id")) != payload.project_id
+            or str(existing.get("bucket")) != payload.bucket
+        ):
+            raise HTTPException(status_code=404, detail="Tabulated summary not found")
+
+        updated = repo.approve_ctd_tabulated_summary(
+            summary_id=summary_id,
+            final_payload=payload.final_payload,
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Tabulated summary not found")
+    finally:
+        db.close()
+
+    return {
+        "tabulated_id": summary_id,
+        "section": updated.get("section_number"),
+        "status": updated.get("status"),
+        "table_payload": updated.get("table_payload"),
+        "final_payload": updated.get("final_payload"),
     }
 
 
