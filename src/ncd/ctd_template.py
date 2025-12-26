@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Helpers for loading IND 2.4/2.6 template entries."""
 
 from __future__ import annotations

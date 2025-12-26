@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """
 This module offers a generic date/time string parser which is able to parse
 most known formats to represent a date and/or time.

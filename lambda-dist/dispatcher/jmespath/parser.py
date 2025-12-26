@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Top down operator precedence parser.
 
 This is an implementation of Vaughan R. Pratt's

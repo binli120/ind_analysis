@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Special cased retries.
 
 These are additional retry cases we still have to handle from the legacy

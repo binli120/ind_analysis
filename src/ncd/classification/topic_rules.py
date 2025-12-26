@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 TOPIC_RULES = {
     "hepatotoxicity": ["liver", "hepat", "alt", "ast", "bilirubin"],
     "nephrotoxicity": ["kidney", "renal", "creatinine", "bun"],

@@ -1,4 +1,8 @@
-"""Tests covering placeholder IND pipeline modules and registry wiring."""
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
+"""Tests covering IND pipeline modules and registry wiring."""
 
 from __future__ import annotations
 
@@ -9,13 +13,11 @@ from typing import Any, Dict
 
 import pytest
 
-import ind_pipeline.upload_ingestion as upload_ingestion_module
 from ind_pipeline import MODULE_REGISTRY, STAGE_SEQUENCE, STAGE_SUCCESSORS
 from ind_pipeline.pdf_extraction import pdf_extraction_handler
 from ind_pipeline import pdf_extraction as pdf_extraction_module
 from ind_pipeline import zeroshot_labeling as zeroshot_module
 from ind_pipeline.zeroshot_labeling import zeroshot_handler
-from ind_pipeline.upload_ingestion import handle_message as upload_ingestion_handler
 
 
 class DummyResult:
@@ -133,59 +135,19 @@ def test_module_registry_smoke() -> None:
     expected_modules = {
         "pdf-extraction",
         "zeroshot-labeling",
-        "upload-ingestion",
         "pdf-parsing-chunking",
-        "classification-template-matching",
         "metadata-summary-extraction",
-        "embedding-indexing",
-        "reranker",
-        "module26-narrative-writers",
-        "module26-tabulators",
-        "module24-synthesizer",
-        "validation-scoring",
-        "packaging-submission",
     }
     assert expected_modules.issubset(MODULE_REGISTRY.keys())
     assert callable(MODULE_REGISTRY["pdf-extraction"].entrypoint)
 
 
 def test_stage_sequence_consistency() -> None:
-    assert STAGE_SEQUENCE[0] == "upload-ingestion"
+    assert STAGE_SEQUENCE[0] == "pdf-extraction"
     for stage, successors in STAGE_SUCCESSORS.items():
         assert stage in STAGE_SEQUENCE
         for successor in successors:
             assert successor in STAGE_SEQUENCE
-
-
-def test_upload_ingestion_placeholder_handler() -> None:
-    payload = {"file_id": "abc123", "metadata": {"s3_uri": "s3://bucket/key"}}
-    result = upload_ingestion_handler(payload)
-
-    assert result["stage"] == "upload-ingestion"
-    assert result["status"] == "completed"
-    assert result["received_keys"] == ["file_id", "metadata"]
-    assert "notes" in result
-
-
-def test_upload_ingestion_publishes_next_topic(monkeypatch: pytest.MonkeyPatch) -> None:
-    topic_arn = "arn:aws:sns:us-east-1:123456789012:pdf-parsing"
-    monkeypatch.setenv("UPLOAD_INGESTION_NEXT_TOPIC_ARN", topic_arn)
-
-    published: list[Dict[str, Any]] = []
-
-    class FakeSNS:
-        def publish(self, TopicArn: str, Message: str) -> None:
-            published.append({"topic": TopicArn, "message": json.loads(Message)})
-
-    monkeypatch.setattr(upload_ingestion_module._MODULE, "_sns", FakeSNS())
-
-    payload = {"file_id": "abc123"}
-    upload_ingestion_handler(payload)
-
-    assert published
-    assert published[0]["topic"] == topic_arn
-    assert published[0]["message"]["stage"] == "upload-ingestion"
-    assert published[0]["message"]["input"]["file_id"] == "abc123"
 
 
 def test_pdf_extraction_publishes_next_topic(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

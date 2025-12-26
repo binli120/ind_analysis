@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Image extraction helpers for PDF processing."""
 
 # @author: Bin Lee

@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Embedding store integrations for Supabase/pgvector and OpenAI generation."""
 
 from __future__ import annotations

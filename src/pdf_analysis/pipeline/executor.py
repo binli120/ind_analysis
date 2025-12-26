@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Helpers for running pipeline jobs concurrently across multiple PDFs."""
 
 from __future__ import annotations

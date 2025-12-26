@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Quality scoring and issue detection for extracted documents."""
 
 # @author: Bin Lee

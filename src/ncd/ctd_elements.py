@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Build CTD 2.4 element references from template + Module 4 data."""
 
 from __future__ import annotations

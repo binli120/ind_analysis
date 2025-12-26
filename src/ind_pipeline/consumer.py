@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """
 Reusable SNS/SQS consumer foundation for independent pipeline modules.
 

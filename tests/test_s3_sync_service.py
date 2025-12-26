@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Tests for S3 to Redis sync service and its supporting utilities."""
 
 # author: Bin Lee

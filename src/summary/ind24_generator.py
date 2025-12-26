@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """End-to-end helper for generating IND Section 2.4 from Section 2.6 inputs."""
 
 from __future__ import annotations

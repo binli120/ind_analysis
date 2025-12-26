@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """CLI helper that mirrors S3 extracts into Redis (and optional AI metadata)."""
 
 # author: Bin Lee

@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """
 Ready-to-use LangChain chains for study segmentation, NOAEL, and PK extraction.
 

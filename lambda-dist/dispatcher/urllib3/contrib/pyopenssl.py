@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """
 Module for using pyOpenSSL as a TLS backend. This module was relevant before
 the standard library ``ssl`` module supported SNI, but now that we've dropped

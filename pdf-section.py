@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 from pathlib import Path
 
 from ncd.ingestion.section_detector import extract_section_spans

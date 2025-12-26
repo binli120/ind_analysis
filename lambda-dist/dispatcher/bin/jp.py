@@ -1,4 +1,8 @@
 #!/Users/blee/Library/Caches/pypoetry/virtualenvs/pdf-analysis-PFqLEeOx-py3.13/bin/python
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 
 import sys
 import json

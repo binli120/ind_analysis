@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Exports for markdown/html composition helpers."""
 
 # @author: Bin Lee

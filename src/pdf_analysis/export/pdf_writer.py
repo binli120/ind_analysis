@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Best-effort conversion from markdown text back into a PDF draft."""
 
 # @author: Bin Lee

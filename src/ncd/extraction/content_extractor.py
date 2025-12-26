@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """LLM helpers for contextual content extraction."""
 
 # @author: Bin Lee

@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """
 Python HTTP library with thread-safe connection pooling, file post support, user friendly, and more
 """

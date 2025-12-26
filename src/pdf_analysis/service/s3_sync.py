@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Services for mirroring S3 PDF extracts into Redis (and optional metadata stores)."""
 
 # author: Bin Lee

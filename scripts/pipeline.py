@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Standalone entry point for invoking the PDF processing pipeline."""
 
 # author: Bin Lee

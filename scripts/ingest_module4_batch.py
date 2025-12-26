@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """
 Batch runner to ingest Module 4 PDFs from S3 into the NCD database.
 

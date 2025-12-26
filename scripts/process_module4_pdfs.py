@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Batch runner to pull Module 4 PDFs from S3, extract tables/images/text, and emit per-PDF folders."""
 
 from __future__ import annotations

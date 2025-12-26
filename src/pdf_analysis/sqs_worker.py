@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """
 SQS worker: downloads PDF from S3, writes documents/document_versions,
 extracts content, persists to DB, uploads markdown/quality artifacts,

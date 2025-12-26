@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """add nonclinical dictionary tables
 
 Revision ID: 9cab72396f00

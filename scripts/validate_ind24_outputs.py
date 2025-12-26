@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Validate IND 2.4 generation outputs (gap analysis and summary)."""
 
 from __future__ import annotations

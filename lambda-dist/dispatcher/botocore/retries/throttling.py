@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 from collections import namedtuple
 
 CubicParams = namedtuple('CubicParams', ['w_max', 'k', 'last_fail'])

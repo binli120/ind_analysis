@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """PDF text extraction utilities with optional OCR fallback."""
 
 # @author: Bin Lee

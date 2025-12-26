@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """The match_hostname() function from Python 3.5, essential when using SSL."""
 
 # Note: This file is under the PSF license as the code comes from the python

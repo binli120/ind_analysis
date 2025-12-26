@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 try:
     from pydantic_settings import BaseSettings  # Pydantic v2 preferred location
 except ImportError:  # pragma: no cover - fallback for environments without pydantic-settings

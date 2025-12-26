@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """LLM-powered document summary and topic generation."""
 
 from __future__ import annotations

@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Fast extraction helpers driven by CTD template hints."""
 
 # @author: Bin Lee

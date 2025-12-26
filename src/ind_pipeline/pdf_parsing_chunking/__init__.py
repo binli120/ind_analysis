@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Stage that parses markdown into section-based chunks."""
 
 from __future__ import annotations

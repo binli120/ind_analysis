@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Tests for the Supabase embedding integration helpers."""
 
 from __future__ import annotations

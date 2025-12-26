@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """FastAPI service that powers PDF analysis, uploads, and downstream tooling."""
 
 # @author: Bin Lee

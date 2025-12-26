@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Generate Section 2.6 summaries from Section 2.4 content using section_26_generation_template.json."""
 
 from __future__ import annotations

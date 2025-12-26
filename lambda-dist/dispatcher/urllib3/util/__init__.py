@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 # For backwards compatibility, provide imports that used to be here.
 from __future__ import annotations
 

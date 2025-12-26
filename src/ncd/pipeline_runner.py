@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """
 Orchestrator to ingest a Module 4 PDF into the NCD schema and run LLM-based
 extraction (NOAEL, dose groups, exposure metrics) into the database.

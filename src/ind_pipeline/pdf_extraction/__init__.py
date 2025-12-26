@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Pipeline stage that downloads PDFs from S3, runs extraction, and publishes results."""
 
 from __future__ import annotations

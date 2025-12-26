@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Ad-hoc tool for running zero-shot IND classification from the CLI."""
 
 from __future__ import annotations

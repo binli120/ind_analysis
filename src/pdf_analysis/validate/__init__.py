@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Validation helpers for sanity-checking extraction quality."""
 
 # @author: Bin Lee

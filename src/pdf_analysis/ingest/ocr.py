@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Optional OCR fallbacks leveraging pytesseract/pdf2image."""
 
 # @author: Bin Lee

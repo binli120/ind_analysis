@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Simple build helper that installs deps and runs type/tests via Poetry."""
 
 # author: Bin Lee

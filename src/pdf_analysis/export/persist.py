@@ -1,3 +1,7 @@
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """Utility helpers for persisting extracted artefacts to disk."""
 
 # @author: Bin Lee

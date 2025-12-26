@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2025 filynai.com
+# Author: Bin Lee
+# Email: blee@filynai.com
+
 """
 This module offers a generic Easter computing method for any given year, using
 Western, Orthodox or Julian algorithms.
