@@ -69,6 +69,30 @@
       }
     },
     {
+      "name": "List Templates",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/ncd/templates?user_id={{userId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ncd",
+            "templates"
+          ],
+          "query": [
+            {
+              "key": "user_id",
+              "value": "{{userId}}"
+            }
+          ]
+        },
+        "description": "List available DOCX templates with presigned download URLs."
+      }
+    },
+    {
       "name": "Upsert Template Override",
       "request": {
         "method": "POST",

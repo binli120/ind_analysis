@@ -25,6 +25,7 @@ IND / CTD generation
 - `generate_ind26_from_24.py`: Generate Section 2.6 outputs from local Section 2.4 content.
 - `generate_ind26.py`: Load Section 2.4 markdown from S3, generate Section 2.6, write JSON/MD back to S3.
 - `generate_ctd_template_docx.py`: Build DOCX templates from the 2.4/2.6 template JSON.
+- `generate_openapi_and_postman.sh`: Generate OpenAPI JSON and a Postman collection from it.
 - `run_zero_shot_ind.py`: Zero-shot IND classification on a local PDF using OpenAI metadata labeling.
 - `validate_ind24_outputs.py`: Validate Section 2.4 summary + gap analysis JSON (local or S3).
 

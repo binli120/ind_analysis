@@ -92,6 +92,9 @@ dev_router = APIRouter(prefix="/dev", tags=["dev"])
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_TEMPLATE_BUCKET = os.getenv("IND_TEMPLATES_BUCKET", "indtemplates")
+_DEFAULT_TEMPLATE_PREFIXES = ("2.4/", "2.6/")
+
 
 def _table_to_payload(
     table: Dict[str, Any], *, max_rows: Optional[int] = None
@@ -435,6 +438,53 @@ def _upload_analysis_json_to_s3(
     except Exception as exc:  # pragma: no cover - best effort
         logger.warning("Failed to upload analysis payload for %s: %s", analysis_key, exc)
     return analysis_key
+
+
+def _require_valid_user_id(db: Session, user_id: str) -> str:
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    try:
+        normalized = str(uuid.UUID(user_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="user_id must be a valid UUID") from exc
+    row = db.execute(
+        sqltext("SELECT 1 FROM users WHERE id = :uid"),
+        {"uid": normalized},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="user_id not found")
+    return normalized
+
+
+def _normalize_prefix_list(prefixes: Optional[str]) -> List[str]:
+    if not prefixes:
+        return list(_DEFAULT_TEMPLATE_PREFIXES)
+    normalized: List[str] = []
+    for raw in prefixes.split(","):
+        cleaned = raw.strip().lstrip("/")
+        if not cleaned:
+            continue
+        if not cleaned.endswith("/"):
+            cleaned = f"{cleaned}/"
+        normalized.append(cleaned)
+    return normalized or list(_DEFAULT_TEMPLATE_PREFIXES)
+
+
+def _list_template_objects(
+    s3_client: Any,
+    bucket: str,
+    prefixes: Sequence[str],
+) -> List[Dict[str, Any]]:
+    paginator = s3_client.get_paginator("list_objects_v2")
+    objects: Dict[str, Dict[str, Any]] = {}
+    for prefix in prefixes:
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj.get("Key")
+                if not key or not key.lower().endswith(".docx"):
+                    continue
+                objects[key] = obj
+    return [objects[key] for key in sorted(objects.keys())]
 
 
 # ---------------------------------------------------------------------------
@@ -1360,6 +1410,71 @@ async def get_template_sections(section: str, user_id: Optional[str] = None) -> 
             matches = merged
 
     return {"section": target, "entries": matches}
+
+
+@ncd_router.get("/templates")
+async def list_template_downloads(
+    user_id: str,
+    bucket: Optional[str] = None,
+    prefixes: Optional[str] = None,
+    expires_in: int = 3600,
+    aws_region: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Return downloadable DOCX template URLs for the configured templates bucket.
+    """
+    db = SessionLocal()
+    try:
+        user_id = _require_valid_user_id(db, user_id)
+    finally:
+        db.close()
+
+    target_bucket = bucket or _DEFAULT_TEMPLATE_BUCKET
+    if not target_bucket:
+        raise HTTPException(status_code=400, detail="bucket is required")
+
+    if expires_in <= 0:
+        raise HTTPException(status_code=400, detail="expires_in must be positive")
+
+    s3_client = boto3.client("s3", region_name=aws_region)
+    prefix_list = _normalize_prefix_list(prefixes)
+    objects = _list_template_objects(s3_client, target_bucket, prefix_list)
+
+    templates: List[Dict[str, Any]] = []
+    for obj in objects:
+        key = obj.get("Key")
+        if not key:
+            continue
+        try:
+            download_url = s3_client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": target_bucket, "Key": key},
+                ExpiresIn=expires_in,
+            )
+        except Exception as exc:  # pragma: no cover - network or auth errors
+            logger.warning("Failed to presign s3://%s/%s: %s", target_bucket, key, exc)
+            download_url = None
+        last_modified = obj.get("LastModified")
+        templates.append(
+            {
+                "name": Path(key).name,
+                "s3_bucket": target_bucket,
+                "s3_key": key,
+                "s3_uri": f"s3://{target_bucket}/{key}",
+                "download_url": download_url,
+                "size_bytes": obj.get("Size"),
+                "last_modified": last_modified.isoformat() if isinstance(last_modified, datetime) else None,
+            }
+        )
+
+    return {
+        "user_id": user_id,
+        "bucket": target_bucket,
+        "prefixes": prefix_list,
+        "expires_in": expires_in,
+        "count": len(templates),
+        "templates": templates,
+    }
 
 
 @ncd_router.get("/ctd/2.4/element")
