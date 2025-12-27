@@ -409,6 +409,8 @@ Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and r
   - `--skip-install` or `--skip-tests` bypass individual stages for faster iteration.
   - The script attempts `mypy` first (warnings are logged but do not stop the build) and finishes with `pytest` unless skipped.
 
+- Unit test documentation: see `docs/UNIT_TESTS.md`.
+
 - run test
 
   ```shell
