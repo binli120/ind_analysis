@@ -20,8 +20,14 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional
 
-import boto3
-from botocore.exceptions import ClientError
+try:
+    import boto3
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    boto3 = None  # type: ignore[assignment]
+try:
+    from botocore.exceptions import ClientError
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    ClientError = Exception  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -68,12 +74,14 @@ class NotificationConsumer:
             raise ValueError("ModuleConfig.topic_arn is required")
         if not config.queue_name:
             raise ValueError("ModuleConfig.queue_name is required")
+        if boto3 is None and (sqs_resource is None or sns_client is None):
+            raise RuntimeError("boto3 is required to construct SQS/SNS clients.")
 
         self.config = config
         self._handler = handler
         self._parser = parser or (lambda payload: payload)
-        self._sqs = sqs_resource or boto3.resource("sqs")
-        self._sns = sns_client or boto3.client("sns")
+        self._sqs = sqs_resource or boto3.resource("sqs")  # type: ignore[union-attr]
+        self._sns = sns_client or boto3.client("sns")  # type: ignore[union-attr]
         self._queue_url: Optional[str] = None
 
     # ------------------------------------------------------------------

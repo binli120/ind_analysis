@@ -22,8 +22,14 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
 from urllib.parse import urlencode
 import uuid
 
-import boto3
-from botocore.exceptions import ClientError
+try:
+    import boto3
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    boto3 = None  # type: ignore[assignment]
+try:
+    from botocore.exceptions import ClientError
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    ClientError = Exception  # type: ignore[assignment]
 import pandas as pd
 from fastapi import APIRouter, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
@@ -439,6 +445,18 @@ def _upload_analysis_json_to_s3(
     except Exception as exc:  # pragma: no cover - best effort
         logger.warning("Failed to upload analysis payload for %s: %s", analysis_key, exc)
     return analysis_key
+
+
+def _boto3_client(service: str, region_name: Optional[str] = None) -> Any:
+    try:
+        import importlib
+        boto3_module = importlib.import_module("boto3")
+    except ModuleNotFoundError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="boto3 is required for S3 operations",
+        ) from exc
+    return boto3_module.client(service, region_name=region_name)
 
 
 def _require_valid_user_id(db: Session, user_id: str) -> str:
@@ -960,7 +978,7 @@ def _process_pdf_and_store_analysis(
     except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
         raise RuntimeError("boto3 is required for S3 operations. Install the 'infra' extras.") from exc
 
-    s3_client = boto3.client("s3", region_name=aws_region)
+    s3_client = _boto3_client("s3", region_name=aws_region)
 
     try:
         analysis_result = _run_pipeline_with_runner(
@@ -1061,7 +1079,7 @@ async def label_s3_pdf(payload: NCDLabelRequest) -> Dict[str, Any]:
     page_limit = payload.page_limit if payload.page_limit and payload.page_limit > 0 else 5
 
     def worker() -> Dict[str, Any]:
-        s3_client = boto3.client("s3", region_name=payload.aws_region)
+        s3_client = _boto3_client("s3", region_name=payload.aws_region)
         with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp_path = Path(tmp.name)
         try:
@@ -1198,7 +1216,7 @@ async def relabel_s3_pdf(payload: NCDRelabelRequest) -> Dict[str, Any]:
 
     dest_key = "/".join(key_parts + [Path(payload.key).name])
 
-    s3_client = boto3.client("s3", region_name=payload.aws_region)
+    s3_client = _boto3_client("s3", region_name=payload.aws_region)
     copy_source: Dict[str, Any] = {"Bucket": bucket, "Key": payload.key}
 
     try:
@@ -1443,7 +1461,7 @@ async def list_template_downloads(
     if expires_in <= 0:
         raise HTTPException(status_code=400, detail="expires_in must be positive")
 
-    s3_client = boto3.client("s3", region_name=aws_region)
+    s3_client = _boto3_client("s3", region_name=aws_region)
     prefix_list = _normalize_prefix_list(prefixes)
     objects = _list_template_objects(s3_client, target_bucket, prefix_list)
 
@@ -1609,7 +1627,7 @@ async def get_ctd_section_materials(
     finally:
         db.close()
 
-    s3_client = boto3.client("s3")
+    s3_client = _boto3_client("s3")
     markdown_cache: Dict[str, Optional[str]] = {}
     response_sources: List[Dict[str, Any]] = []
 
@@ -2087,7 +2105,7 @@ def _build_tabulated_context(
         asset_type="table",
     )
 
-    s3_client = boto3.client("s3")
+    s3_client = _boto3_client("s3")
     table_assets: List[Dict[str, Any]] = []
     for row in assets[: max(0, max_tables)]:
         extra = _normalize_extra_attributes(row.get("extra_attributes"))
@@ -2954,7 +2972,7 @@ async def _analyze_s3_payload(payload: S3AnalyzeRequest) -> Dict[str, Any]:
     extra_args = {"VersionId": payload.version_id} if payload.version_id else None
 
     def worker() -> Dict[str, Any]:
-        s3_client = boto3.client("s3", region_name=payload.aws_region)
+        s3_client = _boto3_client("s3", region_name=payload.aws_region)
         with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp_path = Path(tmp.name)
             try:
@@ -3177,7 +3195,7 @@ async def upload_and_analyze_to_s3(
         key: value for key, value in metadata_context.items() if key != "path" and value
     }
 
-    s3_client = boto3.client("s3", region_name=aws_region)
+    s3_client = _boto3_client("s3", region_name=aws_region)
     try:
         with tmp_path.open("rb") as payload:
             put_response = s3_client.put_object(
@@ -3436,7 +3454,7 @@ async def fetch_s3_markdown(payload: S3MarkdownRequest) -> Dict[str, Any]:
 
     def worker() -> Dict[str, Any]:
         pipeline = PDFProcessingPipeline()
-        s3_client = boto3.client("s3", region_name=payload.aws_region)
+        s3_client = _boto3_client("s3", region_name=payload.aws_region)
         with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp_path = Path(tmp.name)
             try:
@@ -3519,7 +3537,7 @@ async def fetch_s3_markdown_with_summary(payload: S3MarkdownRequest) -> Dict[str
 
     def worker() -> Dict[str, Any]:
         pipeline = PDFProcessingPipeline()
-        s3_client = boto3.client("s3", region_name=payload.aws_region)
+        s3_client = _boto3_client("s3", region_name=payload.aws_region)
         with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp_path = Path(tmp.name)
             try:
@@ -3615,7 +3633,7 @@ async def save_s3_markdown(payload: S3MarkdownUploadRequest) -> Dict[str, Any]:
         tagging = urlencode(payload.tags)
 
     def worker() -> Dict[str, Any]:
-        s3_client = boto3.client("s3", region_name=payload.aws_region)
+        s3_client = _boto3_client("s3", region_name=payload.aws_region)
         kwargs: Dict[str, Any] = {
             "Bucket": payload.bucket,
             "Key": key,
@@ -3672,7 +3690,7 @@ async def get_s3_analysis_status(
     analysis_key = _analysis_json_key(key)
 
     def worker() -> Dict[str, Any]:
-        s3_client = boto3.client("s3", region_name=aws_region)
+        s3_client = _boto3_client("s3", region_name=aws_region)
         try:
             head = s3_client.head_object(Bucket=bucket, Key=analysis_key)
         except ClientError as exc:
@@ -3722,7 +3740,7 @@ async def get_s3_analysis_result(
     analysis_key = _analysis_json_key(key)
 
     def worker() -> Dict[str, Any]:
-        s3_client = boto3.client("s3", region_name=aws_region)
+        s3_client = _boto3_client("s3", region_name=aws_region)
         try:
             response = s3_client.get_object(Bucket=bucket, Key=analysis_key)
         except ClientError as exc:

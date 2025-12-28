@@ -14,7 +14,10 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Protocol
 
-import boto3
+try:
+    import boto3
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    boto3 = None  # type: ignore[assignment]
 
 DEFAULT_TEMPLATE_PATH = (
     Path(__file__).resolve().parents[2] / "config" / "s3_folder_templates.json"
@@ -58,6 +61,8 @@ def create_new_project(
     bucket: str, root_prefix: str, project_name: str, template_file: Path
 ) -> None:
     """Create a new project folder in S3 using the template."""
+    if boto3 is None:
+        raise RuntimeError("boto3 is required to create project folders in S3.")
     s3 = boto3.client("s3")
     structure = load_template(template_file)
     base_prefix = f"{root_prefix.rstrip('/')}/{project_name}/"

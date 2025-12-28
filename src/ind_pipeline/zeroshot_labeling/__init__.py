@@ -11,8 +11,14 @@ import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-import boto3
-from botocore.exceptions import ClientError
+try:
+    import boto3
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    boto3 = None  # type: ignore[assignment]
+try:
+    from botocore.exceptions import ClientError
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    ClientError = Exception  # type: ignore[assignment]
 
 from ind_pipeline.consumer import ModuleConfig, NotificationConsumer
 from ind_pipeline.registry import ModuleDescriptor, register_module
@@ -23,9 +29,27 @@ logger = logging.getLogger(__name__)
 
 MODULE_NAME = "zeroshot-labeling"
 
-_s3_client = boto3.client("s3")
 _generator: Optional[OpenAIMetadataGenerator] = None
-_sns_client = boto3.client("sns")
+_s3_client: Any | None = None
+_sns_client: Any | None = None
+
+
+def _get_s3_client() -> Any:
+    global _s3_client
+    if _s3_client is None:
+        if boto3 is None:
+            raise RuntimeError("boto3 is required to access S3.")
+        _s3_client = boto3.client("s3")
+    return _s3_client
+
+
+def _get_sns_client() -> Any:
+    global _sns_client
+    if _sns_client is None:
+        if boto3 is None:
+            raise RuntimeError("boto3 is required to publish SNS messages.")
+        _sns_client = boto3.client("sns")
+    return _sns_client
 
 
 def _resolve_env(name: str, default: Optional[str] = None) -> str:
@@ -53,7 +77,7 @@ def _load_analysis_document(analysis_s3_uri: str) -> Tuple[Dict[str, Any], str, 
     """Fetch and parse the analysis JSON produced by the extraction module."""
     bucket, key = parse_s3_uri(analysis_s3_uri)
     try:
-        response = _s3_client.get_object(Bucket=bucket, Key=key)
+        response = _get_s3_client().get_object(Bucket=bucket, Key=key)
     except ClientError as exc:
         raise RuntimeError(f"Failed to download analysis document {analysis_s3_uri}: {exc}") from exc
     body = response["Body"].read()
@@ -68,7 +92,7 @@ def _store_metadata(bucket: str, object_key: str, document: Dict[str, Any]) -> s
     """Write the classification metadata JSON back to S3."""
     metadata_key = build_metadata_key(object_key, "classification.json")
     try:
-        _s3_client.put_object(
+        _get_s3_client().put_object(
             Bucket=bucket,
             Key=metadata_key,
             Body=json.dumps(document).encode("utf-8"),
@@ -114,7 +138,7 @@ def _publish_next_events(request_payload: Dict[str, Any], result_payload: Dict[s
 
     for topic in topics:
         try:
-            _sns_client.publish(TopicArn=topic, Message=message)
+            _get_sns_client().publish(TopicArn=topic, Message=message)
             logger.info("[%s] published downstream event to %s", MODULE_NAME, topic)
         except ClientError as exc:  # pragma: no cover - network failure
             logger.warning("[%s] failed to publish downstream event to %s: %s", MODULE_NAME, topic, exc)

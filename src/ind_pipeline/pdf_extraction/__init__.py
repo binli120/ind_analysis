@@ -14,8 +14,14 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import boto3
-from botocore.exceptions import ClientError
+try:
+    import boto3
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    boto3 = None  # type: ignore[assignment]
+try:
+    from botocore.exceptions import ClientError
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    ClientError = Exception  # type: ignore[assignment]
 
 from ind_pipeline.consumer import ModuleConfig, NotificationConsumer
 from ind_pipeline.registry import ModuleDescriptor, register_module
@@ -26,8 +32,26 @@ logger = logging.getLogger(__name__)
 
 MODULE_NAME = "pdf-extraction"
 
-_s3_client = boto3.client("s3")
-_sns_client = boto3.client("sns")
+_s3_client: Any | None = None
+_sns_client: Any | None = None
+
+
+def _get_s3_client() -> Any:
+    global _s3_client
+    if _s3_client is None:
+        if boto3 is None:
+            raise RuntimeError("boto3 is required to access S3.")
+        _s3_client = boto3.client("s3")
+    return _s3_client
+
+
+def _get_sns_client() -> Any:
+    global _sns_client
+    if _sns_client is None:
+        if boto3 is None:
+            raise RuntimeError("boto3 is required to publish SNS messages.")
+        _sns_client = boto3.client("sns")
+    return _sns_client
 
 
 def _resolve_env(name: str, default: Optional[str] = None) -> str:
@@ -63,10 +87,11 @@ def _download_pdf(bucket: str, key: str, version_id: Optional[str]) -> Path:
         tmp_path = Path(tmp.name)
     extra_args = {"VersionId": version_id} if version_id else None
     try:
+        s3_client = _get_s3_client()
         if extra_args:
-            _s3_client.download_file(bucket, key, str(tmp_path), ExtraArgs=extra_args)
+            s3_client.download_file(bucket, key, str(tmp_path), ExtraArgs=extra_args)
         else:
-            _s3_client.download_file(bucket, key, str(tmp_path))
+            s3_client.download_file(bucket, key, str(tmp_path))
     except ClientError as exc:
         tmp_path.unlink(missing_ok=True)
         raise RuntimeError(f"Failed to download s3://{bucket}/{key}: {exc}") from exc
@@ -77,7 +102,7 @@ def _store_analysis(bucket: str, key: str, document: Dict[str, Any]) -> str:
     """Persist the analysis JSON next to the source document and return its key."""
     analysis_key = build_analysis_key(key, "analysis.json")
     try:
-        _s3_client.put_object(
+        _get_s3_client().put_object(
             Bucket=bucket,
             Key=analysis_key,
             Body=json.dumps(document).encode("utf-8"),
@@ -129,7 +154,7 @@ def _publish_next_events(request_payload: Dict[str, Any], result_payload: Dict[s
 
     for topic in topics:
         try:
-            _sns_client.publish(TopicArn=topic, Message=message)
+            _get_sns_client().publish(TopicArn=topic, Message=message)
             logger.info("[%s] published downstream event to %s", MODULE_NAME, topic)
         except ClientError as exc:  # pragma: no cover - network failure
             logger.warning("[%s] failed to publish downstream event to %s: %s", MODULE_NAME, topic, exc)

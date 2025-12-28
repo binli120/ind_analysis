@@ -15,15 +15,18 @@ import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-import boto3
+try:
+    import boto3
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    boto3 = None  # type: ignore[assignment]
 
 from src.utils.utils import _utc_now, _extract_event_time
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-dynamodb = boto3.resource("dynamodb")
-sns = boto3.client("sns")
+dynamodb: Any | None = None
+sns: Any | None = None
 
 _TABLE_NAME = os.getenv("PIPELINE_STATUS_TABLE", "")
 if not _TABLE_NAME:
@@ -83,6 +86,24 @@ def handler(event: Dict[str, Any], _context: Any | None = None) -> Dict[str, Any
     return {"status": "ok", "responses": responses}
 
 
+def _get_dynamodb_resource() -> Any:
+    global dynamodb
+    if dynamodb is None:
+        if boto3 is None:
+            raise RuntimeError("boto3 is required to access DynamoDB.")
+        dynamodb = boto3.resource("dynamodb")
+    return dynamodb
+
+
+def _get_sns_client() -> Any:
+    global sns
+    if sns is None:
+        if boto3 is None:
+            raise RuntimeError("boto3 is required to publish SNS messages.")
+        sns = boto3.client("sns")
+    return sns
+
+
 def _handle_s3_record(record: Dict[str, Any]) -> Dict[str, Any]:
     """Persist ingest metadata for a new S3 object and send a completion notice."""
     s3_info = record.get("s3", {})
@@ -139,7 +160,7 @@ def _handle_s3_record(record: Dict[str, Any]) -> Dict[str, Any]:
     if not _COMPLETION_TOPIC_ARN:
         logger.warning("INGEST_COMPLETED_TOPIC_ARN not set; skipping SNS publish.")
     else:
-        sns.publish(
+        _get_sns_client().publish(
             TopicArn=_COMPLETION_TOPIC_ARN,
             Message=json.dumps(payload),
         )
@@ -212,7 +233,7 @@ def _get_table():
     """Return the configured DynamoDB table resource."""
     if not _TABLE_NAME:
         raise RuntimeError("PIPELINE_STATUS_TABLE environment variable is required")
-    return dynamodb.Table(_TABLE_NAME)
+    return _get_dynamodb_resource().Table(_TABLE_NAME)
 
 
 def _is_allowed_extension(key: str) -> bool:

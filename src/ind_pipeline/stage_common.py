@@ -12,7 +12,10 @@ import os
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
-import boto3
+try:
+    import boto3
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    boto3 = None  # type: ignore[assignment]
 
 from ind_pipeline.consumer import ModuleConfig, NotificationConsumer
 from ind_pipeline.registry import ModuleDescriptor, register_module
@@ -46,7 +49,12 @@ class SimpleStageModule:
         self.spec = spec
         self._work_fn = work_fn
         self._stage_key = stage_key or spec.module_name
-        self._sns = sns_client or boto3.client("sns")
+        if sns_client is not None:
+            self._sns = sns_client
+        elif boto3 is not None:
+            self._sns = boto3.client("sns")
+        else:
+            self._sns = None
         register_module(
             ModuleDescriptor(
                 name=spec.module_name,
@@ -78,6 +86,8 @@ class SimpleStageModule:
 
     # ------------------------------------------------------------------
     def run(self) -> None:
+        if boto3 is None:
+            raise RuntimeError("boto3 is required to run pipeline stages.")
         consumer = NotificationConsumer(self._build_config(), self.handler)
         consumer.run()
 
@@ -128,6 +138,12 @@ class SimpleStageModule:
     def _publish_next_events(self, payload: Dict[str, object], result: Dict[str, object]) -> None:
         topics = list(self._iter_next_topics())
         if not topics:
+            return
+        if self._sns is None:
+            logger.warning(
+                "[%s] boto3 is not available; skipping downstream SNS publish.",
+                self.spec.module_name,
+            )
             return
 
         message_payload = {

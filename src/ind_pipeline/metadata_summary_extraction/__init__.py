@@ -11,7 +11,10 @@ import logging
 import os
 from typing import Any, Dict, List, Optional, Sequence
 
-import boto3
+try:
+    import boto3
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    boto3 = None  # type: ignore[assignment]
 
 from ind_pipeline.utils import parse_s3_uri
 from ncd.database.db import SessionLocal
@@ -22,7 +25,7 @@ from sqlalchemy import text as sqltext
 from ind_pipeline.stage_common import SimpleStageModule, StageModuleSpec
 
 logger = logging.getLogger(__name__)
-_s3_client = boto3.client("s3")
+_s3_client: Any | None = None
 _SUMMARY_PURPOSE = os.getenv("SECTION_SUMMARY_PURPOSE", "ctd_2_6")
 _SUMMARY_TYPE = os.getenv("SECTION_SUMMARY_TYPE", "abstractive")
 _MIN_KEYWORDS = int(os.getenv("SECTION_SUMMARY_KEYWORDS_MIN", "5"))
@@ -104,7 +107,7 @@ def _resolve_markdown(payload: Dict[str, object]) -> Optional[str]:
 def _load_markdown_from_analysis(s3_uri: str) -> Optional[str]:
     try:
         bucket, key = parse_s3_uri(s3_uri)
-        obj = _s3_client.get_object(Bucket=bucket, Key=key)
+        obj = _get_s3_client().get_object(Bucket=bucket, Key=key)
         analysis = json.loads(obj["Body"].read().decode("utf-8"))
         markdown = analysis.get("markdown")
         if isinstance(markdown, str):
@@ -117,7 +120,7 @@ def _load_markdown_from_analysis(s3_uri: str) -> Optional[str]:
 def _load_markdown_from_s3(s3_uri: str) -> Optional[str]:
     try:
         bucket, key = parse_s3_uri(s3_uri)
-        obj = _s3_client.get_object(Bucket=bucket, Key=key)
+        obj = _get_s3_client().get_object(Bucket=bucket, Key=key)
         return obj["Body"].read().decode("utf-8")
     except Exception as exc:  # pragma: no cover - network failure
         logger.warning("Failed to load markdown from %s: %s", s3_uri, exc)
@@ -534,3 +537,10 @@ def run() -> None:
 
 
 __all__ = ["handle_message", "run"]
+def _get_s3_client() -> Any:
+    global _s3_client
+    if _s3_client is None:
+        if boto3 is None:
+            raise RuntimeError("boto3 is required to access S3.")
+        _s3_client = boto3.client("s3")
+    return _s3_client
