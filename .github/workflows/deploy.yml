@@ -113,7 +113,7 @@ jobs:
           jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)' task-definition.json > task-definition-stripped.json
           jq --arg IMAGE "$IMAGE_URI" --arg NAME "$ECS_CONTAINER_NAME" '
             .containerDefinitions = (.containerDefinitions | map(
-              if .name == $NAME then .image = $IMAGE | . else .
+              if .name == $NAME then (.image = $IMAGE) else . end
             ))
           ' task-definition-stripped.json > task-definition-updated.json
 
