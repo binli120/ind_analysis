@@ -43,6 +43,7 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
+    environment: dev
     needs: test
     if: >
       github.event_name != 'pull_request' &&
@@ -81,6 +82,9 @@ jobs:
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Set ECR registry
+        run: echo "ECR_REGISTRY=${{ steps.ecr-login.outputs.registry }}" >> "$GITHUB_ENV"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -92,7 +96,7 @@ jobs:
           push: true
           # Build for ECS-compatible architecture
           platforms: linux/amd64
-          tags: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          tags: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
 
       - name: Download existing task definition
         run: |
