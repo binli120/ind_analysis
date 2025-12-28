@@ -91,6 +91,11 @@ app = FastAPI(
     description="Upload a PDF study report and receive extracted content, structured tables, and quality analysis.",
     version="0.1.0",
 )
+
+
+@app.get("/health", tags=["health"])
+def health_check() -> Dict[str, str]:
+    return {"status": "ok"}
 upload_router = APIRouter(tags=["upload"])
 ncd_router = APIRouter(prefix="/ncd", tags=["ncd"])
 dev_router = APIRouter(prefix="/dev", tags=["dev"])
