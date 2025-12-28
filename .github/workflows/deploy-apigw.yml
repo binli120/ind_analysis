@@ -1,0 +1,111 @@
+name: deploy-apigw
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-apigw:
+    runs-on: ubuntu-latest
+    environment: dev
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.ref == 'refs/heads/main'
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      APIGW_API_ID: ${{ secrets.APIGW_API_ID }}
+      APIGW_STAGE: ${{ secrets.APIGW_STAGE }}
+      APIGW_INTEGRATION_BASE_URL: ${{ secrets.APIGW_INTEGRATION_BASE_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build API Gateway OpenAPI spec
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          spec_path = Path("openapi.json")
+          if not spec_path.exists():
+              raise SystemExit("openapi.json not found. Generate it before deploying.")
+
+          spec = json.loads(spec_path.read_text())
+          base_url = os.environ.get("APIGW_INTEGRATION_BASE_URL", "").rstrip("/")
+          if not base_url:
+              raise SystemExit("APIGW_INTEGRATION_BASE_URL is required.")
+
+          spec["openapi"] = "3.0.1"
+
+          for path, methods in spec.get("paths", {}).items():
+              for method, operation in list(methods.items()):
+                  if method.startswith("x-"):
+                      continue
+                  operation["x-amazon-apigateway-integration"] = {
+                      "type": "http_proxy",
+                      "httpMethod": "ANY",
+                      "payloadFormatVersion": "1.0",
+                      "connectionType": "INTERNET",
+                      "uri": f"{base_url}{path}",
+                  }
+
+          output_path = Path("build/apigw-openapi.json")
+          output_path.parent.mkdir(parents=True, exist_ok=True)
+          output_path.write_text(json.dumps(spec, indent=2))
+          print(f"Wrote {output_path}")
+          PY
+
+      - name: Import or update HTTP API
+        run: |
+          set -euo pipefail
+          SPEC="build/apigw-openapi.json"
+          if [ -n "${APIGW_API_ID:-}" ]; then
+            API_ID="$APIGW_API_ID"
+            aws apigatewayv2 reimport-api \
+              --api-id "$API_ID" \
+              --body "file://${SPEC}"
+          else
+            API_ID=$(aws apigatewayv2 import-api \
+              --body "file://${SPEC}" \
+              --query 'ApiId' \
+              --output text)
+          fi
+          echo "API_ID=${API_ID}" >> "$GITHUB_ENV"
+
+      - name: Create or update stage
+        run: |
+          set -euo pipefail
+          STAGE_NAME="${APIGW_STAGE:-dev}"
+          if aws apigatewayv2 get-stage --api-id "$API_ID" --stage-name "$STAGE_NAME" >/dev/null 2>&1; then
+            aws apigatewayv2 update-stage \
+              --api-id "$API_ID" \
+              --stage-name "$STAGE_NAME" \
+              --auto-deploy
+          else
+            aws apigatewayv2 create-stage \
+              --api-id "$API_ID" \
+              --stage-name "$STAGE_NAME" \
+              --auto-deploy
+          fi
+
+      - name: Show API endpoint
+        run: |
+          set -euo pipefail
+          aws apigatewayv2 get-api \
+            --api-id "$API_ID" \
+            --query 'ApiEndpoint' \
+            --output text
