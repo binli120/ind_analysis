@@ -14,7 +14,12 @@ from sqlalchemy.orm import Session
 
 
 _MAPPING_CACHE: List[Dict[str, Any]] | None = None
-_MAPPING_PATH = Path(__file__).resolve().parent / "mapping" / "module4_to_26_mapping_complete.json"
+def _mapping_paths() -> List[Path]:
+    base = Path(__file__).resolve().parents[1]
+    return [
+        base / "mapping" / "module4_to_26_mapping_complete.json",
+        base.parent / "summary" / "module4_to_26_mapping_complete.json",
+    ]
 
 _SECTION_TOKEN_RE = re.compile(r"(?P<token>\d+(?:\.\d+)+(?:\|\d+(?:\.\d+)+)*)")
 _MARKDOWN_TABLE_ROW_RE = re.compile(r"^\s*\|.+\|\s*$")
@@ -27,7 +32,18 @@ def load_module4_to_26_mapping() -> List[Dict[str, Any]]:
     if _MAPPING_CACHE is not None:
         return _MAPPING_CACHE
 
-    raw = json.loads(_MAPPING_PATH.read_text(encoding="utf-8"))
+    raw = None
+    attempted = []
+    for path in _mapping_paths():
+        attempted.append(str(path))
+        if not path.exists():
+            continue
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        break
+    if raw is None:
+        raise FileNotFoundError(
+            "Module 4 mapping file not found. Checked: " + ", ".join(attempted)
+        )
     mappings: List[Dict[str, Any]] = []
     for group_key in (
         "pharmacology_mappings",

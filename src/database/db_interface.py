@@ -1288,7 +1288,7 @@ class NCDRepository:
                 "project_id": record.project_id,
                 "bucket": record.bucket,
                 "section_number": record.section_number,
-                "table_payload": json.dumps(record.table_payload, ensure_ascii=True),
+                "table_payload": json.dumps(record.table_payload, ensure_ascii=False),
                 "final_payload": None,
                 "status": record.status,
                 "user_prompt": record.user_prompt,
@@ -1331,7 +1331,7 @@ class NCDRepository:
                 ),
                 {
                     "summary_id": summary_id,
-                    "final_payload": json.dumps(final_payload, ensure_ascii=True),
+                    "final_payload": json.dumps(final_payload, ensure_ascii=False),
                     "model_name": model_name,
                 },
             )

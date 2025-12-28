@@ -1740,6 +1740,126 @@ def _summary_to_text(value: Any) -> str:
     return json.dumps(value, ensure_ascii=True)
 
 
+_SECTION_PROMPT_MAX_CHARS = 24000
+
+
+def _trim_section_summary_context(context: Dict[str, Any]) -> Dict[str, Any]:
+    def _trim_sources(
+        sources: Sequence[Dict[str, Any]],
+        *,
+        limit: int,
+        max_summary_chars: int,
+    ) -> List[Dict[str, Any]]:
+        trimmed: List[Dict[str, Any]] = []
+        for row in sources[:limit]:
+            if not isinstance(row, dict):
+                continue
+            slim = dict(row)
+            slim["summary_text"] = _truncate_text(
+                str(slim.get("summary_text") or ""), max_summary_chars
+            )
+            if "summary" in slim:
+                slim["summary"] = None
+            trimmed.append(slim)
+        return trimmed
+
+    def _trim_key_sections(
+        sections: Sequence[Dict[str, Any]],
+        *,
+        limit: int,
+        max_text_chars: int,
+    ) -> List[Dict[str, Any]]:
+        trimmed: List[Dict[str, Any]] = []
+        for row in sections[:limit]:
+            if not isinstance(row, dict):
+                continue
+            slim = dict(row)
+            slim["text"] = _truncate_text(
+                str(slim.get("text") or ""), max_text_chars
+            )
+            trimmed.append(slim)
+        return trimmed
+
+    def _trim_elements(
+        elements: Sequence[Dict[str, Any]],
+        *,
+        limit: int,
+        max_summary_chars: int,
+        max_text_chars: int,
+    ) -> List[Dict[str, Any]]:
+        trimmed: List[Dict[str, Any]] = []
+        for row in elements[:limit]:
+            if not isinstance(row, dict):
+                continue
+            slim = dict(row)
+            slim["sources"] = _trim_sources(
+                slim.get("sources") or [],
+                limit=3,
+                max_summary_chars=max_summary_chars,
+            )
+            slim["key_sections"] = _trim_key_sections(
+                slim.get("key_sections") or [],
+                limit=3,
+                max_text_chars=max_text_chars,
+            )
+            trimmed.append(slim)
+        return trimmed
+
+    def _build_trimmed(
+        *,
+        source_limit: int,
+        key_limit: int,
+        element_limit: int,
+        summary_chars: int,
+        key_chars: int,
+    ) -> Dict[str, Any]:
+        trimmed = dict(context)
+        trimmed["section_sources"] = _trim_sources(
+            context.get("section_sources") or [],
+            limit=source_limit,
+            max_summary_chars=summary_chars,
+        )
+        trimmed["section_key_sections"] = _trim_key_sections(
+            context.get("section_key_sections") or [],
+            limit=key_limit,
+            max_text_chars=key_chars,
+        )
+        trimmed["elements"] = _trim_elements(
+            context.get("elements") or [],
+            limit=element_limit,
+            max_summary_chars=summary_chars,
+            max_text_chars=key_chars,
+        )
+        return trimmed
+
+    for source_limit, key_limit, element_limit, summary_chars, key_chars in (
+        (20, 20, 10, 1200, 1200),
+        (10, 10, 5, 800, 800),
+        (5, 5, 3, 600, 600),
+    ):
+        candidate = _build_trimmed(
+            source_limit=source_limit,
+            key_limit=key_limit,
+            element_limit=element_limit,
+            summary_chars=summary_chars,
+            key_chars=key_chars,
+        )
+        if (
+            len(json.dumps(candidate, ensure_ascii=True, default=str))
+            <= _SECTION_PROMPT_MAX_CHARS
+        ):
+            return candidate
+
+    minimal = dict(context)
+    minimal["section_sources"] = _trim_sources(
+        context.get("section_sources") or [],
+        limit=5,
+        max_summary_chars=400,
+    )
+    minimal["section_key_sections"] = []
+    minimal["elements"] = []
+    return minimal
+
 def _normalize_json_dict(value: Any) -> Dict[str, Any]:
     if isinstance(value, dict):
         return value
@@ -1998,7 +2118,9 @@ def _build_section_summary_prompt(
         parts.append(f"User comment:\n{user_comment}")
         parts.append("Revise the summary to address the comment.")
 
-    context_json = json.dumps(context, ensure_ascii=True, indent=2, default=str)
+    context_json = json.dumps(
+        _trim_section_summary_context(context), ensure_ascii=True, indent=2, default=str
+    )
     parts.append(f"Context data (JSON):\n{context_json}")
     return system_prompt, "\n\n".join(parts)
 
@@ -2006,7 +2128,168 @@ def _build_section_summary_prompt(
 def _parse_columns_header(value: Any) -> List[str]:
     if not isinstance(value, str):
         return []
-    return [item.strip() for item in value.split(";") if item.strip()]
+    separator = ";"
+    if ";" not in value and "|" in value:
+        separator = "|"
+    return [item.strip() for item in value.split(separator) if item.strip()]
+
+
+_STUDY_ID_RE = re.compile(
+    r"\b(?=[A-Z0-9.-]*[A-Z])(?=[A-Z0-9.-]*\d)[A-Z0-9]{2,}(?:[-.][A-Z0-9]+)+\b",
+    re.IGNORECASE,
+)
+
+
+def _extract_study_ids(text: str) -> List[str]:
+    if not text:
+        return []
+    found = []
+    for match in _STUDY_ID_RE.findall(text):
+        if match:
+            found.append(match)
+    seen = set()
+    ordered: List[str] = []
+    for value in found:
+        key = value.upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(value)
+    return ordered
+
+
+def _build_study_id_candidates(context: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    candidates: Dict[str, Dict[str, Any]] = {}
+
+    def add_candidate(study_id: str, label: str) -> None:
+        key = study_id.upper()
+        entry = candidates.setdefault(key, {"study_id": study_id, "labels": set()})
+        if label:
+            entry["labels"].add(label)
+
+    for asset in context.get("table_assets", []) or []:
+        if not isinstance(asset, dict):
+            continue
+        parts = [
+            asset.get("s3_key"),
+            asset.get("json_key"),
+            asset.get("caption"),
+            asset.get("description"),
+        ]
+        keywords = asset.get("keywords") or []
+        if isinstance(keywords, list):
+            parts.extend(str(item) for item in keywords if item)
+        blob = " ".join(str(part) for part in parts if part)
+        for study_id in _extract_study_ids(blob):
+            add_candidate(study_id, blob)
+
+    for source in context.get("section_sources", []) or []:
+        if not isinstance(source, dict):
+            continue
+        blob = " ".join(
+            str(part)
+            for part in (
+                source.get("section_title"),
+                source.get("summary_text"),
+            )
+            if part
+        )
+        for study_id in _extract_study_ids(blob):
+            add_candidate(study_id, blob)
+
+    return candidates
+
+
+def _select_study_id_from_text(
+    text: str, candidates: Dict[str, Dict[str, Any]]
+) -> Optional[str]:
+    if not text:
+        return None
+    for study_id in _extract_study_ids(text):
+        key = study_id.upper()
+        if key in candidates:
+            return candidates[key]["study_id"]
+        return study_id
+
+    best_id = None
+    best_score = 0
+    for entry in candidates.values():
+        labels = entry.get("labels") or []
+        for label in labels:
+            score = fuzz.token_set_ratio(text, label)
+            if score > best_score:
+                best_score = score
+                best_id = entry.get("study_id")
+    if best_id and best_score >= 70:
+        return best_id
+    return None
+
+
+def _normalize_tabulated_study_ids(
+    tables: Sequence[Dict[str, Any]],
+    context: Dict[str, Any],
+) -> None:
+    candidates = _build_study_id_candidates(context)
+    if not candidates:
+        return
+
+    def pick_column(columns: Sequence[str], options: Sequence[str]) -> Optional[str]:
+        for column in columns:
+            normalized = column.strip().lower()
+            for option in options:
+                if normalized == option:
+                    return column
+        return None
+
+    for table in tables:
+        if not isinstance(table, dict):
+            continue
+        columns = table.get("columns") or []
+        if not isinstance(columns, list):
+            continue
+        study_col = pick_column(
+            columns,
+            (
+                "study number",
+                "study id",
+                "study no.",
+                "study no",
+                "study #",
+                "study number [-]",
+                "study id [-]",
+            ),
+        )
+        if not study_col:
+            continue
+        location_col = pick_column(
+            columns,
+            (
+                "location in ctd",
+                "location in ctd: vol. section",
+                "location in ctd: vol. section [-]",
+                "location in ctd [-]",
+            ),
+        )
+        for row in table.get("rows") or []:
+            if not isinstance(row, dict):
+                continue
+            current = str(row.get(study_col) or "").strip()
+            if current and current.lower() in {"none", "none conducted", "not conducted"}:
+                continue
+            if current and _extract_study_ids(current):
+                normalized = _select_study_id_from_text(current, candidates)
+                if normalized:
+                    row[study_col] = normalized
+                continue
+            location_value = str(row.get(location_col) or "").strip() if location_col else ""
+            normalized = _select_study_id_from_text(location_value, candidates)
+            if not normalized:
+                row_text = " ".join(
+                    str(row.get(col) or "") for col in columns if col != study_col
+                ).strip()
+                normalized = _select_study_id_from_text(row_text, candidates)
+            if normalized:
+                row[study_col] = normalized
 
 
 def _tabulated_template_entries_for_section(section: str) -> List[Dict[str, Any]]:
@@ -2016,6 +2299,12 @@ def _tabulated_template_entries_for_section(section: str) -> List[Dict[str, Any]
     if not target:
         return matches
     target_lower = target.lower()
+    token_match = re.search(r"\d+(?:\.\d+)+", target_lower)
+    if token_match:
+        target_lower = token_match.group(0)
+    if target_lower.endswith(".x") or target_lower.endswith(".*"):
+        target_lower = target_lower[:-2]
+    target_lower = target_lower.rstrip(".")
     for entry in entries:
         raw = entry.get("raw") or {}
         if not isinstance(raw, dict):
@@ -2142,7 +2431,11 @@ def _build_tabulated_context(
         raw = entry.get("raw") or {}
         if not isinstance(raw, dict):
             continue
-        columns_header = raw.get("Columns Headers")
+        columns_header = (
+            raw.get("Columns Headers")
+            or raw.get("Column Header")
+            or raw.get("Column Headers")
+        )
         table_specs.append(
             {
                 "section": entry.get("section"),
@@ -2215,6 +2508,20 @@ def _merge_tabulated_tables(
     table_specs: Sequence[Dict[str, Any]],
     tables: Sequence[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
+    def _normalize_rows(
+        rows: Sequence[Dict[str, Any]] | None, columns: Sequence[str]
+    ) -> List[Dict[str, Any]]:
+        if not rows:
+            return []
+        if not columns:
+            return [row for row in rows if isinstance(row, dict)]
+        normalized: List[Dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            normalized.append({col: row.get(col, "") for col in columns})
+        return normalized
+
     tables_by_subsection = {
         str(table.get("subsection") or ""): table for table in tables if isinstance(table, dict)
     }
@@ -2222,13 +2529,17 @@ def _merge_tabulated_tables(
     for spec in table_specs:
         subsection = str(spec.get("subsection") or "")
         existing = tables_by_subsection.get(subsection, {})
+        spec_columns = spec.get("columns") or []
+        existing_rows = existing.get("rows") or []
+        columns = spec_columns or existing.get("columns") or []
+        rows = _normalize_rows(existing_rows, columns)
         merged.append(
             {
                 "subsection": subsection,
                 "subsection_header": spec.get("subsection_header"),
                 "description": spec.get("table_description"),
-                "columns": existing.get("columns") or spec.get("columns") or [],
-                "rows": existing.get("rows") or [],
+                "columns": columns,
+                "rows": rows,
                 "notes": existing.get("notes") or "",
             }
         )
@@ -2777,6 +3088,7 @@ async def create_ctd_tabulated_summary(
                 if notes:
                     table["notes"] = " ".join(note.strip() for note in notes if note.strip())
             llm_model_name = "template-only"
+            _normalize_tabulated_study_ids(merged_tables, context)
         else:
             system_prompt, user_prompt = _build_tabulated_prompt(
                 section=section,
@@ -2800,6 +3112,7 @@ async def create_ctd_tabulated_summary(
             if not isinstance(tables, list):
                 tables = []
             merged_tables = _merge_tabulated_tables(table_specs, tables)
+            _normalize_tabulated_study_ids(merged_tables, context)
         table_payload = {
             "section": section,
             "tables": merged_tables,
