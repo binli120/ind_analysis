@@ -42,10 +42,10 @@ if str(REPO_ROOT) not in sys.path:
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from ncd.ctd_elements import build_ctd_element_reference, list_template_elements
-from ncd.db_interface import CTDSectionReferenceRecord, NCDRepository
-from ncd.llm_client import LLMClient
-from ncd.pipeline_runner import run_pdf_ingest_and_extract
+from ncd.types.ctd_elements import build_ctd_element_reference, list_template_elements
+from database.db_interface import CTDSectionReferenceRecord, NCDRepository
+from ncd.llm.llm_client import LLMClient
+from ncd.pipeline.pipeline_runner import run_pdf_ingest_and_extract
 from ncd.ingestion.pdf_ingestion import sha256_file
 from ind_pipeline import metadata_summary_extraction as section_summary
 from ncd.ingestion.section_detector import SectionSpan, persist_section_spans

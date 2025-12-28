@@ -8,7 +8,7 @@ import re
 from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session
 
-from ..llm_client import LLMClient
+from ncd.llm.llm_client import LLMClient
 from .topic_rules import TOPIC_RULES
 
 STUDY_TYPE_RULES = [

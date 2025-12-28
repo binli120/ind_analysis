@@ -12,7 +12,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from sqlalchemy.orm import Session
 
-from ncd.ctd_materials import (
+from ncd.types.ctd_materials import (
     fetch_assets_for_sections,
     fetch_key_sections_for_sections,
     fetch_project_name,
@@ -20,7 +20,7 @@ from ncd.ctd_materials import (
     module4_sections_for_ctd_targets,
     resolve_ctd_targets,
 )
-from ncd.ctd_template import load_template_entries, normalize_element_number
+from ncd.config.ctd_template import load_template_entries, normalize_element_number
 from ncd.extraction.fast_extract import parse_fast_method
 
 

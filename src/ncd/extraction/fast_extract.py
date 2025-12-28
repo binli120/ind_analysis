@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence
 
-from ncd.ctd_template import load_template_entries
+from ncd.config.ctd_template import load_template_entries
 
 FAST_FIELD = "Fast extraction method (keywords/tables/regex)"
 _SECTION_RE = re.compile(r"^2\.\d+(?:\.\d+)*$")

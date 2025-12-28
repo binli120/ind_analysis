@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-export PYTHONPATH="$REPO_ROOT:${PYTHONPATH:-}"
+export PYTHONPATH="$REPO_ROOT/src:$REPO_ROOT:${PYTHONPATH:-}"
 
 TEST_DIRS=()
 while IFS= read -r dir; do

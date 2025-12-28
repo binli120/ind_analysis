@@ -15,7 +15,7 @@ import boto3
 
 from ind_pipeline.utils import parse_s3_uri
 from ncd.ingestion.section_detector import extract_section_spans, persist_section_spans
-from ncd.db import SessionLocal
+from ncd.database.db import SessionLocal
 
 from ind_pipeline.stage_common import SimpleStageModule, StageModuleSpec
 

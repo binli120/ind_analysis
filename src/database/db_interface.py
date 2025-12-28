@@ -22,7 +22,7 @@ from sqlalchemy import text as sqltext
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from .db import SessionLocal, engine as default_engine
+from ncd.database.db import SessionLocal, engine as default_engine
 
 
 @dataclass

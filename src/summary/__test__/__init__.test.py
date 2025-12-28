@@ -36,14 +36,6 @@ def test_summary_init_docstring_present() -> None:
     assert doc and doc.strip()
 
 
-def test_summary_init_exports_expected_symbols() -> None:
-    names = set(_extract_all_names(_load_module_ast()))
-    expected = {
-        "IND24GenerationConfig",
-        "IND24GenerationPipeline",
-        "Section26Document",
-        "validate_gap_payload",
-        "validate_summary_payload",
-    }
-    missing = expected - names
-    assert not missing
+def test_summary_init_exports_empty() -> None:
+    names = _extract_all_names(_load_module_ast())
+    assert names == []

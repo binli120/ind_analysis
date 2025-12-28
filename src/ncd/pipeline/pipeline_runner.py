@@ -22,12 +22,11 @@ from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session
 
 from ncd.classification.study_classifier import classify_study_for_document
-from ncd.config import settings
-from ncd.db import SessionLocal
+from ncd.database.db import SessionLocal
 from ncd.ingestion.chunking import chunk_text_by_pages
 from ncd.ingestion.embedding import embed_chunks
 from ncd.ingestion.pdf_ingestion import create_source_document, extract_pages, sha256_file
-from ncd.llm_client import LLMClient
+from ncd.llm.llm_client import LLMClient
 from ncd.extraction.tox_extractor import extract_tox_for_study
 from ncd.extraction.pk_extractor import extract_pk_for_study
 

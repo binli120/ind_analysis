@@ -55,8 +55,8 @@ from pdf_analysis.transform.markdown_writer import (
     build_markdown_document,
 )
 from pdf_analysis.validate import generate_quality_report
-from ncd.ctd_elements import build_ctd_element_reference
-from ncd.ctd_materials import (
+from ncd.types.ctd_elements import build_ctd_element_reference
+from ncd.types.ctd_materials import (
     extract_markdown_images,
     extract_markdown_tables,
     fetch_assets_for_sections,
@@ -67,19 +67,18 @@ from ncd.ctd_materials import (
     markdown_slice,
     module4_sections_for_ctd,
     module4_sections_for_ctd_targets,
-    resolve_ctd_targets,
     section_number_matches,
 )
-from ncd.ctd_template import load_template_entries, normalize_element_number
-from ncd.db import SessionLocal
-from ncd.config import settings
-from ncd.db_interface import (
+from ncd.config.ctd_template import load_template_entries, normalize_element_number
+from ncd.database.db import SessionLocal
+from ncd.config.config import settings
+from database.db_interface import (
     CTDSectionReferenceRecord,
     CTDSectionSummaryRecord,
     CTDTabulatedSummaryRecord,
     NCDRepository,
 )
-from ncd.llm_client import LLMClient
+from ncd.llm.llm_client import LLMClient
 
 app = FastAPI(
     title="PDF Analysis API",
@@ -204,6 +203,7 @@ class CTDSectionSummaryRequest(BaseModel):
     user_prompt: Optional[str] = None
     user_comment: Optional[str] = None
     previous_summary_id: Optional[str] = None
+    refresh_template: bool = False
 
 
 class CTDSectionSummaryApproveRequest(BaseModel):
@@ -228,6 +228,7 @@ class CTDTabulatedSummaryRequest(BaseModel):
     user_prompt: Optional[str] = None
     user_comment: Optional[str] = None
     previous_tabulated_id: Optional[str] = None
+    refresh_template: bool = False
 
 
 class CTDTabulatedSummaryApproveRequest(BaseModel):
@@ -492,6 +493,12 @@ def _list_template_objects(
 # ---------------------------------------------------------------------------
 _IND_TEMPLATE_SECTIONS: List[Dict[str, str]] | None = None
 _IND_TEMPLATE_ENTRIES: List[Dict[str, Any]] | None = None
+
+
+def _reset_ind_template_cache() -> None:
+    global _IND_TEMPLATE_SECTIONS, _IND_TEMPLATE_ENTRIES
+    _IND_TEMPLATE_SECTIONS = None
+    _IND_TEMPLATE_ENTRIES = None
 
 
 def _load_ind_template_sections() -> List[Dict[str, str]]:
@@ -1752,6 +1759,18 @@ def _normalize_optional_uuid(value: Optional[str], field_name: str) -> Optional[
     return cleaned
 
 
+def _normalize_uuid_list(values: Sequence[Any]) -> List[str]:
+    normalized: List[str] = []
+    for value in values:
+        if value is None:
+            continue
+        try:
+            normalized.append(str(uuid.UUID(str(value))))
+        except (ValueError, TypeError):
+            continue
+    return normalized
+
+
 def _slim_sources(sources: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     payload: List[Dict[str, Any]] = []
     for row in sources:
@@ -2406,8 +2425,7 @@ async def get_assets_contents(
         if include_assets:
             asset_ids: List[str] = []
             for row in key_sections:
-                for asset_id in row.get("asset_ids") or []:
-                    asset_ids.append(str(asset_id))
+                asset_ids.extend(_normalize_uuid_list(row.get("asset_ids") or []))
             if asset_ids:
                 assets = (
                     db.execute(
@@ -2417,7 +2435,7 @@ async def get_assets_contents(
                                    s3_bucket, s3_key, caption, description, keywords,
                                    extra_attributes, document_version_id
                             FROM document_assets
-                            WHERE id = ANY(:ids)
+                            WHERE id = ANY(CAST(:ids AS uuid[]))
                             """
                         ),
                         {"ids": asset_ids},
@@ -2483,6 +2501,8 @@ async def create_ctd_section_summary(
     _require_uuid(payload.project_id, "project_id")
     if not payload.bucket:
         raise HTTPException(status_code=400, detail="bucket is required")
+    if payload.refresh_template:
+        _reset_ind_template_cache()
 
     db = SessionLocal()
     repo = NCDRepository(session=db)
@@ -2663,6 +2683,8 @@ async def create_ctd_tabulated_summary(
     _require_uuid(payload.project_id, "project_id")
     if not payload.bucket:
         raise HTTPException(status_code=400, detail="bucket is required")
+    if payload.refresh_template:
+        _reset_ind_template_cache()
 
     db = SessionLocal()
     repo = NCDRepository(session=db)

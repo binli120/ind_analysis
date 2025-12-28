@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
 _DEFAULT_TEMPLATE_PATHS = [
-    Path(__file__).resolve().parents[1] / "summary" / "ind_24_26_template.json",
-    Path(__file__).resolve().parents[1] / "ncd" / "ind_24_26_template.json",
+    Path(__file__).resolve().parents[2] / "ncd" / "ind_24_26_template.json",
+    Path(__file__).resolve().parents[2] / "summary" / "ind_24_26_template.json",
 ]
 
 _MODULE_KEY_MAP = {

@@ -5,8 +5,8 @@
 from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session
 
-from ncd.llm_client import LLMClient
-from ncd.schemas import PKStudySummarySchema
+from ncd.llm.llm_client import LLMClient
+from ncd.database.schemas import PKStudySummarySchema
 
 PK_EXTRACTION_SYSTEM_PROMPT = """
 You are a nonclinical pharmacokinetics expert. Extract structured PK parameters

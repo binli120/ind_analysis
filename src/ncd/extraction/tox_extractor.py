@@ -8,10 +8,10 @@ from typing import List
 from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session
 
-from ncd.db_interface import NCDRepository
+from database.db_interface import NCDRepository
 from ncd.extraction.fast_extract import match_fast_extract
-from ncd.llm_client import LLMClient
-from ncd.schemas import ToxStudySummarySchema
+from ncd.llm.llm_client import LLMClient
+from ncd.database.schemas import ToxStudySummarySchema
 
 TOX_EXTRACTION_SYSTEM_PROMPT = """
 You are a senior nonclinical toxicologist. Extract structured data for repeat-dose

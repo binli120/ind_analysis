@@ -25,8 +25,8 @@ import argparse
 from pathlib import Path
 from typing import Any, Dict
 
-from ncd.llm_client import LLMClient
-from ncd.pipeline_runner import run_pdf_ingest_and_extract
+from ncd.llm.llm_client import LLMClient
+from ncd.pipeline.pipeline_runner import run_pdf_ingest_and_extract
 
 
 class DummyLLM(LLMClient):

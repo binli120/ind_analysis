@@ -13,7 +13,7 @@ import json
 import os
 from typing import Any, Dict, List, Optional, Sequence
 
-from ncd.llm_client import LLMClient
+from ncd.llm.llm_client import LLMClient
 
 KEY_SECTION_MIN_CHARS = int(os.getenv("KEY_SECTION_MIN_CHARS", "300"))
 KEY_SECTION_MAX_CHARS = int(os.getenv("KEY_SECTION_MAX_CHARS", "4000"))

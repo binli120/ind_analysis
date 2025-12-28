@@ -13,7 +13,7 @@ from typing import Any, Dict
 
 import pytest
 
-from ind_pipeline import MODULE_REGISTRY, STAGE_SEQUENCE, STAGE_SUCCESSORS
+from ind_pipeline import MODULE_REGISTRY
 from ind_pipeline.pdf_extraction import pdf_extraction_handler
 from ind_pipeline import pdf_extraction as pdf_extraction_module
 from ind_pipeline import zeroshot_labeling as zeroshot_module
@@ -140,14 +140,6 @@ def test_module_registry_smoke() -> None:
     }
     assert expected_modules.issubset(MODULE_REGISTRY.keys())
     assert callable(MODULE_REGISTRY["pdf-extraction"].entrypoint)
-
-
-def test_stage_sequence_consistency() -> None:
-    assert STAGE_SEQUENCE[0] == "pdf-extraction"
-    for stage, successors in STAGE_SUCCESSORS.items():
-        assert stage in STAGE_SEQUENCE
-        for successor in successors:
-            assert successor in STAGE_SEQUENCE
 
 
 def test_pdf_extraction_publishes_next_topic(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

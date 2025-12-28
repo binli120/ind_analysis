@@ -20,11 +20,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 from uuid import uuid4
 
 from .pipeline import DocumentChunk
-from ncd.db_interface import NCDRepository
+from database.db_interface import NCDRepository
 
 logger = logging.getLogger(__name__)
 

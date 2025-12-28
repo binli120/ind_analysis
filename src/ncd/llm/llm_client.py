@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 from pydantic import BaseModel
 
-from .config import settings
+from ncd.config.config import settings
 
 
 class LLMClient:

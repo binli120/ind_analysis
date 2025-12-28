@@ -14,9 +14,9 @@ from typing import Any, Dict, List, Optional, Sequence
 import boto3
 
 from ind_pipeline.utils import parse_s3_uri
-from ncd.db import SessionLocal
+from ncd.database.db import SessionLocal
 from ncd.ingestion.section_detector import SectionSpan, extract_section_spans, persist_section_spans
-from ncd.llm_client import LLMClient
+from ncd.llm.llm_client import LLMClient
 from sqlalchemy import text as sqltext
 
 from ind_pipeline.stage_common import SimpleStageModule, StageModuleSpec

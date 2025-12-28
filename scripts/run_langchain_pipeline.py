@@ -25,7 +25,6 @@ from pathlib import Path
 
 from pdf_analysis.pipeline.pipeline import PDFProcessingPipeline, PipelineContext
 from pdf_analysis.pipeline.langchain_extraction import (
-    DocumentChunk,
     LangChainExtractionPipeline,
 )
 from pdf_analysis.pipeline.langchain_chains import (
@@ -179,7 +178,7 @@ def main() -> None:
 
     # Repository selection
     if args.use_db:
-        from ncd.db_interface import NCDRepository
+        from database.db_interface import NCDRepository
 
         repo = NCDRepository()
         print("[repo] using real database repository")

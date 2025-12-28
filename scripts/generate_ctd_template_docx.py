@@ -16,7 +16,7 @@ _SRC = _ROOT / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from ncd.ctd_docx_template import write_module_docx, write_section_docx
+from ncd.config.ctd_docx_template import write_module_docx, write_section_docx
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:

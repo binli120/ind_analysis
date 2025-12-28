@@ -25,7 +25,6 @@ from pdf_analysis.ingest.images import extract_images
 from pdf_analysis.pipeline.pipeline import PDFProcessingPipeline, PipelineContext
 from pdf_analysis.pipeline.config import PipelineConfig
 from pdf_analysis.pipeline.langchain_extraction import (
-    DocumentChunk,
     LangChainExtractionPipeline,
 )
 from pdf_analysis.pipeline.langchain_chains import (
@@ -33,7 +32,7 @@ from pdf_analysis.pipeline.langchain_chains import (
     build_pk_chain,
     build_study_segmentation_chain,
 )
-from ncd.db_interface import (
+from database.db_interface import (
     DocumentAssetRecord,
     DocumentKeySectionRecord,
     NCDRepository,
@@ -44,7 +43,7 @@ from ncd.extraction.content_extractor import (
     extract_key_sections_from_pages,
 )
 from ncd.extraction.fast_extract import match_fast_extract
-from ncd.llm_client import LLMClient
+from ncd.llm.llm_client import LLMClient
 
 s3 = boto3.client("s3")
 
