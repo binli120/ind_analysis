@@ -4913,4 +4913,4 @@ tabula = ["tabula-py"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "2b83a3156f2e2d80412a36b85e7f407196fae68558045f50cb68656255ec50fc"
+content-hash = "24e505da50fbdfcd727266c72a1899dc9a4e42f30a565c8845edbeb8d8a550ba"
