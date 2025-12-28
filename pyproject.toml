@@ -34,6 +34,7 @@ packages = [
     { include = "pdf_analysis", from = "src" },
     { include = "ind_pipeline", from = "src" },
     { include = "summary", from = "src" },
+    { include = "ncd", from = "src" },
 ]
 
 

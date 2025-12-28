@@ -6,6 +6,31 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health Check",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Check Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/analyze": {
       "post": {
         "tags": [
@@ -1567,6 +1592,11 @@
               }
             ],
             "title": "Previous Summary Id"
+          },
+          "refresh_template": {
+            "type": "boolean",
+            "title": "Refresh Template",
+            "default": false
           }
         },
         "type": "object",
@@ -1693,6 +1723,11 @@
               }
             ],
             "title": "Previous Tabulated Id"
+          },
+          "refresh_template": {
+            "type": "boolean",
+            "title": "Refresh Template",
+            "default": false
           }
         },
         "type": "object",
