@@ -28,8 +28,8 @@ def normalize_element_number(value: str | None) -> str:
 def _template_paths() -> List[Path]:
     base = Path(__file__).resolve().parents[2]
     return [
-        base / "ncd" / "ind_24_26_template.json",
         base / "summary" / "ind_24_26_template.json",
+        base / "ncd" / "ind_24_26_template.json",
     ]
 
 

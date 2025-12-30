@@ -2139,6 +2139,51 @@ def _parse_columns_header(value: Any) -> List[str]:
     return [item.strip() for item in value.split(separator) if item.strip()]
 
 
+def _truncate_preview_value(value: Any, max_len: int = 300) -> str:
+    text = str(value) if value is not None else ""
+    if len(text) <= max_len:
+        return text
+    return f"{text[:max_len].rstrip()}..."
+
+
+def _trim_tabulated_context(context: Dict[str, Any]) -> Dict[str, Any]:
+    max_assets = 8
+    max_preview_rows = 6
+    max_columns = 12
+    trimmed_assets: List[Dict[str, Any]] = []
+    for asset in (context.get("table_assets") or [])[:max_assets]:
+        if not isinstance(asset, dict):
+            continue
+        preview_rows = []
+        for row in (asset.get("preview_rows") or [])[:max_preview_rows]:
+            if not isinstance(row, dict):
+                continue
+            preview_rows.append(
+                {k: _truncate_preview_value(v) for k, v in row.items()}
+            )
+        trimmed_assets.append(
+            {
+                "id": asset.get("id"),
+                "s3_key": asset.get("s3_key"),
+                "json_key": asset.get("json_key"),
+                "caption": asset.get("caption"),
+                "description": asset.get("description"),
+                "page_number": asset.get("page_number"),
+                "index_on_page": asset.get("index_on_page"),
+                "columns": (asset.get("columns") or [])[:max_columns],
+                "row_count": asset.get("row_count"),
+                "preview_rows": preview_rows,
+            }
+        )
+    return {
+        "section": context.get("section"),
+        "ctd_targets": context.get("ctd_targets") or [],
+        "module4_sections": (context.get("module4_sections") or [])[:20],
+        "table_specs": context.get("table_specs") or [],
+        "table_assets": trimmed_assets,
+    }
+
+
 _STUDY_ID_RE = re.compile(
     r"\b(?=[A-Z0-9.-]*[A-Z])(?=[A-Z0-9.-]*\d)[A-Z0-9]{2,}(?:[-.][A-Z0-9]+)+\b",
     re.IGNORECASE,
@@ -2297,6 +2342,348 @@ def _normalize_tabulated_study_ids(
                 row[study_col] = normalized
 
 
+def _normalize_header_token(value: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    alias_map = {
+        "dose": "doses",
+        "dose level": "doses",
+        "dose levels": "doses",
+        "dose mg kg": "doses",
+        "dose mg/kg": "doses",
+        "doses mg kg": "doses",
+        "doses mg/kg": "doses",
+        "dosage": "doses",
+        "route of administration": "method of administration",
+        "route": "method of administration",
+        "administration route": "method of administration",
+        "method of admin": "method of administration",
+        "study id": "study number",
+        "study no": "study number",
+        "study no.": "study number",
+        "study #": "study number",
+        "species strain": "species strain",
+        "species strain or test system": "species strain or test system",
+        "species strain or test system or species": "species strain or test system",
+        "organ system": "organ systems evaluated",
+        "organ systems": "organ systems evaluated",
+        "organ systems evaluated": "organ systems evaluated",
+        "glp": "glp compliance",
+        "sex": "gender",
+        "gender and no per group": "gender and no per group",
+        "gender and no. per group": "gender and no per group",
+        "sex and no per group": "gender and no per group",
+        "sex and no. per group": "gender and no per group",
+        "noteworthy findings": "noteworthy findings",
+        "key findings": "noteworthy findings",
+        "key results": "noteworthy findings",
+        "findings": "noteworthy findings",
+        "observations": "noteworthy findings",
+    }
+    if cleaned in alias_map:
+        return alias_map[cleaned]
+    if cleaned == "method of admin":
+        return "method of administration"
+    if cleaned == "method of administrationistration":
+        return "method of administration"
+    if cleaned == "method of admin istration":
+        return "method of administration"
+    if cleaned.startswith("dose "):
+        return "doses"
+    if cleaned.startswith("doses "):
+        return "doses"
+    if cleaned.startswith("organ system"):
+        return "organ systems evaluated"
+    return cleaned
+
+
+def _tokenize_text(value: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+", value.lower()))
+
+
+def _pick_first_value(
+    row: Dict[str, Any], key_map: Dict[str, str], *candidates: str
+) -> str:
+    for candidate in candidates:
+        key = key_map.get(candidate)
+        if key:
+            return str(row.get(key) or "").strip()
+    return ""
+
+
+def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, str]]:
+    candidates: List[Dict[str, str]] = []
+    seen: set[str] = set()
+    for asset in context.get("table_assets", []) or []:
+        preview_rows = asset.get("preview_rows") or []
+        for row in preview_rows:
+            if not isinstance(row, dict):
+                continue
+            key_map = {_normalize_header_token(str(key)): key for key in row.keys()}
+            if "type of study" not in key_map or not (
+                key_map.get("species strain") or key_map.get("test system")
+            ):
+                continue
+            study_number = _pick_first_value(row, key_map, "study number")
+            if not study_number or study_number in seen:
+                continue
+            doses_key = key_map.get("doses")
+            candidates.append(
+                {
+                    "type_of_study": _pick_first_value(row, key_map, "type of study"),
+                    "species_strain": _pick_first_value(
+                        row,
+                        key_map,
+                        "species strain",
+                        "test system",
+                        "species strain or test system",
+                    ),
+                    "method_of_admin": _pick_first_value(row, key_map, "method of administration"),
+                    "doses": str(row.get(doses_key or "") or "").strip() if doses_key else "",
+                    "gender_group": _pick_first_value(
+                        row, key_map, "gender and no per group", "gender", "sex"
+                    ),
+                    "findings": _pick_first_value(
+                        row,
+                        key_map,
+                        "noteworthy findings",
+                        "key findings",
+                        "key results",
+                    ),
+                    "study_number": study_number,
+                }
+            )
+            seen.add(study_number)
+    return candidates
+
+
+def _repair_primary_pharmacodynamics_table(
+    tables: Sequence[Dict[str, Any]],
+    context: Dict[str, Any],
+) -> None:
+    target = next(
+        (table for table in tables if str(table.get("subsection") or "") == "2.6.3.2"),
+        None,
+    )
+    if not target:
+        return
+    candidates = _extract_primary_pd_candidates(context)
+    if not candidates:
+        return
+    columns = [
+        "Type of Study",
+        "Species/Strain",
+        "Method of Admin.",
+        "Doses (mg/kg)",
+        "Gender and No. per Group",
+        "Noteworthy Findings",
+        "Study Number",
+    ]
+    target["columns"] = columns
+    target["rows"] = [
+        {
+            "Type of Study": candidate.get("type_of_study", ""),
+            "Species/Strain": candidate.get("species_strain", ""),
+            "Method of Admin.": candidate.get("method_of_admin", ""),
+            "Doses (mg/kg)": candidate.get("doses", ""),
+            "Gender and No. per Group": candidate.get("gender_group", ""),
+            "Noteworthy Findings": candidate.get("findings", ""),
+            "Study Number": candidate.get("study_number", ""),
+        }
+        for candidate in candidates
+    ]
+
+
+def _extract_safety_pharmacology_candidates(context: Dict[str, Any]) -> List[Dict[str, str]]:
+    candidates: List[Dict[str, str]] = []
+    seen: set[str] = set()
+    for asset in context.get("table_assets", []) or []:
+        preview_rows = asset.get("preview_rows") or []
+        for row in preview_rows:
+            if not isinstance(row, dict):
+                continue
+            key_map = {_normalize_header_token(str(key)): key for key in row.keys()}
+            if "organ systems evaluated" not in key_map or "glp compliance" not in key_map:
+                continue
+            study_number = _pick_first_value(row, key_map, "study number")
+            if not study_number or study_number in seen:
+                continue
+            doses_key = key_map.get("doses")
+            candidates.append(
+                {
+                    "organ_systems": _pick_first_value(row, key_map, "organ systems evaluated"),
+                    "species_strain": _pick_first_value(row, key_map, "species strain"),
+                    "method_of_admin": _pick_first_value(row, key_map, "method of administration"),
+                    "doses": str(row.get(doses_key or "") or "").strip() if doses_key else "",
+                    "gender_group": _pick_first_value(
+                        row, key_map, "gender and no per group", "gender", "sex"
+                    ),
+                    "findings": _pick_first_value(row, key_map, "noteworthy findings"),
+                    "glp": _pick_first_value(row, key_map, "glp compliance"),
+                    "study_number": study_number,
+                }
+            )
+            seen.add(study_number)
+    return candidates
+
+
+def _repair_safety_pharmacology_table(
+    tables: Sequence[Dict[str, Any]],
+    context: Dict[str, Any],
+) -> None:
+    target = next(
+        (table for table in tables if str(table.get("subsection") or "") == "2.6.3.4"),
+        None,
+    )
+    if not target:
+        return
+    candidates = _extract_safety_pharmacology_candidates(context)
+    if not candidates:
+        return
+    columns = [
+        "Organ Systems Evaluated",
+        "Species/Strain",
+        "Method of Admin.",
+        "Doses (mg/kg)",
+        "Gender and No. per Group",
+        "Noteworthy Findings",
+        "GLP Compliance",
+        "Study Number",
+    ]
+    target["columns"] = columns
+    target["rows"] = [
+        {
+            "Organ Systems Evaluated": candidate.get("organ_systems", ""),
+            "Species/Strain": candidate.get("species_strain", ""),
+            "Method of Admin.": candidate.get("method_of_admin", ""),
+            "Doses (mg/kg)": candidate.get("doses", ""),
+            "Gender and No. per Group": candidate.get("gender_group", ""),
+            "Noteworthy Findings": candidate.get("findings", ""),
+            "GLP Compliance": candidate.get("glp", ""),
+            "Study Number": candidate.get("study_number", ""),
+        }
+        for candidate in candidates
+    ]
+
+
+def _extract_overview_candidates(context: Dict[str, Any]) -> List[Dict[str, str]]:
+    candidates: List[Dict[str, str]] = []
+    for asset in context.get("table_assets", []) or []:
+        preview_rows = asset.get("preview_rows") or []
+        for row in preview_rows:
+            if not isinstance(row, dict):
+                continue
+            key_map = {_normalize_header_token(str(key)): key for key in row.keys()}
+            study_key = key_map.get("study number")
+            type_key = key_map.get("type of study")
+            if not study_key or not type_key:
+                continue
+            study_number = str(row.get(study_key) or "").strip()
+            if not study_number:
+                continue
+            candidates.append(
+                {
+                    "type_of_study": str(row.get(type_key) or "").strip(),
+                    "test_system": _pick_first_value(
+                        row, key_map, "test system", "species strain"
+                    ),
+                    "method_of_administration": str(
+                        row.get(key_map.get("method of administration") or "") or ""
+                    ).strip(),
+                    "testing_facility": str(row.get(key_map.get("testing facility") or "") or "").strip(),
+                    "study_number": study_number,
+                }
+            )
+    return candidates
+
+
+def _repair_overview_table(
+    tables: Sequence[Dict[str, Any]],
+    context: Dict[str, Any],
+) -> None:
+    target = next(
+        (table for table in tables if str(table.get("subsection") or "") == "2.6.3.1"),
+        None,
+    )
+    if not target:
+        return
+    columns = [str(col) for col in (target.get("columns") or [])]
+    if not columns:
+        return
+    study_col = next((col for col in columns if _normalize_header_token(col) == "study number"), None)
+    if not study_col:
+        return
+
+    candidates = _extract_overview_candidates(context)
+    if not candidates:
+        return
+
+    def candidate_text(candidate: Dict[str, str]) -> str:
+        parts = [
+            candidate.get("type_of_study", ""),
+            candidate.get("test_system", ""),
+            candidate.get("method_of_administration", ""),
+            candidate.get("testing_facility", ""),
+        ]
+        return " ".join(part for part in parts if part)
+
+    candidate_tokens = [(_tokenize_text(candidate_text(c)), c) for c in candidates]
+    candidate_index_by_study = {
+        candidate.get("study_number", ""): idx for idx, candidate in enumerate(candidates)
+    }
+
+    matched_indices: set[int] = set()
+    rows = target.get("rows") or []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        current = str(row.get(study_col) or "").strip()
+        if current and _extract_study_ids(current):
+            if current in candidate_index_by_study:
+                matched_indices.add(candidate_index_by_study[current])
+            continue
+        row_text = " ".join(
+            str(row.get(col) or "")
+            for col in columns
+            if _normalize_header_token(col) not in {"study number", "location in ctd"}
+        ).strip()
+        row_tokens = _tokenize_text(row_text)
+        if not row_tokens:
+            continue
+        best_score = 0.0
+        best_index: Optional[int] = None
+        for idx, (tokens, candidate) in enumerate(candidate_tokens):
+            if not tokens:
+                continue
+            overlap = row_tokens & tokens
+            score = len(overlap) / max(len(tokens), 1)
+            if score > best_score:
+                best_score = score
+                best_index = idx
+        if best_index is not None and best_score >= 0.25:
+            row[study_col] = candidates[best_index]["study_number"]
+            matched_indices.add(best_index)
+
+    # Append any unmatched extracted rows.
+    for idx, candidate in enumerate(candidates):
+        if idx in matched_indices:
+            continue
+        new_row = {col: "" for col in columns}
+        for col in columns:
+            key = _normalize_header_token(col)
+            if key == "type of study":
+                new_row[col] = candidate.get("type_of_study", "")
+            elif key == "test system":
+                new_row[col] = candidate.get("test_system", "")
+            elif key == "method of administration":
+                new_row[col] = candidate.get("method_of_administration", "")
+            elif key == "testing facility":
+                new_row[col] = candidate.get("testing_facility", "")
+            elif key == "study number":
+                new_row[col] = candidate.get("study_number", "")
+        rows.append(new_row)
+
+
 def _tabulated_template_entries_for_section(section: str) -> List[Dict[str, Any]]:
     entries = _load_ind_template_entries()
     matches: List[Dict[str, Any]] = []
@@ -2344,7 +2731,44 @@ def _read_table_json_preview(
     except json.JSONDecodeError:
         return []
     if isinstance(payload, list):
-        return [row for row in payload[:max_rows] if isinstance(row, dict)]
+        if all(isinstance(row, dict) for row in payload):
+            return [row for row in payload[:max_rows] if isinstance(row, dict)]
+        if all(isinstance(row, list) for row in payload):
+            header_idx: Optional[int] = None
+            for idx, row in enumerate(payload):
+                if not row:
+                    continue
+                normalized = [_normalize_header_token(str(cell)) for cell in row]
+                hits = sum(
+                    1
+                    for token in normalized
+                    if token
+                    in {
+                        "study number",
+                        "type of study",
+                        "test system",
+                        "organ systems evaluated",
+                        "noteworthy findings",
+                    }
+                )
+                if hits >= 2 or "study number" in normalized:
+                    header_idx = idx
+                    break
+            if header_idx is None:
+                return []
+            headers = [str(cell).strip() for cell in payload[header_idx]]
+            rows: List[Dict[str, Any]] = []
+            for row in payload[header_idx + 1 :]:
+                if not isinstance(row, list):
+                    continue
+                row_dict = {
+                    headers[i]: row[i] if i < len(row) else ""
+                    for i in range(len(headers))
+                }
+                rows.append(row_dict)
+                if len(rows) >= max_rows:
+                    break
+            return rows
     return []
 
 
@@ -2358,6 +2782,8 @@ def _build_tabulated_context(
     max_table_rows: int = 10,
     max_tables: int = 50,
 ) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    if section.startswith("2.6.3"):
+        max_table_rows = max(max_table_rows, 50)
     project_name = fetch_project_name(db, project_id)
     project_like = f"%/{project_name}/%" if project_name else "%"
 
@@ -2587,7 +3013,9 @@ def _build_tabulated_prompt(
         parts.append(f"User comment:\n{user_comment}")
         parts.append("Revise the tables to address the comment.")
 
-    context_json = json.dumps(context, ensure_ascii=True, indent=2, default=str)
+    context_json = json.dumps(
+        _trim_tabulated_context(context), ensure_ascii=True, indent=2, default=str
+    )
     parts.append(f"Context data (JSON):\n{context_json}")
     return system_prompt, "\n\n".join(parts)
 
@@ -3094,6 +3522,9 @@ async def create_ctd_tabulated_summary(
                     table["notes"] = " ".join(note.strip() for note in notes if note.strip())
             llm_model_name = "template-only"
             _normalize_tabulated_study_ids(merged_tables, context)
+            _repair_overview_table(merged_tables, context)
+            _repair_primary_pharmacodynamics_table(merged_tables, context)
+            _repair_safety_pharmacology_table(merged_tables, context)
         else:
             system_prompt, user_prompt = _build_tabulated_prompt(
                 section=section,
@@ -3118,6 +3549,9 @@ async def create_ctd_tabulated_summary(
                 tables = []
             merged_tables = _merge_tabulated_tables(table_specs, tables)
             _normalize_tabulated_study_ids(merged_tables, context)
+            _repair_overview_table(merged_tables, context)
+            _repair_primary_pharmacodynamics_table(merged_tables, context)
+            _repair_safety_pharmacology_table(merged_tables, context)
         table_payload = {
             "section": section,
             "tables": merged_tables,

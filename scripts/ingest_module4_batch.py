@@ -1240,7 +1240,9 @@ def main(argv: list[str]) -> int:
                 pass
 
     prefix = args.prefix or f"{args.company.rstrip('/')}/{args.project.strip('/')}/"
-    if not prefix.endswith("/"):
+    if prefix.lower().endswith(".pdf"):
+        prefix = prefix
+    elif not prefix.endswith("/"):
         prefix = f"{prefix}/"
 
     if args.core_text_engines:

@@ -9,7 +9,10 @@ from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session
 
 from ncd.llm.llm_client import LLMClient
-from .topic_rules import TOPIC_RULES
+try:
+    from .topic_rules import TOPIC_RULES
+except ModuleNotFoundError:
+    TOPIC_RULES = {}
 
 STUDY_TYPE_RULES = [
     (

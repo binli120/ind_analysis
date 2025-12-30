@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import boto3
+from sqlalchemy import text as sqltext
 
 from pdf_analysis.export.persist import ensure_unique_columns, save_tables
 from pdf_analysis.ingest.images import extract_images
@@ -254,6 +255,14 @@ def process_message(
                         if pipeline_result is None:
                             pdf_pipeline = _build_pipeline()
                             pipeline_result = pdf_pipeline.run(local_pdf)
+
+                        if force:
+                            _purge_table_assets(
+                                repo,
+                                document_version_id,
+                                f"{key}.tables/",
+                            )
+                            _delete_s3_prefix(bucket, f"{key}.tables/")
 
                         assets = _build_document_assets(
                             local_pdf,
@@ -664,6 +673,37 @@ def _build_document_assets(
                     }
                 )
     return assets
+
+
+def _delete_s3_prefix(bucket: str, prefix: str) -> None:
+    paginator = s3.get_paginator("list_objects_v2")
+    batch: List[Dict[str, str]] = []
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            key = obj.get("Key")
+            if not key:
+                continue
+            batch.append({"Key": key})
+            if len(batch) == 1000:
+                s3.delete_objects(Bucket=bucket, Delete={"Objects": batch})
+                batch = []
+    if batch:
+        s3.delete_objects(Bucket=bucket, Delete={"Objects": batch})
+
+
+def _purge_table_assets(repo: NCDRepository, document_version_id: str, key_prefix: str) -> None:
+    repo.session.execute(
+        sqltext(
+            """
+            DELETE FROM document_assets
+            WHERE document_version_id = :dvid
+              AND asset_type = 'table'
+              AND s3_key LIKE :prefix
+            """
+        ),
+        {"dvid": document_version_id, "prefix": f"{key_prefix}%"},
+    )
+    repo.session.commit()
 
 
 def _build_pipeline() -> PDFProcessingPipeline:
