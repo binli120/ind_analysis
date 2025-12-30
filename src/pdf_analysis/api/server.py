@@ -2977,6 +2977,73 @@ def _merge_tabulated_tables(
     return merged
 
 
+def _normalize_tabulated_columns(value: Any) -> List[str]:
+    if not value:
+        return []
+    if isinstance(value, str):
+        parts = re.split(r"[|\n]", value)
+        return [_normalize_header_token(part.strip()) for part in parts if part.strip()]
+    if isinstance(value, (list, tuple)):
+        return [
+            _normalize_header_token(str(item))
+            for item in value
+            if str(item).strip()
+        ]
+    return []
+
+
+def _columns_from_rows(rows: Sequence[Dict[str, Any]] | None) -> List[str]:
+    if not rows:
+        return []
+    first = rows[0] if isinstance(rows[0], dict) else {}
+    return _normalize_tabulated_columns(list(first.keys()))
+
+
+def _realign_tabulated_tables_by_columns(
+    table_specs: Sequence[Dict[str, Any]],
+    tables: Sequence[Dict[str, Any]],
+) -> None:
+    spec_columns: Dict[str, List[str]] = {}
+    for spec in table_specs:
+        subsection = str(spec.get("subsection") or "")
+        columns = _normalize_tabulated_columns(spec.get("columns") or [])
+        if subsection and columns:
+            spec_columns[subsection] = columns
+
+    if not spec_columns:
+        return
+
+    for table in tables:
+        if not isinstance(table, dict):
+            continue
+        cols = _normalize_tabulated_columns(table.get("columns") or [])
+        if not cols:
+            cols = _columns_from_rows(table.get("rows"))
+        if not cols:
+            continue
+        cols_set = set(cols)
+        best_subsection: Optional[str] = None
+        best_score = 0.0
+        for subsection, spec_cols in spec_columns.items():
+            spec_set = set(spec_cols)
+            if not spec_set:
+                continue
+            overlap = len(cols_set & spec_set)
+            score = overlap / max(len(spec_set), 1)
+            if score > best_score:
+                best_score = score
+                best_subsection = subsection
+
+        current_subsection = str(table.get("subsection") or "")
+        current_score = 0.0
+        if current_subsection in spec_columns:
+            current_set = set(spec_columns[current_subsection])
+            current_score = len(cols_set & current_set) / max(len(current_set), 1)
+
+        if best_subsection and best_score >= 0.6 and best_score >= max(current_score + 0.15, 0.75):
+            table["subsection"] = best_subsection
+
+
 def _build_tabulated_prompt(
     *,
     section: str,
@@ -3503,6 +3570,7 @@ async def create_ctd_tabulated_summary(
                 tables = previous_tables.get("tables") if isinstance(previous_tables, dict) else []
             if not isinstance(tables, list):
                 tables = []
+            _realign_tabulated_tables_by_columns(table_specs, tables)
             merged_tables = _merge_tabulated_tables(table_specs, tables)
             for spec, table in zip(table_specs, merged_tables):
                 if table.get("notes"):
@@ -3547,6 +3615,7 @@ async def create_ctd_tabulated_summary(
             tables = response.get("tables") if isinstance(response, dict) else []
             if not isinstance(tables, list):
                 tables = []
+            _realign_tabulated_tables_by_columns(table_specs, tables)
             merged_tables = _merge_tabulated_tables(table_specs, tables)
             _normalize_tabulated_study_ids(merged_tables, context)
             _repair_overview_table(merged_tables, context)
