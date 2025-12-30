@@ -85,6 +85,7 @@ def process_message(
     key = payload["key"]
     version_id = payload.get("version_id")
     tenant_id = payload.get("tenant_id") or DEFAULT_TENANT_ID
+    project_id = payload.get("project_id") or os.getenv("PROJECT_ID")
     created_by = payload.get("created_by") or DEFAULT_USER_ID
     if not tenant_id:
         raise RuntimeError("tenant_id is required (set DEFAULT_TENANT_ID or include in payload)")
@@ -400,6 +401,8 @@ def process_message(
                             model_name=LLM_MODEL,
                             chunks=chunks or [],
                             created_by=created_by,
+                            project_id=str(project_id) if project_id else None,
+                            source_key=key,
                         )
                         repo.upsert_pipeline_status(
                             s3_bucket=bucket,

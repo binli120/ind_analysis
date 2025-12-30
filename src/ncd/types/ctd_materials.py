@@ -459,6 +459,121 @@ def fetch_key_sections_for_sections(
     return [dict(row) for row in rows]
 
 
+def fetch_document_keys_for_sections(
+    db: Session,
+    *,
+    tenant_id: str,
+    bucket: str,
+    project_like: str,
+    module4_sections: List[str],
+) -> List[str]:
+    if not module4_sections:
+        return []
+
+    filters: List[str] = []
+    params: Dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "bucket": bucket,
+        "project_like": project_like,
+    }
+    for idx, module4_section in enumerate(module4_sections):
+        key = f"mod_{idx}"
+        params[key] = f"%/{module4_section}%"
+        filters.append(f"dv.s3_key ILIKE :{key}")
+
+    filter_sql = " OR ".join(filters)
+    rows = (
+        db.execute(
+            sqltext(
+                f"""
+                SELECT DISTINCT
+                    dv.s3_key
+                FROM document_versions dv
+                JOIN documents d ON d.id = dv.document_id
+                WHERE d.tenant_id = :tenant_id
+                  AND dv.s3_bucket = :bucket
+                  AND dv.s3_key ILIKE :project_like
+                  AND ({filter_sql})
+                ORDER BY dv.s3_key
+                """
+            ),
+            params,
+        )
+        .mappings()
+        .all()
+    )
+    return [str(row.get("s3_key") or "") for row in rows if row.get("s3_key")]
+
+
+def fetch_project_document_keys(
+    db: Session,
+    *,
+    tenant_id: str,
+    bucket: str,
+    project_like: str,
+    limit: int = 50,
+) -> List[str]:
+    rows = (
+        db.execute(
+            sqltext(
+                """
+                SELECT DISTINCT
+                    dv.s3_key
+                FROM document_versions dv
+                JOIN documents d ON d.id = dv.document_id
+                WHERE d.tenant_id = :tenant_id
+                  AND dv.s3_bucket = :bucket
+                  AND dv.s3_key ILIKE :project_like
+                ORDER BY dv.s3_key
+                LIMIT :limit
+                """
+            ),
+            {
+                "tenant_id": tenant_id,
+                "bucket": bucket,
+                "project_like": project_like,
+                "limit": limit,
+            },
+        )
+        .mappings()
+        .all()
+    )
+    return [str(row.get("s3_key") or "") for row in rows if row.get("s3_key")]
+
+
+def fetch_study_ids_for_sections(
+    db: Session,
+    *,
+    project_id: str,
+    module4_sections: List[str],
+) -> List[str]:
+    if not project_id or not module4_sections:
+        return []
+    rows = (
+        db.execute(
+            sqltext(
+                """
+                SELECT DISTINCT sponsor_study_id
+                FROM ncd_study
+                WHERE project_id = :pid
+                  AND module4_section = ANY(:sections)
+                  AND sponsor_study_id IS NOT NULL
+                  AND sponsor_study_id <> ''
+                ORDER BY sponsor_study_id
+                """
+            ),
+            {"pid": project_id, "sections": module4_sections},
+        )
+        .mappings()
+        .all()
+    )
+    return [
+        str(row.get("sponsor_study_id") or "")
+        for row in rows
+        if row.get("sponsor_study_id")
+    ]
+
+
 def fetch_ncd_payload(
     db: Session,
     *,

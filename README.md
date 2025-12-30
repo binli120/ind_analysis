@@ -220,6 +220,62 @@ Decision guide:
 - Markdown/quality only: use `PDFProcessingPipeline`.
 - Redis index of S3 content: use `scripts/s3_sync.py`.
 
+## Run All Pipelines for New PDFs
+
+Use the batch ingest script to run core + LangChain + context + summary first, then run tox in a separate pass.
+
+1) Set required environment variables:
+
+```shell
+export DATABASE_URL="postgresql+psycopg://<user>:<pass>@<host>:5432/<db>"
+export OPENAI_API_KEY="<key>"
+export AWS_REGION="us-east-1"
+export ENABLE_LANGCHAIN=true
+export ENABLE_CONTEXT_PIPELINE=true
+```
+
+2) Core + LangChain + context + summary:
+
+```shell
+LANGCHAIN_TRACING_V2=false LANGCHAIN_API_KEY= \
+poetry run python scripts/ingest_module4_batch.py \
+  --bucket doc-repository-dev \
+  --company filynai.com \
+  --project Lpathomab \
+  --project-id <PROJECT_UUID> \
+  --tenant-id <TENANT_UUID> \
+  --created-by <USER_UUID> \
+  --prefix "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/<NEW_FOLDER>/" \
+  --mode core \
+  --force-core \
+  --run-langchain --force-langchain \
+  --core-table-engines pdfplumber,camelot \
+  --workers 4
+```
+
+3) Tox pipeline (separate pass):
+
+```shell
+LANGCHAIN_TRACING_V2=false LANGCHAIN_API_KEY= \
+poetry run python scripts/ingest_module4_batch.py \
+  --bucket doc-repository-dev \
+  --company filynai.com \
+  --project Lpathomab \
+  --project-id <PROJECT_UUID> \
+  --tenant-id <TENANT_UUID> \
+  --created-by <USER_UUID> \
+  --prefix "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/<NEW_FOLDER>/" \
+  --mode tox \
+  --force-tox \
+  --workers 2
+```
+
+4) Review the latest ingestion report:
+
+```shell
+ls -t tmp/ingestion_reports/ingestion_module4-*.json | head -n 1
+```
+
 ## S3 → Redis Synchronisation Service
 
 - Install the infra extras to pick up the required clients:

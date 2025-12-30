@@ -856,6 +856,7 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                         "version_id": version_id,
                         "tenant_id": args.tenant_id,
                         "created_by": args.created_by,
+                        "project_id": args.project_id,
                     },
                     force=bool(args.force or args.force_core),
                     run_core=core_required,

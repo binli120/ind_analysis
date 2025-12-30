@@ -66,10 +66,13 @@ from ncd.types.ctd_materials import (
     extract_markdown_images,
     extract_markdown_tables,
     fetch_assets_for_sections,
+    fetch_document_keys_for_sections,
     fetch_key_sections_for_sections,
     fetch_ncd_payload,
+    fetch_project_document_keys,
     fetch_project_name,
     fetch_section_sources,
+    fetch_study_ids_for_sections,
     markdown_slice,
     module4_sections_for_ctd,
     module4_sections_for_ctd_targets,
@@ -2019,6 +2022,19 @@ def _build_section_summary_context(
         project_like=project_like,
         module4_sections=module4_sections,
     )
+    project_document_keys = fetch_project_document_keys(
+        db,
+        tenant_id=tenant_id,
+        bucket=bucket,
+        project_like=project_like,
+    )
+    document_keys = fetch_document_keys_for_sections(
+        db,
+        tenant_id=tenant_id,
+        bucket=bucket,
+        project_like=project_like,
+        module4_sections=module4_sections,
+    )
     key_sections = fetch_key_sections_for_sections(
         db,
         tenant_id=tenant_id,
@@ -2188,15 +2204,57 @@ _STUDY_ID_RE = re.compile(
     r"\b(?=[A-Z0-9.-]*[A-Z])(?=[A-Z0-9.-]*\d)[A-Z0-9]{2,}(?:[-.][A-Z0-9]+)+\b",
     re.IGNORECASE,
 )
+_STUDY_ID_EXT_RE = re.compile(
+    r"\.(?:pdf|xml|docx|txt|csv|json|md)$", re.IGNORECASE
+)
+_STUDY_ID_PREFIX_RE = re.compile(r"^(?:stf-|study-)", re.IGNORECASE)
+_STUDY_ID_TRAILERS = {
+    "pdf",
+    "xml",
+    "docx",
+    "txt",
+    "csv",
+    "json",
+    "md",
+    "extracted",
+    "quality",
+    "meta",
+    "images",
+    "tables",
+}
+_STUDY_ID_SKIP_RE = re.compile(r"^(?:input\.(?:p\\d+)?\\.t\\d+|p\\d+\\.t\\d+)$", re.IGNORECASE)
 
 
 def _extract_study_ids(text: str) -> List[str]:
     if not text:
         return []
-    found = []
+    found: List[str] = []
     for match in _STUDY_ID_RE.findall(text):
-        if match:
-            found.append(match)
+        if not match:
+            continue
+        cleaned = _STUDY_ID_EXT_RE.sub("", match)
+        cleaned = _STUDY_ID_PREFIX_RE.sub("", cleaned)
+        cleaned = cleaned.strip("._-")
+        if not cleaned:
+            continue
+        while "." in cleaned:
+            parts = cleaned.split(".")
+            if parts[-1].lower() not in _STUDY_ID_TRAILERS:
+                break
+            cleaned = ".".join(parts[:-1]).strip("._-")
+            if not cleaned:
+                break
+        if not cleaned:
+            continue
+        if _STUDY_ID_SKIP_RE.match(cleaned):
+            continue
+        if len(cleaned) < 6:
+            continue
+        if sum(1 for ch in cleaned if ch.isdigit()) < 3:
+            continue
+        if not _STUDY_ID_RE.fullmatch(cleaned):
+            continue
+        found.append(cleaned)
     seen = set()
     ordered: List[str] = []
     for value in found:
@@ -2240,12 +2298,31 @@ def _build_study_id_candidates(context: Dict[str, Any]) -> Dict[str, Dict[str, A
             str(part)
             for part in (
                 source.get("section_title"),
+                source.get("section_number"),
+                source.get("s3_key"),
                 source.get("summary_text"),
             )
             if part
         )
         for study_id in _extract_study_ids(blob):
             add_candidate(study_id, blob)
+
+    for key in context.get("document_keys", []) or []:
+        if not key:
+            continue
+        for study_id in _extract_study_ids(str(key)):
+            add_candidate(study_id, key)
+
+    for key in context.get("s3_listing_keys", []) or []:
+        if not key:
+            continue
+        for study_id in _extract_study_ids(str(key)):
+            add_candidate(study_id, key)
+
+    for study_id in context.get("ncd_study_ids", []) or []:
+        if not study_id:
+            continue
+        add_candidate(str(study_id), "ncd_study")
 
     return candidates
 
@@ -2399,6 +2476,100 @@ def _normalize_header_token(value: str) -> str:
 
 def _tokenize_text(value: str) -> set[str]:
     return set(re.findall(r"[a-z0-9]+", value.lower()))
+
+
+def _infer_project_prefix(project_name: Optional[str], seeds: Sequence[str]) -> Optional[str]:
+    if not project_name or not seeds:
+        return None
+    needle = f"/{project_name.lower()}/"
+    for key in seeds:
+        if not key:
+            continue
+        lower = str(key).lower()
+        idx = lower.find(needle)
+        if idx == -1:
+            continue
+        end = idx + len(needle)
+        return str(key)[:end]
+    return None
+
+
+def _list_module4_study_keys(
+    s3_client: Any,
+    *,
+    bucket: str,
+    project_name: Optional[str],
+    module4_sections: Sequence[str],
+    seeds: Sequence[str],
+    max_keys: int = 2000,
+) -> List[str]:
+    prefix = _infer_project_prefix(project_name, seeds)
+    if not prefix or not module4_sections:
+        return []
+    search_prefix = f"{prefix}Module 4 Nonclinical Study Reports/"
+    keys: List[str] = []
+    key_set: set[str] = set()
+    token: Optional[str] = None
+    scanned = 0
+    module_tokens = [str(section) for section in module4_sections if section]
+
+    def add_key(key: str) -> None:
+        if key in key_set:
+            return
+        key_set.add(key)
+        keys.append(key)
+
+    def list_prefix(prefix_value: str) -> None:
+        nonlocal scanned
+        continuation: Optional[str] = None
+        while True:
+            params = {
+                "Bucket": bucket,
+                "Prefix": prefix_value,
+                "MaxKeys": 1000,
+            }
+            if continuation:
+                params["ContinuationToken"] = continuation
+            try:
+                response = s3_client.list_objects_v2(**params)
+            except Exception:
+                return
+            contents = response.get("Contents") or []
+            for item in contents:
+                key = item.get("Key")
+                if not key:
+                    continue
+                scanned += 1
+                if scanned > max_keys:
+                    return
+                if module_tokens and not any(token in key for token in module_tokens):
+                    continue
+                if _extract_study_ids(key):
+                    add_key(key)
+            if not response.get("IsTruncated"):
+                break
+            continuation = response.get("NextContinuationToken")
+            if not continuation:
+                break
+
+    seed_prefixes: set[str] = set()
+    for seed in seeds:
+        if not seed:
+            continue
+        parts = str(seed).split("/")
+        for idx, segment in enumerate(parts):
+            if not any(token in segment for token in module_tokens):
+                continue
+            candidate = "/".join(parts[: idx + 1]) + "/"
+            if candidate.startswith(prefix):
+                seed_prefixes.add(candidate)
+    for seed_prefix in sorted(seed_prefixes):
+        list_prefix(seed_prefix)
+        if scanned > max_keys:
+            return keys
+
+    list_prefix(search_prefix)
+    return keys
 
 
 def _pick_first_value(
@@ -2568,6 +2739,7 @@ def _repair_safety_pharmacology_table(
 
 def _extract_overview_candidates(context: Dict[str, Any]) -> List[Dict[str, str]]:
     candidates: List[Dict[str, str]] = []
+    seen: set[str] = set()
     for asset in context.get("table_assets", []) or []:
         preview_rows = asset.get("preview_rows") or []
         for row in preview_rows:
@@ -2575,15 +2747,31 @@ def _extract_overview_candidates(context: Dict[str, Any]) -> List[Dict[str, str]
                 continue
             key_map = {_normalize_header_token(str(key)): key for key in row.keys()}
             study_key = key_map.get("study number")
+            if not study_key:
+                for fallback in ("study id", "study no", "study #", "report number"):
+                    study_key = key_map.get(fallback)
+                    if study_key:
+                        break
             type_key = key_map.get("type of study")
-            if not study_key or not type_key:
+            if not type_key:
+                for fallback in ("study title", "study description", "title"):
+                    type_key = key_map.get(fallback)
+                    if type_key:
+                        break
+            if not study_key:
                 continue
             study_number = str(row.get(study_key) or "").strip()
             if not study_number:
                 continue
+            study_ids = _extract_study_ids(study_number)
+            if not study_ids:
+                continue
+            study_id = study_ids[0]
+            if study_id in seen:
+                continue
             candidates.append(
                 {
-                    "type_of_study": str(row.get(type_key) or "").strip(),
+                    "type_of_study": str(row.get(type_key) or "").strip() if type_key else "",
                     "test_system": _pick_first_value(
                         row, key_map, "test system", "species strain"
                     ),
@@ -2591,9 +2779,10 @@ def _extract_overview_candidates(context: Dict[str, Any]) -> List[Dict[str, str]
                         row.get(key_map.get("method of administration") or "") or ""
                     ).strip(),
                     "testing_facility": str(row.get(key_map.get("testing facility") or "") or "").strip(),
-                    "study_number": study_number,
+                    "study_number": study_id,
                 }
             )
+            seen.add(study_id)
     return candidates
 
 
@@ -2617,6 +2806,7 @@ def _repair_overview_table(
     candidates = _extract_overview_candidates(context)
     if not candidates:
         return
+    study_id_candidates = _build_study_id_candidates(context)
 
     def candidate_text(candidate: Dict[str, str]) -> str:
         parts = [
@@ -2682,6 +2872,42 @@ def _repair_overview_table(
             elif key == "study number":
                 new_row[col] = candidate.get("study_number", "")
         rows.append(new_row)
+
+    if study_id_candidates:
+        existing_ids = {
+            str(row.get(study_col) or "").strip()
+            for row in rows
+            if isinstance(row, dict)
+        }
+        for entry in study_id_candidates.values():
+            study_id = str(entry.get("study_id") or "").strip()
+            if not study_id or study_id in existing_ids:
+                continue
+            new_row = {col: "" for col in columns}
+            for col in columns:
+                if _normalize_header_token(col) == "study number":
+                    new_row[col] = study_id
+            rows.append(new_row)
+            existing_ids.add(study_id)
+
+    deduped: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        study_id = str(row.get(study_col) or "").strip()
+        if not study_id:
+            continue
+        score = sum(1 for col in columns if str(row.get(col) or "").strip())
+        current = deduped.get(study_id)
+        if not current or score > current.get("_score", 0):
+            row_copy = dict(row)
+            row_copy["_score"] = score
+            deduped[study_id] = row_copy
+    if deduped:
+        rows[:] = [
+            {k: v for k, v in entry.items() if k != "_score"}
+            for entry in deduped.values()
+        ]
 
 
 def _tabulated_template_entries_for_section(section: str) -> List[Dict[str, Any]]:
@@ -2788,6 +3014,12 @@ def _build_tabulated_context(
     project_like = f"%/{project_name}/%" if project_name else "%"
 
     module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(section)
+    fallback_section = None
+    if not module4_sections and section == "2.6.3.1":
+        fallback_section = "2.6.3"
+        module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(
+            fallback_section
+        )
     mapping_filter = "prefix"
     if section.startswith("2.6."):
         exact_sections = set()
@@ -2815,6 +3047,24 @@ def _build_tabulated_context(
         project_like=project_like,
         module4_sections=module4_sections,
     )
+    project_document_keys = fetch_project_document_keys(
+        db,
+        tenant_id=tenant_id,
+        bucket=bucket,
+        project_like=project_like,
+    )
+    document_keys = fetch_document_keys_for_sections(
+        db,
+        tenant_id=tenant_id,
+        bucket=bucket,
+        project_like=project_like,
+        module4_sections=module4_sections,
+    )
+    ncd_study_ids = fetch_study_ids_for_sections(
+        db,
+        project_id=project_id,
+        module4_sections=module4_sections,
+    )
 
     assets = fetch_assets_for_sections(
         db,
@@ -2826,6 +3076,7 @@ def _build_tabulated_context(
     )
 
     s3_client = _boto3_client("s3")
+    s3_listing_keys: List[str] = []
     table_assets: List[Dict[str, Any]] = []
     for row in assets[: max(0, max_tables)]:
         extra = _normalize_extra_attributes(row.get("extra_attributes"))
@@ -2855,6 +3106,19 @@ def _build_tabulated_context(
                 "preview_rows": preview_rows,
             }
         )
+
+    s3_listing_keys = _list_module4_study_keys(
+        s3_client,
+        bucket=bucket,
+        project_name=project_name,
+        module4_sections=module4_sections,
+        seeds=[
+            *(asset.get("s3_key") for asset in table_assets if asset.get("s3_key")),
+            *(source.get("s3_key") for source in sources if source.get("s3_key")),
+            *document_keys,
+            *project_document_keys,
+        ],
+    )
 
     template_entries = _tabulated_template_entries_for_section(section)
     table_specs: List[Dict[str, Any]] = []
@@ -2896,6 +3160,10 @@ def _build_tabulated_context(
         warnings.append("No section sources found for the matched Module 4 sections.")
     if not assets:
         warnings.append("No table assets found for the matched Module 4 sections.")
+    if fallback_section:
+        warnings.append(
+            f"No mapping for {section}; using {fallback_section} module sections."
+        )
 
     debug = {
         "project_name": project_name,
@@ -2911,6 +3179,8 @@ def _build_tabulated_context(
         "table_assets_with_preview_rows": table_assets_with_preview,
         "table_preview_row_count": preview_row_total,
         "table_specs_count": len(table_specs),
+        "document_keys_count": len(document_keys),
+        "s3_listing_keys_count": len(s3_listing_keys),
         "warnings": warnings,
         "table_asset_samples": [
             {
@@ -2932,6 +3202,10 @@ def _build_tabulated_context(
         "table_specs": table_specs,
         "table_assets": table_assets,
         "section_sources": _slim_sources([dict(row) for row in sources]),
+        "document_keys": document_keys,
+        "project_document_keys": project_document_keys,
+        "ncd_study_ids": ncd_study_ids,
+        "s3_listing_keys": s3_listing_keys,
     }, debug
 
 

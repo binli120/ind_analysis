@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+import re
 from typing import Any, Dict, Iterable, List, Optional
 from uuid import uuid4
 
@@ -27,6 +28,35 @@ from .pipeline import DocumentChunk
 from database.db_interface import NCDRepository
 
 logger = logging.getLogger(__name__)
+
+_STUDY_ID_RE = re.compile(
+    r"\b(?=[A-Z0-9.-]*[A-Z])(?=[A-Z0-9.-]*\d)[A-Z0-9]{2,}(?:[-.][A-Z0-9]+)+\b",
+    re.IGNORECASE,
+)
+_STUDY_ID_PREFIX_RE = re.compile(r"^(?:stf-|study-)", re.IGNORECASE)
+_STUDY_ID_EXT_RE = re.compile(
+    r"\.(?:pdf|xml|docx|txt|csv|json|md)$", re.IGNORECASE
+)
+
+
+def _extract_study_id_from_key(key: str | None) -> str | None:
+    if not key:
+        return None
+    matches = _STUDY_ID_RE.findall(key)
+    if not matches:
+        return None
+    for match in matches:
+        cleaned = _STUDY_ID_EXT_RE.sub("", match)
+        cleaned = _STUDY_ID_PREFIX_RE.sub("", cleaned)
+        cleaned = cleaned.strip("._-")
+        if not cleaned:
+            continue
+        if not _STUDY_ID_RE.fullmatch(cleaned):
+            continue
+        if sum(1 for ch in cleaned if ch.isdigit()) < 3:
+            continue
+        return cleaned.upper()
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -120,6 +150,8 @@ class LangChainExtractionPipeline:
         model_name: str,
         chunks: List[DocumentChunk],
         created_by: Optional[str] = None,
+        project_id: Optional[str] = None,
+        source_key: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Orchestrate segmentation → extraction → confidence → persistence.
@@ -133,6 +165,39 @@ class LangChainExtractionPipeline:
         )
 
         study_segments = self.segment_studies(chunks)
+        if not study_segments:
+            last_page = max((chunk.page for chunk in chunks), default=1)
+            fallback_id = _extract_study_id_from_key(source_key) or f"study-{uuid4()}"
+            study_segments = [
+                StudySegment(
+                    study_id=fallback_id,
+                    study_type="tox",
+                    start_page=1,
+                    end_page=last_page,
+                    species=None,
+                    route=None,
+                    duration=None,
+                )
+            ]
+        fallback_id = _extract_study_id_from_key(source_key)
+        if fallback_id and len(study_segments) == 1:
+            candidate_id = study_segments[0].study_id
+            normalized_candidate = (candidate_id or "").strip()
+            if not normalized_candidate:
+                study_segments[0].study_id = fallback_id
+            elif normalized_candidate.lower().startswith("study-"):
+                study_segments[0].study_id = fallback_id
+            elif not _STUDY_ID_RE.fullmatch(normalized_candidate):
+                study_segments[0].study_id = fallback_id
+            elif normalized_candidate.upper() != fallback_id.upper():
+                study_segments[0].study_id = fallback_id
+        elif fallback_id:
+            has_valid = any(
+                seg.study_id and _STUDY_ID_RE.fullmatch(seg.study_id) and not seg.study_id.lower().startswith("study-")
+                for seg in study_segments
+            )
+            if not has_valid and study_segments:
+                study_segments[0].study_id = fallback_id
         persisted: Dict[str, Any] = {
             "extraction_run_id": run_id,
             "studies": [],
@@ -146,6 +211,7 @@ class LangChainExtractionPipeline:
                 species=segment.species,
                 route=segment.route,
                 duration=segment.duration,
+                project_id=project_id,
             )
             study_chunks = [
                 chunk
@@ -170,15 +236,23 @@ class LangChainExtractionPipeline:
                     }
                 )
                 anchor = self._make_anchor(chunk, record.quote)
-                noael_id = self.repo.insert_noael(
-                    study_id=study_db_id,
-                    dose=record.dose,
-                    dose_unit=record.dose_unit,
-                    species=record.species,
-                    sex=record.sex,
-                    endpoint=record.endpoint,
-                    value=record.quote,
-                )
+                try:
+                    noael_id = self.repo.insert_noael(
+                        study_id=study_db_id,
+                        dose=record.dose,
+                        dose_unit=record.dose_unit,
+                        species=record.species,
+                        sex=record.sex,
+                        endpoint=record.endpoint,
+                        value=record.quote,
+                    )
+                except Exception as exc:  # pragma: no cover - schema drift
+                    logger.warning("Skipping NOAEL insert for %s: %s", segment.study_id, exc)
+                    try:
+                        self.repo.session.rollback()
+                    except Exception:
+                        pass
+                    continue
                 self.repo.insert_extracted_entity(
                     extraction_run_id=run_id,
                     document_version_id=document_version_id,
@@ -203,13 +277,21 @@ class LangChainExtractionPipeline:
                     }
                 )
                 anchor = self._make_anchor(chunk, record.quote)
-                pk_id = self.repo.insert_pk_parameter(
-                    study_id=study_db_id,
-                    parameter=record.parameter,
-                    value=record.value,
-                    unit=record.unit,
-                    dose_group=record.dose_group,
-                )
+                try:
+                    pk_id = self.repo.insert_pk_parameter(
+                        study_id=study_db_id,
+                        parameter=record.parameter,
+                        value=record.value,
+                        unit=record.unit,
+                        dose_group=record.dose_group,
+                    )
+                except Exception as exc:  # pragma: no cover - schema drift
+                    logger.warning("Skipping PK insert for %s: %s", segment.study_id, exc)
+                    try:
+                        self.repo.session.rollback()
+                    except Exception:
+                        pass
+                    continue
                 self.repo.insert_extracted_entity(
                     extraction_run_id=run_id,
                     document_version_id=document_version_id,

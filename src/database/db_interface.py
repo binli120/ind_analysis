@@ -1427,6 +1427,7 @@ class NCDRepository:
         species: str | None = None,
         route: str | None = None,
         duration: str | None = None,
+        project_id: str | None = None,
     ) -> str:
         """
         Insert a study if missing; return its UUID.
@@ -1472,6 +1473,18 @@ class NCDRepository:
         if not self._table_exists("ncd_study"):
             raise RuntimeError("Missing ncd_study/ncd_studies table for study upsert")
 
+        if project_id is None and source_document_id:
+            project_id = db.execute(
+                sqltext(
+                    """
+                    SELECT project_id
+                    FROM ncd_source_document
+                    WHERE id = :sid
+                    """
+                ),
+                {"sid": source_document_id},
+            ).scalar()
+
         duration_days = self._parse_duration_days(duration)
         extra_attributes = {}
         if duration and duration_days is None:
@@ -1491,31 +1504,64 @@ class NCDRepository:
             {"sid": study_id},
         ).scalar()
         if existing:
+            if project_id:
+                db.execute(
+                    sqltext(
+                        """
+                        UPDATE ncd_study
+                        SET project_id = COALESCE(project_id, :pid)
+                        WHERE id = :id
+                        """
+                    ),
+                    {"pid": project_id, "id": existing},
+                )
+                db.commit()
             return str(existing)
 
-        inserted = db.execute(
-            sqltext(
-                """
+        columns = [
+            "sponsor_study_id",
+            "study_type",
+            "species",
+            "route",
+            "duration_days",
+            "extra_attributes",
+        ]
+        values: Dict[str, Any] = {
+            "sid": study_id,
+            "stype": study_type,
+            "species": species,
+            "route": route,
+            "duration_days": duration_days,
+            "extra": json.dumps(extra_attributes) if extra_attributes else "{}",
+        }
+        if project_id:
+            columns.insert(0, "project_id")
+            values["project_id"] = project_id
+
+        cols_sql = ", ".join(columns)
+        params_sql = ", ".join(
+            f":{param}"
+            for param in (
+                "project_id" if project_id else None,
+                "sid",
+                "stype",
+                "species",
+                "route",
+                "duration_days",
+                "extra",
+            )
+            if param
+        )
+        insert_sql = f"""
                 INSERT INTO ncd_study (
-                    sponsor_study_id, study_type, species, route,
-                    duration_days, extra_attributes
+                    {cols_sql}
                 )
                 VALUES (
-                    :sid, :stype, :species, :route,
-                    :duration_days, CAST(:extra AS jsonb)
+                    {params_sql}
                 )
                 RETURNING id
                 """
-            ),
-            {
-                "sid": study_id,
-                "stype": study_type,
-                "species": species,
-                "route": route,
-                "duration_days": duration_days,
-                "extra": json.dumps(extra_attributes) if extra_attributes else "{}",
-            },
-        ).scalar()
+        inserted = db.execute(sqltext(insert_sql), values).scalar()
         if inserted is None:
             raise RuntimeError("Failed to upsert study")
         db.commit()
@@ -1606,6 +1652,7 @@ class NCDRepository:
         confidence: float | None,
     ) -> str:
         db = self.session
+        anchor_json = json.dumps(anchor) if anchor is not None else None
         ent_id = db.execute(
             sqltext(
                 """
@@ -1613,7 +1660,7 @@ class NCDRepository:
                     extraction_run_id, document_version_id,
                     entity_type, entity_id, anchor, confidence
                 )
-                VALUES (:run_id, :doc_version_id, :etype, :eid, :anchor, :conf)
+                VALUES (:run_id, :doc_version_id, :etype, :eid, CAST(:anchor AS jsonb), :conf)
                 ON CONFLICT (entity_type, entity_id)
                 DO UPDATE SET
                     anchor = EXCLUDED.anchor,
@@ -1628,7 +1675,7 @@ class NCDRepository:
                 "doc_version_id": document_version_id,
                 "etype": entity_type,
                 "eid": entity_id,
-                "anchor": anchor,
+                "anchor": anchor_json,
                 "conf": confidence,
             },
         ).scalar()
@@ -1646,6 +1693,7 @@ class NCDRepository:
         created_by: str | None = None,
     ) -> str:
         db = self.session
+        anchor_json = json.dumps(anchor) if anchor is not None else None
         comment_id = db.execute(
             sqltext(
                 """
@@ -1653,13 +1701,13 @@ class NCDRepository:
                     document_version_id, parent_id, status,
                     anchor, content, created_by
                 )
-                VALUES (:doc_version_id, NULL, 'open', :anchor, :content, :created_by)
+                VALUES (:doc_version_id, NULL, 'open', CAST(:anchor AS jsonb), :content, :created_by)
                 RETURNING id
                 """
             ),
             {
                 "doc_version_id": document_version_id,
-                "anchor": anchor,
+                "anchor": anchor_json,
                 "content": content,
                 "created_by": created_by,
             },
