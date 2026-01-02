@@ -222,7 +222,7 @@ Decision guide:
 
 ## Run All Pipelines for New PDFs
 
-Use the batch ingest script to run core + LangChain + context + summary first, then run tox in a separate pass.
+Use the batch ingest script to run core + context + summary for every module, then run the Module 4 LangChain and tox passes.
 
 1) Set required environment variables:
 
@@ -232,45 +232,78 @@ export OPENAI_API_KEY="<key>"
 export AWS_REGION="us-east-1"
 export ENABLE_LANGCHAIN=true
 export ENABLE_CONTEXT_PIPELINE=true
+export PROJECT_NAME="Lpathomab"
+export PROJECT_UUID="00000000-0000-0000-0000-000000000000"
+export TENANT_UUID="00000000-0000-0000-0000-000000000000"
+export USER_UUID="00000000-0000-0000-0000-000000000000"
 ```
 
-2) Core + LangChain + context + summary:
+2) Core extraction for all modules (1-5):
+
+```shell
+poetry run python scripts/ingest_module4_batch.py \
+  --bucket doc-repository-dev \
+  --company filynai.com \
+  --project "${PROJECT_NAME}" \
+  --project-id "${PROJECT_UUID}" \
+  --tenant-id "${TENANT_UUID}" \
+  --created-by "${USER_UUID}" \
+  --prefix "filynai.com/${PROJECT_NAME}/" \
+  --all-modules \
+  --mode core \
+  --force-core \
+  --core-table-engines pdfplumber,camelot \
+  --workers 4
+```
+
+3) Optional: AI metadata labels for all modules (writes `.meta.json` updates + Redis entries):
+
+```shell
+poetry run python scripts/s3_sync.py \
+  --bucket doc-repository-dev \
+  --company filynai.com \
+  --projects "${PROJECT_NAME}" \
+  --modules 1,2,3,4,5 \
+  --ai-metadata \
+  --output-dir ./synced-markdown
+```
+
+4) Module 4 LangChain extraction (ncd_study, NOAEL, PK, extracted_entities):
 
 ```shell
 LANGCHAIN_TRACING_V2=false LANGCHAIN_API_KEY= \
 poetry run python scripts/ingest_module4_batch.py \
   --bucket doc-repository-dev \
   --company filynai.com \
-  --project Lpathomab \
-  --project-id <PROJECT_UUID> \
-  --tenant-id <TENANT_UUID> \
-  --created-by <USER_UUID> \
-  --prefix "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/<NEW_FOLDER>/" \
+  --project "${PROJECT_NAME}" \
+  --project-id "${PROJECT_UUID}" \
+  --tenant-id "${TENANT_UUID}" \
+  --created-by "${USER_UUID}" \
+  --prefix "filynai.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/" \
   --mode core \
-  --force-core \
   --run-langchain --force-langchain \
   --core-table-engines pdfplumber,camelot \
   --workers 4
 ```
 
-3) Tox pipeline (separate pass):
+5) Module 4 tox pipeline (ncd_finding/exposure/safety summary):
 
 ```shell
 LANGCHAIN_TRACING_V2=false LANGCHAIN_API_KEY= \
 poetry run python scripts/ingest_module4_batch.py \
   --bucket doc-repository-dev \
   --company filynai.com \
-  --project Lpathomab \
-  --project-id <PROJECT_UUID> \
-  --tenant-id <TENANT_UUID> \
-  --created-by <USER_UUID> \
-  --prefix "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/<NEW_FOLDER>/" \
+  --project "${PROJECT_NAME}" \
+  --project-id "${PROJECT_UUID}" \
+  --tenant-id "${TENANT_UUID}" \
+  --created-by "${USER_UUID}" \
+  --prefix "filynai.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/" \
   --mode tox \
   --force-tox \
   --workers 2
 ```
 
-4) Review the latest ingestion report:
+6) Review the latest ingestion report:
 
 ```shell
 ls -t tmp/ingestion_reports/ingestion_module4-*.json | head -n 1
