@@ -58,7 +58,9 @@ def _resolve_env(name: str, default: Optional[str] = None) -> str:
     """Read an environment variable, raising if it is missing and no default is provided."""
     value = os.getenv(name, default)
     if value is None or not value.strip():
-        raise RuntimeError(f"Environment variable {name} is required for the {MODULE_NAME} module")
+        raise RuntimeError(
+            f"Environment variable {name} is required for the {MODULE_NAME} module"
+        )
     return value
 
 
@@ -109,7 +111,9 @@ def _store_analysis(bucket: str, key: str, document: Dict[str, Any]) -> str:
             ContentType="application/json",
         )
     except ClientError as exc:
-        raise RuntimeError(f"Failed to upload analysis to s3://{bucket}/{analysis_key}: {exc}") from exc
+        raise RuntimeError(
+            f"Failed to upload analysis to s3://{bucket}/{analysis_key}: {exc}"
+        ) from exc
     return analysis_key
 
 
@@ -137,7 +141,9 @@ def _iter_next_topic_arns() -> List[str]:
     return unique
 
 
-def _publish_next_events(request_payload: Dict[str, Any], result_payload: Dict[str, Any]) -> None:
+def _publish_next_events(
+    request_payload: Dict[str, Any], result_payload: Dict[str, Any]
+) -> None:
     """Broadcast completion events so the next stages can begin processing."""
     topics = _iter_next_topic_arns()
     if not topics:
@@ -157,7 +163,12 @@ def _publish_next_events(request_payload: Dict[str, Any], result_payload: Dict[s
             _get_sns_client().publish(TopicArn=topic, Message=message)
             logger.info("[%s] published downstream event to %s", MODULE_NAME, topic)
         except ClientError as exc:  # pragma: no cover - network failure
-            logger.warning("[%s] failed to publish downstream event to %s: %s", MODULE_NAME, topic, exc)
+            logger.warning(
+                "[%s] failed to publish downstream event to %s: %s",
+                MODULE_NAME,
+                topic,
+                exc,
+            )
 
 
 def pdf_extraction_handler(payload: Dict[str, Any]) -> Dict[str, Any]:

@@ -132,10 +132,16 @@ class DummyLLM(LLMClient):
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run NCD ingest + extraction demo against a PDF.")
+    parser = argparse.ArgumentParser(
+        description="Run NCD ingest + extraction demo against a PDF."
+    )
     parser.add_argument("pdf", type=Path, help="Path to the PDF to ingest.")
-    parser.add_argument("--project-id", required=True, help="Project UUID for DB records.")
-    parser.add_argument("--module", default="Module 4", help="Module label to store on source_document.")
+    parser.add_argument(
+        "--project-id", required=True, help="Project UUID for DB records."
+    )
+    parser.add_argument(
+        "--module", default="Module 4", help="Module label to store on source_document."
+    )
     parser.add_argument(
         "--chunk-max-chars",
         type=int,
@@ -169,8 +175,12 @@ def main() -> int:
     print(f"Source document: {result['source_document_id']}")
     print(f"Study:           {result['study_id']}")
     print(f"Chunks inserted: {len(result['chunks'])}")
-    print(f"NOAEL:           {result['tox_summary']['noael_mg_per_kg'] if result['tox_summary'] else 'n/a'}")
-    print(f"Cmax entries:    {len(result['pk_summary']['parameters']) if result['pk_summary'] else 0}")
+    print(
+        f"NOAEL:           {result['tox_summary']['noael_mg_per_kg'] if result['tox_summary'] else 'n/a'}"
+    )
+    print(
+        f"Cmax entries:    {len(result['pk_summary']['parameters']) if result['pk_summary'] else 0}"
+    )
     print(f"PK summary:      {bool(result['pk_summary'])}")
     return 0
 

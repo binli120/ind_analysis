@@ -142,7 +142,9 @@ class OpenAIMetadataGenerator:
         keywords = _ensure_list(data.get("keywords") or data.get("tags"), limit=5)
         language = str(data.get("language") or data.get("lang") or "unknown").lower()
         ind_document_type = data.get("ind_document_type") or data.get("document_type")
-        ind_section_number = data.get("ind_section_number") or data.get("section_number")
+        ind_section_number = data.get("ind_section_number") or data.get(
+            "section_number"
+        )
         ind_section_title = data.get("ind_section_title") or data.get("section_title")
         ind_confidence = data.get("ind_confidence") or data.get("confidence")
 
@@ -159,7 +161,9 @@ class OpenAIMetadataGenerator:
             metadata["ind_section_title"] = str(ind_section_title).strip()
         if ind_confidence is not None:
             try:
-                metadata["ind_classification_confidence"] = round(float(ind_confidence), 3)
+                metadata["ind_classification_confidence"] = round(
+                    float(ind_confidence), 3
+                )
             except (TypeError, ValueError):
                 pass
         metadata["analyzed"] = True

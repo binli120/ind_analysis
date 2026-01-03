@@ -24,7 +24,9 @@ def _extract_all_names(module_ast: ast.Module) -> list[str]:
                     if isinstance(node.value, (ast.List, ast.Tuple)):
                         names: list[str] = []
                         for elt in node.value.elts:
-                            if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                            if isinstance(elt, ast.Constant) and isinstance(
+                                elt.value, str
+                            ):
                                 names.append(elt.value)
                         return names
     return []
@@ -38,4 +40,6 @@ def test_export_init_docstring_present() -> None:
 
 def test_export_init_exports_expected_symbols() -> None:
     names = set(_extract_all_names(_load_module_ast()))
-    assert {"PAGE_BREAK", "build_markdown_document", "build_html_document"}.issubset(names)
+    assert {"PAGE_BREAK", "build_markdown_document", "build_html_document"}.issubset(
+        names
+    )

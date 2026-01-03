@@ -118,7 +118,9 @@ class CTDTabulatedSummaryRecord:
 class NCDRepository:
     """Small helper for inserting document/pages/chunks into the NCD schema."""
 
-    def __init__(self, engine: Engine | None = None, session: Session | None = None) -> None:
+    def __init__(
+        self, engine: Engine | None = None, session: Session | None = None
+    ) -> None:
         self._engine = engine or default_engine
         self._external_session = session
         self._session: Session | None = None
@@ -326,9 +328,10 @@ class NCDRepository:
         if self._documents_embedding_info is not None:
             return self._documents_embedding_info
         db = self.session
-        row = db.execute(
-            sqltext(
-                """
+        row = (
+            db.execute(
+                sqltext(
+                    """
                 SELECT column_name, is_nullable, data_type, udt_name, column_default
                 FROM information_schema.columns
                 WHERE table_schema = 'public'
@@ -336,8 +339,11 @@ class NCDRepository:
                   AND column_name = 'embedding'
                 LIMIT 1
                 """
+                )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
         if not row:
             self._documents_embedding_info = None
             return None
@@ -352,9 +358,10 @@ class NCDRepository:
 
     def _documents_embedding_type_repr(self) -> str | None:
         db = self.session
-        row = db.execute(
-            sqltext(
-                """
+        row = (
+            db.execute(
+                sqltext(
+                    """
                 SELECT format_type(a.atttypid, a.atttypmod) AS type_repr
                 FROM pg_attribute a
                 JOIN pg_class c ON c.oid = a.attrelid
@@ -365,8 +372,11 @@ class NCDRepository:
                   AND a.attnum > 0
                 LIMIT 1
                 """
+                )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
         return str(row.get("type_repr")) if row else None
 
     def _default_embedding_value(self, info: dict) -> object:
@@ -519,9 +529,10 @@ class NCDRepository:
         Upsert ingestion status row.
         """
         db = self.session
-        row = db.execute(
-            sqltext(
-                """
+        row = (
+            db.execute(
+                sqltext(
+                    """
                 INSERT INTO document_ingestion_status (
                     s3_bucket, s3_key, s3_version_id,
                     content_hash, status, document_version_id, error_message
@@ -535,17 +546,20 @@ class NCDRepository:
                     updated_at = now()
                 RETURNING id, status, document_version_id
                 """
-            ),
-            {
-                "bucket": s3_bucket,
-                "key": s3_key,
-                "version_id": s3_version_id,
-                "hash": content_hash,
-                "status": status,
-                "dvid": document_version_id,
-                "err": error_message,
-            },
-        ).mappings().first()
+                ),
+                {
+                    "bucket": s3_bucket,
+                    "key": s3_key,
+                    "version_id": s3_version_id,
+                    "hash": content_hash,
+                    "status": status,
+                    "dvid": document_version_id,
+                    "err": error_message,
+                },
+            )
+            .mappings()
+            .first()
+        )
         db.commit()
         return dict(row) if row else {}
 
@@ -553,16 +567,20 @@ class NCDRepository:
         self, *, s3_bucket: str, s3_key: str, content_hash: str
     ) -> dict | None:
         db = self.session
-        row = db.execute(
-            sqltext(
-                """
+        row = (
+            db.execute(
+                sqltext(
+                    """
                 SELECT id, status, document_version_id
                 FROM document_ingestion_status
                 WHERE s3_bucket = :bucket AND s3_key = :key AND content_hash = :hash
                 """
-            ),
-            {"bucket": s3_bucket, "key": s3_key, "hash": content_hash},
-        ).mappings().first()
+                ),
+                {"bucket": s3_bucket, "key": s3_key, "hash": content_hash},
+            )
+            .mappings()
+            .first()
+        )
         return dict(row) if row else None
 
     def fetch_ingestion_status_for_key(
@@ -573,9 +591,10 @@ class NCDRepository:
         Optionally scope the lookup to a specific S3 version id.
         """
         db = self.session
-        row = db.execute(
-            sqltext(
-                """
+        row = (
+            db.execute(
+                sqltext(
+                    """
                 SELECT id, status, document_version_id, content_hash, s3_version_id, updated_at, error_message
                 FROM document_ingestion_status
                 WHERE s3_bucket = :bucket
@@ -584,13 +603,16 @@ class NCDRepository:
                 ORDER BY updated_at DESC
                 LIMIT 1
                 """
-            ),
-            {
-                "bucket": s3_bucket,
-                "key": s3_key,
-                "version_id": s3_version_id,
-            },
-        ).mappings().first()
+                ),
+                {
+                    "bucket": s3_bucket,
+                    "key": s3_key,
+                    "version_id": s3_version_id,
+                },
+            )
+            .mappings()
+            .first()
+        )
         return dict(row) if row else None
 
     def upsert_pipeline_status(
@@ -611,9 +633,10 @@ class NCDRepository:
         Upsert per-pipeline ingestion status.
         """
         db = self.session
-        row = db.execute(
-            sqltext(
-                """
+        row = (
+            db.execute(
+                sqltext(
+                    """
                 INSERT INTO ncd_ingestion_pipeline_status (
                     s3_bucket, s3_key, s3_version_id,
                     content_hash, pipeline, status,
@@ -636,20 +659,23 @@ class NCDRepository:
                     updated_at = now()
                 RETURNING id, status, document_version_id, source_document_id, study_id
                 """
-            ),
-            {
-                "bucket": s3_bucket,
-                "key": s3_key,
-                "version_id": s3_version_id,
-                "hash": content_hash,
-                "pipeline": pipeline,
-                "status": status,
-                "dvid": document_version_id,
-                "sdid": source_document_id,
-                "study_id": study_id,
-                "err": error_message,
-            },
-        ).mappings().first()
+                ),
+                {
+                    "bucket": s3_bucket,
+                    "key": s3_key,
+                    "version_id": s3_version_id,
+                    "hash": content_hash,
+                    "pipeline": pipeline,
+                    "status": status,
+                    "dvid": document_version_id,
+                    "sdid": source_document_id,
+                    "study_id": study_id,
+                    "err": error_message,
+                },
+            )
+            .mappings()
+            .first()
+        )
         db.commit()
         return dict(row) if row else {}
 
@@ -662,9 +688,10 @@ class NCDRepository:
         pipeline: str,
     ) -> dict | None:
         db = self.session
-        row = db.execute(
-            sqltext(
-                """
+        row = (
+            db.execute(
+                sqltext(
+                    """
                 SELECT id, status, document_version_id, source_document_id, study_id, error_message
                 FROM ncd_ingestion_pipeline_status
                 WHERE s3_bucket = :bucket
@@ -672,9 +699,17 @@ class NCDRepository:
                   AND content_hash = :hash
                   AND pipeline = :pipeline
                 """
-            ),
-            {"bucket": s3_bucket, "key": s3_key, "hash": content_hash, "pipeline": pipeline},
-        ).mappings().first()
+                ),
+                {
+                    "bucket": s3_bucket,
+                    "key": s3_key,
+                    "hash": content_hash,
+                    "pipeline": pipeline,
+                },
+            )
+            .mappings()
+            .first()
+        )
         return dict(row) if row else None
 
     def fetch_pipeline_status_for_key(
@@ -686,9 +721,10 @@ class NCDRepository:
         s3_version_id: str | None = None,
     ) -> dict | None:
         db = self.session
-        row = db.execute(
-            sqltext(
-                """
+        row = (
+            db.execute(
+                sqltext(
+                    """
                 SELECT id, status, document_version_id, source_document_id, study_id,
                        content_hash, s3_version_id, updated_at, error_message
                 FROM ncd_ingestion_pipeline_status
@@ -699,14 +735,17 @@ class NCDRepository:
                 ORDER BY updated_at DESC
                 LIMIT 1
                 """
-            ),
-            {
-                "bucket": s3_bucket,
-                "key": s3_key,
-                "pipeline": pipeline,
-                "version_id": s3_version_id,
-            },
-        ).mappings().first()
+                ),
+                {
+                    "bucket": s3_bucket,
+                    "key": s3_key,
+                    "pipeline": pipeline,
+                    "version_id": s3_version_id,
+                },
+            )
+            .mappings()
+            .first()
+        )
         return dict(row) if row else None
 
     def upsert_source_document(
@@ -853,9 +892,10 @@ class NCDRepository:
         db = self.session
         rows: List[dict] = []
         for asset in assets:
-            row = db.execute(
-                sqltext(
-                    """
+            row = (
+                db.execute(
+                    sqltext(
+                        """
                     INSERT INTO document_assets (
                         document_version_id, asset_type,
                         page_number, index_on_page,
@@ -875,20 +915,25 @@ class NCDRepository:
                         extra_attributes = EXCLUDED.extra_attributes
                     RETURNING id, page_number, asset_type
                     """
-                ),
-                {
-                    "dvid": asset.document_version_id,
-                    "atype": asset.asset_type,
-                    "page_number": asset.page_number,
-                    "index_on_page": asset.index_on_page,
-                    "bucket": asset.s3_bucket,
-                    "key": asset.s3_key,
-                    "caption": asset.caption,
-                    "description": asset.description,
-                    "keywords": list(asset.keywords or []),
-                    "extra": json.dumps(asset.extra_attributes or {}, ensure_ascii=True),
-                },
-            ).mappings().first()
+                    ),
+                    {
+                        "dvid": asset.document_version_id,
+                        "atype": asset.asset_type,
+                        "page_number": asset.page_number,
+                        "index_on_page": asset.index_on_page,
+                        "bucket": asset.s3_bucket,
+                        "key": asset.s3_key,
+                        "caption": asset.caption,
+                        "description": asset.description,
+                        "keywords": list(asset.keywords or []),
+                        "extra": json.dumps(
+                            asset.extra_attributes or {}, ensure_ascii=True
+                        ),
+                    },
+                )
+                .mappings()
+                .first()
+            )
             if row:
                 rows.append(dict(row))
         db.commit()
@@ -1354,17 +1399,21 @@ class NCDRepository:
         if page_start is None or page_end is None:
             return []
         db = self.session
-        rows = db.execute(
-            sqltext(
-                """
+        rows = (
+            db.execute(
+                sqltext(
+                    """
                 SELECT id
                 FROM document_assets
                 WHERE document_version_id = :dvid
                   AND page_number BETWEEN :pstart AND :pend
                 """
-            ),
-            {"dvid": document_version_id, "pstart": page_start, "pend": page_end},
-        ).scalars().all()
+                ),
+                {"dvid": document_version_id, "pstart": page_start, "pend": page_end},
+            )
+            .scalars()
+            .all()
+        )
         return [str(row) for row in rows]
 
     def fetch_document_version_id_for_study(self, *, study_id: str) -> str | None:
@@ -1383,6 +1432,7 @@ class NCDRepository:
             {"sid": study_id},
         ).scalar()
         return str(row) if row else None
+
     def create_extraction_run(
         self,
         *,
@@ -1534,7 +1584,9 @@ class NCDRepository:
     ) -> str:
         db = self.session
         if not self._table_exists("ncd_noael"):
-            raise RuntimeError("Missing ncd_noael table; run legacy NCD schema for LangChain NOAEL extraction.")
+            raise RuntimeError(
+                "Missing ncd_noael table; run legacy NCD schema for LangChain NOAEL extraction."
+            )
         noael_id = db.execute(
             sqltext(
                 """
@@ -1571,7 +1623,9 @@ class NCDRepository:
     ) -> str:
         db = self.session
         if not self._table_exists("ncd_pk_parameters"):
-            raise RuntimeError("Missing ncd_pk_parameters table; run legacy NCD schema for LangChain PK extraction.")
+            raise RuntimeError(
+                "Missing ncd_pk_parameters table; run legacy NCD schema for LangChain PK extraction."
+            )
         pk_id = db.execute(
             sqltext(
                 """

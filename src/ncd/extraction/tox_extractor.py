@@ -80,13 +80,15 @@ def extract_tox_for_study(
     # Grab relevant chunks associated with this study or its source document
     chunks = (
         db.execute(
-            sqltext("""
+            sqltext(
+                """
             SELECT tc.id, tc.raw_text, tc.page_from, tc.page_to
             FROM ncd_text_chunk tc
             JOIN ncd_study s ON s.main_source_document_id = tc.source_document_id
             WHERE s.id = :sid
             ORDER BY tc.page_from
-        """),
+        """
+            ),
             {"sid": study_id},
         )
         .mappings()
@@ -127,17 +129,20 @@ def extract_tox_for_study(
     # Persist to DB: ncd_dose_group, ncd_exposure_metric, ncd_finding, ncd_study_safety_summary
     # 1) Safety summary (manual upsert to avoid ON CONFLICT requirement)
     existing_ss = db.execute(
-        sqltext("""
+        sqltext(
+            """
             SELECT id FROM ncd_study_safety_summary
             WHERE study_id = :sid
             LIMIT 1
-        """),
+        """
+        ),
         {"sid": study_id},
     ).scalar()
 
     if existing_ss:
         db.execute(
-            sqltext("""
+            sqltext(
+                """
                 UPDATE ncd_study_safety_summary
                 SET noael_mg_per_kg = :noael,
                     loael_mg_per_kg = :loael,
@@ -145,7 +150,8 @@ def extract_tox_for_study(
                     limiting_finding = :finding,
                     clinical_multiple = :cm
                 WHERE study_id = :sid
-            """),
+            """
+            ),
             {
                 "sid": study_id,
                 "noael": summary.noael_mg_per_kg,
@@ -157,12 +163,14 @@ def extract_tox_for_study(
         )
     else:
         db.execute(
-            sqltext("""
+            sqltext(
+                """
                 INSERT INTO ncd_study_safety_summary (
                     study_id, noael_mg_per_kg, loael_mg_per_kg,
                     limiting_organ, limiting_finding, clinical_multiple
                 ) VALUES (:sid, :noael, :loael, :organ, :finding, :cm)
-            """),
+            """
+            ),
             {
                 "sid": study_id,
                 "noael": summary.noael_mg_per_kg,
@@ -184,10 +192,12 @@ def extract_tox_for_study(
         ):
             continue
         db.execute(
-            sqltext("""
+            sqltext(
+                """
                 INSERT INTO ncd_dose_group (study_id, name, sex, n_animals, dose_mg_per_kg, dose_mg_per_m2, extra_attributes)
                 VALUES (:sid, :name, :sex, :n, :dose_kg, :dose_m2, '{}'::jsonb)
-            """),
+            """
+            ),
             {
                 "sid": study_id,
                 "name": dg.name,
@@ -203,7 +213,8 @@ def extract_tox_for_study(
         if not f.finding_term:
             continue
         db.execute(
-            sqltext("""
+            sqltext(
+                """
                 INSERT INTO ncd_finding (
                     study_id, organ_system, organ, finding_term,
                     severity, adverse, reversible, onset_day,
@@ -211,7 +222,8 @@ def extract_tox_for_study(
                 ) VALUES (
                     :sid, :org_sys, :org, :term, :sev, :adv, :rev, :onset, :dose_thr, :noael
                 )
-            """),
+            """
+            ),
             {
                 "sid": study_id,
                 "org_sys": f.organ_system,
@@ -231,13 +243,15 @@ def extract_tox_for_study(
         if not em.parameter:
             continue
         db.execute(
-            sqltext("""
+            sqltext(
+                """
                 INSERT INTO ncd_exposure_metric (
                     study_id, species, parameter, value, unit, timepoint, clinical_multiple
                 ) VALUES (
                     :sid, :species, :param, :val, :unit, :tp, :cm
                 )
-            """),
+            """
+            ),
             {
                 "sid": study_id,
                 "species": summary.species,
@@ -289,7 +303,7 @@ def _extract_positive_findings(
             f"Study ID: {study_id}\n"
             f"Chunk ID: {chunk.get('id')}\n"
             f"Pages: {chunk.get('page_from')} - {chunk.get('page_to')}\n\n"
-            f"Text:\n\"\"\"{raw_text}\"\"\""
+            f'Text:\n"""{raw_text}"""'
         )
         try:
             payload = llm.extract_json(TOX_POSITIVE_FINDINGS_PROMPT, prompt)

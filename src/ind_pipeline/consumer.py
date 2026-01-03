@@ -96,7 +96,12 @@ class NotificationConsumer:
                 Attributes=self.config.queue_attributes,
             )
         except ClientError as exc:
-            logger.error("[%s] failed to create SQS queue %s: %s", self.config.name, self.config.queue_name, exc)
+            logger.error(
+                "[%s] failed to create SQS queue %s: %s",
+                self.config.name,
+                self.config.queue_name,
+                exc,
+            )
             raise
 
         queue_url = queue.url
@@ -136,7 +141,9 @@ class NotificationConsumer:
                     "Principal": {"Service": "sns.amazonaws.com"},
                     "Action": "sqs:SendMessage",
                     "Resource": queue_arn,
-                    "Condition": {"ArnEquals": {"aws:SourceArn": self.config.topic_arn}},
+                    "Condition": {
+                        "ArnEquals": {"aws:SourceArn": self.config.topic_arn}
+                    },
                 }
             ],
         }
@@ -150,12 +157,18 @@ class NotificationConsumer:
         try:
             payload = json.loads(message_body)
         except json.JSONDecodeError:
-            logger.warning("[%s] received non-JSON message body: %s", self.config.name, message_body)
+            logger.warning(
+                "[%s] received non-JSON message body: %s",
+                self.config.name,
+                message_body,
+            )
             return None
         try:
             parsed = self._parser(payload) if self._parser else payload
         except Exception as exc:  # pragma: no cover - parser is user provided
-            logger.warning("[%s] parser failed for payload %s: %s", self.config.name, payload, exc)
+            logger.warning(
+                "[%s] parser failed for payload %s: %s", self.config.name, payload, exc
+            )
             return None
         return parsed
 
@@ -224,7 +237,9 @@ class NotificationConsumer:
         assert self._queue_url is not None  # satisfied by ensure_subscription
         queue = self._sqs.Queue(self._queue_url)
 
-        logger.info("[%s] listening for messages on %s", self.config.name, self._queue_url)
+        logger.info(
+            "[%s] listening for messages on %s", self.config.name, self._queue_url
+        )
         while True:
             messages = queue.receive_messages(
                 MaxNumberOfMessages=self.config.max_messages,

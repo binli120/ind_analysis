@@ -36,7 +36,9 @@ def _persist_outputs(
 
     manifest = save_tables(pdf_path, result.tables, outdir)
     table_csv_paths = [outdir / entry["csv"] for entry in manifest if entry.get("csv")]
-    table_json_paths = [outdir / entry["json"] for entry in manifest if entry.get("json")]
+    table_json_paths = [
+        outdir / entry["json"] for entry in manifest if entry.get("json")
+    ]
 
     legend_path: Optional[Path] = None
     if manifest:

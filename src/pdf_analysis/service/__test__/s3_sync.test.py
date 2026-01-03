@@ -46,7 +46,10 @@ def test_extract_document_metadata_invalid() -> None:
 def test_is_not_found_error() -> None:
     class FakeError(Exception):
         def __init__(self):
-            self.response = {"Error": {"Code": "NoSuchKey"}, "ResponseMetadata": {"HTTPStatusCode": 404}}
+            self.response = {
+                "Error": {"Code": "NoSuchKey"},
+                "ResponseMetadata": {"HTTPStatusCode": 404},
+            }
 
     assert s3_sync._is_not_found_error(FileNotFoundError("missing")) is True
     assert s3_sync._is_not_found_error(FakeError()) is True
@@ -63,7 +66,9 @@ def test_persist_markdown_file(tmp_path: Path) -> None:
         version_id="v1",
         last_modified=datetime.now(timezone.utc),
     )
-    service._persist_markdown_file(tmp_path, doc, "text", {"meta": True}, summary_text="summary")
+    service._persist_markdown_file(
+        tmp_path, doc, "text", {"meta": True}, summary_text="summary"
+    )
     assert (tmp_path / "filynai.com/Proj/Module 4/file.v1.pdf.md").exists()
     assert (tmp_path / "filynai.com/Proj/Module 4/file.v1.pdf.meta.json").exists()
     assert (tmp_path / "filynai.com/Proj/Module 4/file.v1.pdf.summary.txt").exists()

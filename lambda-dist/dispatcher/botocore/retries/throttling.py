@@ -4,7 +4,7 @@
 
 from collections import namedtuple
 
-CubicParams = namedtuple('CubicParams', ['w_max', 'k', 'last_fail'])
+CubicParams = namedtuple("CubicParams", ["w_max", "k", "last_fail"])
 
 
 class CubicCalculator:
@@ -54,6 +54,4 @@ class CubicCalculator:
         New parameters may be added to this object in the future.
 
         """
-        return CubicParams(
-            w_max=self._w_max, k=self._k, last_fail=self._last_fail
-        )
+        return CubicParams(w_max=self._w_max, k=self._k, last_fail=self._last_fail)

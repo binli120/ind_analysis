@@ -55,4 +55,4 @@ def test_build_html_document_includes_tables() -> None:
     doc = markdown_writer.build_html_document("Doc", pages, table_manifest)
     assert "<h1>Doc</h1>" in doc
     assert "Table (p1 t1)" in doc
-    assert "href=\"table.csv\"" in doc
+    assert 'href="table.csv"' in doc

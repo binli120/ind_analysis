@@ -135,7 +135,9 @@ class SimpleStageModule:
         return None
 
     # ------------------------------------------------------------------
-    def _publish_next_events(self, payload: Dict[str, object], result: Dict[str, object]) -> None:
+    def _publish_next_events(
+        self, payload: Dict[str, object], result: Dict[str, object]
+    ) -> None:
         topics = list(self._iter_next_topics())
         if not topics:
             return
@@ -158,7 +160,11 @@ class SimpleStageModule:
         for topic in topics:
             try:
                 self._sns.publish(TopicArn=topic, Message=message)
-                logger.info("[%s] published downstream event to %s", self.spec.module_name, topic)
+                logger.info(
+                    "[%s] published downstream event to %s",
+                    self.spec.module_name,
+                    topic,
+                )
             except Exception as exc:  # pragma: no cover - network failure
                 logger.warning(
                     "[%s] failed to publish next stage event to %s: %s",

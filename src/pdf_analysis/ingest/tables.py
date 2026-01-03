@@ -147,6 +147,7 @@ def extract_tables(
     if engine == "pdfplumber":
         try:
             from pdfminer import pdfinterp as _pdfinterp  # type: ignore
+
             if not hasattr(_pdfinterp, "PDFStackT"):
                 from typing import Any as _Any
 
@@ -192,7 +193,9 @@ def extract_tables(
         # Lattice for ruled tables, Stream for non-ruled; try both
         for flavor in ("lattice", "stream"):
             try:
-                tables = camelot.read_pdf(str(pdf_path), flavor=flavor, pages=page_range)
+                tables = camelot.read_pdf(
+                    str(pdf_path), flavor=flavor, pages=page_range
+                )
                 for t in tables:
                     df = t.df
                     pno = t.page
@@ -221,9 +224,7 @@ def extract_tables(
             page_range = ",".join(str(p) for p in page_selection)
 
         try:
-            dfs = tabula.read_pdf(
-                str(pdf_path), pages=page_range, multiple_tables=True
-            )
+            dfs = tabula.read_pdf(str(pdf_path), pages=page_range, multiple_tables=True)
             for idx, df in enumerate(dfs, start=1):
                 results.append(
                     {

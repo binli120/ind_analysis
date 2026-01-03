@@ -24,7 +24,9 @@ def _extract_all_names(module_ast: ast.Module) -> list[str]:
                     if isinstance(node.value, (ast.List, ast.Tuple)):
                         names: list[str] = []
                         for elt in node.value.elts:
-                            if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                            if isinstance(elt, ast.Constant) and isinstance(
+                                elt.value, str
+                            ):
                                 names.append(elt.value)
                         return names
     return []

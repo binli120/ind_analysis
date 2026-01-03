@@ -65,13 +65,15 @@ def classify_study_for_document(
     # get first page text
     row = (
         db.execute(
-            sqltext("""
+            sqltext(
+                """
             SELECT page_number, text
             FROM ncd_document_page
             WHERE source_document_id = :sid
             ORDER BY page_number ASC
             LIMIT 1
-        """),
+        """
+            ),
             {"sid": source_document_id},
         )
         .mappings()
@@ -105,33 +107,47 @@ def classify_study_for_document(
 
     # Insert ncd_study if not exists
     study_row = db.execute(
-        sqltext("""
+        sqltext(
+            """
             SELECT id FROM ncd_study
             WHERE main_source_document_id = :sid
-        """),
+        """
+        ),
         {"sid": source_document_id},
     ).scalar()
 
     if study_row:
         db.execute(
-            sqltext("""
+            sqltext(
+                """
                 UPDATE ncd_study
                 SET study_type = COALESCE(:stype, study_type),
                     extra_attributes = extra_attributes || CAST(:extra_json AS jsonb)
                 WHERE id = :id
-            """),
-            {"stype": study_type, "extra_json": json.dumps({"title": title}), "id": study_row},
+            """
+            ),
+            {
+                "stype": study_type,
+                "extra_json": json.dumps({"title": title}),
+                "id": study_row,
+            },
         )
     else:
         new_id = db.execute(
-            sqltext("""
+            sqltext(
+                """
                 INSERT INTO ncd_study (project_id, main_source_document_id, study_type, extra_attributes)
                 SELECT project_id, :sid, :stype, CAST(:extra_json AS jsonb)
                 FROM ncd_source_document
                 WHERE id = :sid
                 RETURNING id;
-            """),
-            {"sid": source_document_id, "stype": study_type, "extra_json": json.dumps({"title": title})},
+            """
+            ),
+            {
+                "sid": source_document_id,
+                "stype": study_type,
+                "extra_json": json.dumps({"title": title}),
+            },
         ).scalar()
         study_row = new_id
 

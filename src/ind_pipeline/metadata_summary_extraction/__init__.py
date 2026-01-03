@@ -18,7 +18,11 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
 
 from ind_pipeline.utils import parse_s3_uri
 from ncd.database.db import SessionLocal
-from ncd.ingestion.section_detector import SectionSpan, extract_section_spans, persist_section_spans
+from ncd.ingestion.section_detector import (
+    SectionSpan,
+    extract_section_spans,
+    persist_section_spans,
+)
 from ncd.llm.llm_client import LLMClient
 from sqlalchemy import text as sqltext
 
@@ -127,7 +131,9 @@ def _load_markdown_from_s3(s3_uri: str) -> Optional[str]:
     return None
 
 
-def _resolve_sections(markdown_payload: Dict[str, object], markdown: str) -> List[SectionSpan]:
+def _resolve_sections(
+    markdown_payload: Dict[str, object], markdown: str
+) -> List[SectionSpan]:
     for candidate in _iter_payload_candidates(markdown_payload):
         payload_sections = candidate.get("chunks")
         if not isinstance(payload_sections, list):
@@ -206,7 +212,9 @@ def _summarize_section(
     try:
         data = llm.extract_json(system_prompt, user_prompt)
     except Exception as exc:
-        logger.warning("Summary generation failed for %s: %s", section.section_number, exc)
+        logger.warning(
+            "Summary generation failed for %s: %s", section.section_number, exc
+        )
         data = {}
 
     summary = str(data.get("summary") or "").strip()
@@ -345,7 +353,7 @@ def _split_keywords(text: str) -> List[str]:
         if not any(ch.isalpha() for ch in token):
             continue
         cleaned.append(token.lower())
-    return cleaned[: _MAX_KEYWORDS]
+    return cleaned[:_MAX_KEYWORDS]
 
 
 def _resolve_document_version_id(payload: Dict[str, object]) -> Optional[str]:
@@ -434,7 +442,11 @@ def _fetch_section_ids(
         .mappings()
         .all()
     )
-    return {row["section_number"]: str(row["id"]) for row in rows if row.get("section_number")}
+    return {
+        row["section_number"]: str(row["id"])
+        for row in rows
+        if row.get("section_number")
+    }
 
 
 def _upsert_summary(
@@ -537,6 +549,8 @@ def run() -> None:
 
 
 __all__ = ["handle_message", "run"]
+
+
 def _get_s3_client() -> Any:
     global _s3_client
     if _s3_client is None:

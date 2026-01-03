@@ -58,7 +58,11 @@ class PipelineRunner:
             return []
 
         results: List[PipelineTaskResult] = []
-        logger.info("[pipeline-runner] processing %d PDFs with %s workers", len(paths), self._max_workers or 'default')
+        logger.info(
+            "[pipeline-runner] processing %d PDFs with %s workers",
+            len(paths),
+            self._max_workers or "default",
+        )
 
         with ThreadPoolExecutor(max_workers=self._max_workers) as executor:
             future_map = {
@@ -76,7 +80,9 @@ class PipelineRunner:
                         result.duration_seconds,
                     )
                 except Exception as exc:  # pragma: no cover - defensive
-                    logger.exception("[pipeline-runner] unexpected failure processing %s", path)
+                    logger.exception(
+                        "[pipeline-runner] unexpected failure processing %s", path
+                    )
                     results.append(
                         PipelineTaskResult(
                             pdf_path=path,
@@ -95,8 +101,12 @@ class PipelineRunner:
         try:
             result = pipeline.run(pdf_path)
             error: Optional[BaseException] = None
-        except BaseException as exc:  # capture all exceptions, propagate later if needed
-            logger.warning("[pipeline-runner] pipeline failed for %s: %s", pdf_path.name, exc)
+        except (
+            BaseException
+        ) as exc:  # capture all exceptions, propagate later if needed
+            logger.warning(
+                "[pipeline-runner] pipeline failed for %s: %s", pdf_path.name, exc
+            )
             result = None
             error = exc
         duration = time.perf_counter() - start

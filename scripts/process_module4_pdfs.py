@@ -77,11 +77,15 @@ def download_pdf(client, bucket: str, key: str, dest_path: Path) -> None:
     client.download_file(bucket, key, str(dest_path))
 
 
-def process_pdf_key(client, bucket: str, key: str, output_root: Path, force: bool) -> None:
+def process_pdf_key(
+    client, bucket: str, key: str, output_root: Path, force: bool
+) -> None:
     pdf_stem = Path(key).stem
     pdf_output_dir = output_root / pdf_stem
     if pdf_output_dir.exists() and not force:
-        print(f"[SKIP] {key} -> {pdf_output_dir} already exists (use --force to overwrite).")
+        print(
+            f"[SKIP] {key} -> {pdf_output_dir} already exists (use --force to overwrite)."
+        )
         return
 
     pdf_output_dir.mkdir(parents=True, exist_ok=True)
@@ -116,7 +120,10 @@ def main(argv: list[str]) -> int:
             except ClientError as exc:
                 print(f"[ERROR] Failed to process {key}: {exc}", file=sys.stderr)
     except ClientError as exc:
-        print(f"[ERROR] Unable to list s3://{args.bucket}/{args.prefix}: {exc}", file=sys.stderr)
+        print(
+            f"[ERROR] Unable to list s3://{args.bucket}/{args.prefix}: {exc}",
+            file=sys.stderr,
+        )
         return 1
 
     print(f"\nCompleted. PDFs processed: {processed}")
