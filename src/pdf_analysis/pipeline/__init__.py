@@ -15,7 +15,12 @@ from .config import (
     StructuredExtractionConfig,
     TextExtractionConfig,
 )
-from .pipeline import PDFProcessingPipeline, PipelineChunk, PipelineMetrics, PipelineResult
+from .pipeline import (
+    PDFProcessingPipeline,
+    PipelineChunk,
+    PipelineMetrics,
+    PipelineResult,
+)
 from .executor import PipelineRunner, PipelineTaskResult
 
 __all__ = [

@@ -15,9 +15,16 @@ from pdf_analysis.pipeline.executor import PipelineRunner, PipelineTaskResult
 
 
 def test_pipeline_task_result_succeeded() -> None:
-    result = PipelineTaskResult(pdf_path=Path("a.pdf"), result=None, error=None, duration_seconds=0.1)
+    result = PipelineTaskResult(
+        pdf_path=Path("a.pdf"), result=None, error=None, duration_seconds=0.1
+    )
     assert result.succeeded is True
-    failed = PipelineTaskResult(pdf_path=Path("b.pdf"), result=None, error=RuntimeError("fail"), duration_seconds=0.1)
+    failed = PipelineTaskResult(
+        pdf_path=Path("b.pdf"),
+        result=None,
+        error=RuntimeError("fail"),
+        duration_seconds=0.1,
+    )
     assert failed.succeeded is False
 
 

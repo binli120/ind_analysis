@@ -55,8 +55,16 @@ def main(argv: Sequence[str]) -> int:
         raise SystemExit(f"Input file not found: {input_path}")
     text = input_path.read_text(encoding="utf-8")
 
-    output_json = Path(args.output_json).expanduser() if args.output_json else input_path.with_suffix(".section_2_6.json")
-    output_md = Path(args.output_md).expanduser() if args.output_md else input_path.with_suffix(".section_2_6.md")
+    output_json = (
+        Path(args.output_json).expanduser()
+        if args.output_json
+        else input_path.with_suffix(".section_2_6.json")
+    )
+    output_md = (
+        Path(args.output_md).expanduser()
+        if args.output_md
+        else input_path.with_suffix(".section_2_6.md")
+    )
 
     config = Section26GeneratorConfig(
         output_json=output_json,

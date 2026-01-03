@@ -18,7 +18,10 @@ import pytest
 @pytest.fixture(name="app_module")
 def _app_module(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("PIPELINE_STATUS_TABLE", "pipeline-status")
-    monkeypatch.setenv("INGEST_COMPLETED_TOPIC_ARN", "arn:aws:sns:us-east-1:123456789012:ingest-completed")
+    monkeypatch.setenv(
+        "INGEST_COMPLETED_TOPIC_ARN",
+        "arn:aws:sns:us-east-1:123456789012:ingest-completed",
+    )
     monkeypatch.setenv("DEFAULT_COMPANY", "Acme")
     monkeypatch.setenv("DEFAULT_PROJECT", "Rocket")
 
@@ -27,7 +30,9 @@ def _app_module(monkeypatch: pytest.MonkeyPatch):
     return module
 
 
-def test_s3_event_records_document_and_publishes_event(monkeypatch: pytest.MonkeyPatch, app_module) -> None:
+def test_s3_event_records_document_and_publishes_event(
+    monkeypatch: pytest.MonkeyPatch, app_module
+) -> None:
     published: List[Dict[str, Any]] = []
 
     class FakeTable:
@@ -37,7 +42,9 @@ def test_s3_event_records_document_and_publishes_event(monkeypatch: pytest.Monke
         def put_item(self, Item: Dict[str, Any]) -> None:
             self.items.append(Item)
 
-        def update_item(self, *args, **kwargs) -> None:  # pragma: no cover - not used in this test
+        def update_item(
+            self, *args, **kwargs
+        ) -> None:  # pragma: no cover - not used in this test
             raise AssertionError("update_item should not be called for S3 flow")
 
     table = FakeTable()
@@ -70,17 +77,24 @@ def test_s3_event_records_document_and_publishes_event(monkeypatch: pytest.Monke
     assert item["document_id"] == "doc-bucket/submissions/file.pdf#1"
     assert published
     assert published[0]["TopicArn"].endswith("ingest-completed")
-    assert published[0]["Message"]["metadata"]["document_id"] == "doc-bucket/submissions/file.pdf#1"
+    assert (
+        published[0]["Message"]["metadata"]["document_id"]
+        == "doc-bucket/submissions/file.pdf#1"
+    )
 
 
-def test_sns_event_updates_stage_status(monkeypatch: pytest.MonkeyPatch, app_module) -> None:
+def test_sns_event_updates_stage_status(
+    monkeypatch: pytest.MonkeyPatch, app_module
+) -> None:
     updates: List[Dict[str, Any]] = []
 
     class FakeTable:
         def update_item(self, **kwargs) -> None:
             updates.append(kwargs)
 
-        def put_item(self, Item: Dict[str, Any]) -> None:  # pragma: no cover - not used in this test
+        def put_item(
+            self, Item: Dict[str, Any]
+        ) -> None:  # pragma: no cover - not used in this test
             raise AssertionError("put_item should not be called for SNS flow")
 
     monkeypatch.setattr(app_module, "_get_table", lambda: FakeTable())

@@ -27,7 +27,9 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         prog="generate-ind26",
         description="Generate Section 2.6 written summaries from Section 2.4 content stored in S3.",
     )
-    parser.add_argument("--bucket", required=True, help="S3 bucket containing project folders.")
+    parser.add_argument(
+        "--bucket", required=True, help="S3 bucket containing project folders."
+    )
     parser.add_argument(
         "--company",
         default="filynai.com",
@@ -52,15 +54,23 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 def main(argv: Sequence[str]) -> int:
     args = parse_args(argv)
-    logging.basicConfig(level=args.log_level.upper(), format="%(levelname)s %(message)s")
+    logging.basicConfig(
+        level=args.log_level.upper(), format="%(levelname)s %(message)s"
+    )
     s3 = boto3.client("s3")
 
-    prefix_24 = args.section_prefix or _discover_24_prefix(s3, args.bucket, args.company, args.project)
+    prefix_24 = args.section_prefix or _discover_24_prefix(
+        s3, args.bucket, args.company, args.project
+    )
     if not prefix_24:
-        raise SystemExit("Unable to find a 2.4 prefix. Provide --section-prefix explicitly.")
+        raise SystemExit(
+            "Unable to find a 2.4 prefix. Provide --section-prefix explicitly."
+        )
 
     if "2.6" in prefix_24.lower():
-        raise SystemExit("The prefix appears to be a 2.6 path; please supply the 2.4 folder.")
+        raise SystemExit(
+            "The prefix appears to be a 2.6 path; please supply the 2.4 folder."
+        )
 
     logging.info("Using 2.4 prefix: %s", prefix_24)
     objects_24 = _list_objects(s3, args.bucket, prefix_24)
@@ -71,7 +81,11 @@ def main(argv: Sequence[str]) -> int:
     texts: List[str] = []
     for key in md_keys:
         try:
-            body = s3.get_object(Bucket=args.bucket, Key=key)["Body"].read().decode("utf-8")
+            body = (
+                s3.get_object(Bucket=args.bucket, Key=key)["Body"]
+                .read()
+                .decode("utf-8")
+            )
             texts.append(f"# Source: {key}\n\n{body}")
         except Exception as exc:
             logging.warning("Failed to read %s: %s", key, exc)
@@ -104,7 +118,9 @@ def main(argv: Sequence[str]) -> int:
     return 0
 
 
-def _discover_24_prefix(s3: any, bucket: str, company: str, project: str) -> Optional[str]:
+def _discover_24_prefix(
+    s3: any, bucket: str, company: str, project: str
+) -> Optional[str]:
     base_prefix = f"{company.rstrip('/')}/{project}/"
     candidates: Dict[str, int] = {}
     paginator = s3.get_paginator("list_objects_v2")

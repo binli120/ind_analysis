@@ -21,7 +21,9 @@ def test_format_summary_text() -> None:
     summary = document_summarizer.TopicSummaryResult(
         summary="Summary text",
         topics=[
-            document_summarizer.TopicSection(title="Topic", description="Desc", anchor="topic")
+            document_summarizer.TopicSection(
+                title="Topic", description="Desc", anchor="topic"
+            )
         ],
     )
     output = document_summarizer.format_summary_text(summary)
@@ -31,7 +33,9 @@ def test_format_summary_text() -> None:
 
 
 def test_embed_topics_into_markdown() -> None:
-    topics = [document_summarizer.TopicSection(title="Alpha", description="", anchor="alpha")]
+    topics = [
+        document_summarizer.TopicSection(title="Alpha", description="", anchor="alpha")
+    ]
     markdown = "# Title\n\nAlpha section"
     updated = document_summarizer.embed_topics_into_markdown(markdown, topics)
     assert "## Key Topics" in updated

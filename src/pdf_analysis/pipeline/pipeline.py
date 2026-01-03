@@ -35,7 +35,9 @@ from .config import PipelineConfig, RedisStreamingConfig
 logger = logging.getLogger(__name__)
 
 _TABLE_SUBPROCESS_ENGINES = {"camelot", "tabula"}
-_TABLE_SUBPROCESS_ENABLED = os.getenv("PDF_PIPELINE_TABLES_SUBPROCESS", "1").lower() in {
+_TABLE_SUBPROCESS_ENABLED = os.getenv(
+    "PDF_PIPELINE_TABLES_SUBPROCESS", "1"
+).lower() in {
     "1",
     "true",
     "yes",
@@ -273,11 +275,22 @@ class PDFProcessingPipeline:
             raise ValueError("chunk_size must be a positive integer")
         redis_config = getattr(self.config, "redis", None)
 
-        if redis_client is None and isinstance(redis_config, RedisStreamingConfig) and redis_config.enabled:
+        if (
+            redis_client is None
+            and isinstance(redis_config, RedisStreamingConfig)
+            and redis_config.enabled
+        ):
             redis_client = self._get_redis_client(redis_config)
             if redis_client is None:
-                logger.warning("[pipeline] redis streaming disabled due to missing client")
-        if redis_client is not None and redis_key is None and isinstance(redis_config, RedisStreamingConfig) and redis_config.enabled:
+                logger.warning(
+                    "[pipeline] redis streaming disabled due to missing client"
+                )
+        if (
+            redis_client is not None
+            and redis_key is None
+            and isinstance(redis_config, RedisStreamingConfig)
+            and redis_config.enabled
+        ):
             redis_key = redis_config.key_template.format(
                 filename=pdf_path.name,
                 stem=pdf_path.stem,
@@ -397,7 +410,9 @@ class PDFProcessingPipeline:
                         page["text"] = ocr_result[page_no]
                         chunk_ocr_pages.add(page_no)
 
-        tables, engines_used = self._extract_tables_for_pages(pdf_path, chunk_page_numbers)
+        tables, engines_used = self._extract_tables_for_pages(
+            pdf_path, chunk_page_numbers
+        )
         chunk = PipelineChunk(
             chunk_index=chunk_index,
             pages=[page.copy() for page in chunk_pages],
@@ -442,19 +457,25 @@ class PDFProcessingPipeline:
             return extract_pages_text(pdf_path, max_pages=max_pages)
         if engine == "pdfplumber":
             if not self._pdfplumber_text_supported:
-                raise RuntimeError("pdfplumber text engine disabled due to compatibility issue")
+                raise RuntimeError(
+                    "pdfplumber text engine disabled due to compatibility issue"
+                )
             self._patch_pdfminer_for_pdfplumber()
             pdfplumber = import_module("pdfplumber")
             pages: List[Dict[str, Any]] = []
             try:
                 with pdfplumber.open(str(pdf_path)) as pdf:
-                    limit = min(len(pdf.pages), max_pages) if max_pages else len(pdf.pages)
+                    limit = (
+                        min(len(pdf.pages), max_pages) if max_pages else len(pdf.pages)
+                    )
                     for idx in range(limit):
                         page = pdf.pages[idx]
                         try:
                             text = page.extract_text(layout=True) or ""
                         except AttributeError as exc:
-                            if "graphicstate" in str(exc) or "original_path" in str(exc):
+                            if "graphicstate" in str(exc) or "original_path" in str(
+                                exc
+                            ):
                                 self._pdfplumber_text_supported = False
                                 logger.warning(
                                     "pdfplumber text extraction disabled: %s", exc
@@ -501,13 +522,17 @@ class PDFProcessingPipeline:
 
             def generator() -> Iterator[Dict[str, str]]:
                 with pdfplumber.open(str(pdf_path)) as pdf:
-                    limit = min(len(pdf.pages), max_pages) if max_pages else len(pdf.pages)
+                    limit = (
+                        min(len(pdf.pages), max_pages) if max_pages else len(pdf.pages)
+                    )
                     for idx in range(limit):
                         page = pdf.pages[idx]
                         try:
                             text = page.extract_text(layout=True) or ""
                         except AttributeError as exc:
-                            if "graphicstate" in str(exc) or "original_path" in str(exc):
+                            if "graphicstate" in str(exc) or "original_path" in str(
+                                exc
+                            ):
                                 self._pdfplumber_text_supported = False
                                 logger.warning(
                                     "pdfplumber text extraction disabled: %s",
@@ -1026,7 +1051,9 @@ class PDFProcessingPipeline:
         self, ctx: PipelineContext, quality: Optional[Dict[str, Any]]
     ) -> PipelineMetrics:
         total_pages = len(ctx.pages)
-        pages_with_text = sum(1 for page in ctx.pages if (page.get("text") or "").strip())
+        pages_with_text = sum(
+            1 for page in ctx.pages if (page.get("text") or "").strip()
+        )
         text_coverage = (pages_with_text / total_pages) if total_pages else 0.0
 
         tables_total = len(ctx.tables)
@@ -1038,7 +1065,9 @@ class PDFProcessingPipeline:
         key_value_pairs = len(ctx.key_values)
         key_score = 1.0 if key_value_pairs > 0 else 0.0
 
-        confidence = 0.6 * text_coverage + 0.3 * min(table_coverage, 1.0) + 0.1 * key_score
+        confidence = (
+            0.6 * text_coverage + 0.3 * min(table_coverage, 1.0) + 0.1 * key_score
+        )
         confidence = round(confidence, 3)
 
         metrics = PipelineMetrics(
@@ -1078,7 +1107,9 @@ class PDFProcessingPipeline:
         chunk: PipelineChunk,
         serializer: Optional[Callable[[PipelineChunk], Any]],
     ) -> None:
-        payload = serializer(chunk) if serializer else json.dumps(chunk.to_serializable())
+        payload = (
+            serializer(chunk) if serializer else json.dumps(chunk.to_serializable())
+        )
         field = f"chunk:{chunk.chunk_index:05d}"
         redis_client.hset(redis_key, field, payload)
 
@@ -1105,7 +1136,9 @@ class PDFProcessingPipeline:
         if config.url:
             client = redis_module.Redis.from_url(config.url)
         else:
-            client = redis_module.Redis(host=config.host, port=config.port, db=config.db)
+            client = redis_module.Redis(
+                host=config.host, port=config.port, db=config.db
+            )
         self._redis_client_cache = client
         return client
 

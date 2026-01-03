@@ -46,7 +46,9 @@ class DummyResult:
         self.metrics = self.Metrics()
 
 
-def test_pdf_extraction_handler_smoke(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_pdf_extraction_handler_smoke(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     payload = {
         "company": "Acme",
         "project": "Rocket",
@@ -124,7 +126,9 @@ def test_zeroshot_handler_smoke(monkeypatch: pytest.MonkeyPatch) -> None:
     payload = {"analysis_s3_uri": "s3://analysis/docs/proposal.analysis.json"}
     result = zeroshot_handler(payload)
 
-    assert result["metadata_s3_uri"].endswith("metadata/docs/proposal.classification.json")
+    assert result["metadata_s3_uri"].endswith(
+        "metadata/docs/proposal.classification.json"
+    )
     assert result["ind_section_number"] == "2.3"
     assert stored_payload["metadata"]["labels"] == ["ind"]
     assert result["stage"] == "zeroshot-labeling"
@@ -142,7 +146,9 @@ def test_module_registry_smoke() -> None:
     assert callable(MODULE_REGISTRY["pdf-extraction"].entrypoint)
 
 
-def test_pdf_extraction_publishes_next_topic(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_pdf_extraction_publishes_next_topic(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     topic_arn = "arn:aws:sns:us-east-1:123456789012:zeroshot"
     monkeypatch.setenv("PDF_EXTRACT_NEXT_TOPIC_ARN", topic_arn)
 

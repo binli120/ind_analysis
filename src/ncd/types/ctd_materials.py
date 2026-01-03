@@ -14,12 +14,15 @@ from sqlalchemy.orm import Session
 
 
 _MAPPING_CACHE: List[Dict[str, Any]] | None = None
+
+
 def _mapping_paths() -> List[Path]:
     base = Path(__file__).resolve().parents[1]
     return [
         base / "mapping" / "module4_to_26_mapping_complete.json",
         base.parent / "summary" / "module4_to_26_mapping_complete.json",
     ]
+
 
 _SECTION_TOKEN_RE = re.compile(r"(?P<token>\d+(?:\.\d+)+(?:\|\d+(?:\.\d+)+)*)")
 _MARKDOWN_TABLE_ROW_RE = re.compile(r"^\s*\|.+\|\s*$")
@@ -120,7 +123,9 @@ def resolve_ctd_targets(ctd_section: str) -> List[str]:
     return []
 
 
-def module4_sections_for_ctd_targets(ctd_section: str) -> tuple[List[str], List[Dict[str, Any]], List[str]]:
+def module4_sections_for_ctd_targets(
+    ctd_section: str,
+) -> tuple[List[str], List[Dict[str, Any]], List[str]]:
     targets = resolve_ctd_targets(ctd_section)
     matched_entries: List[Dict[str, Any]] = []
     seen = set()
@@ -218,7 +223,11 @@ def extract_markdown_images(markdown: str, bucket: str, base_key: str) -> List[s
         uri = match.group(1).strip()
         if not uri:
             continue
-        if uri.startswith("s3://") or uri.startswith("http://") or uri.startswith("https://"):
+        if (
+            uri.startswith("s3://")
+            or uri.startswith("http://")
+            or uri.startswith("https://")
+        ):
             images.append(uri)
         else:
             key = f"{prefix}/{uri}" if prefix else uri
@@ -229,7 +238,9 @@ def extract_markdown_images(markdown: str, bucket: str, base_key: str) -> List[s
 def fetch_project_name(db: Session, project_id: str) -> Optional[str]:
     row = (
         db.execute(
-            sqltext("SELECT to_jsonb(p) AS payload FROM projects p WHERE id = :pid LIMIT 1"),
+            sqltext(
+                "SELECT to_jsonb(p) AS payload FROM projects p WHERE id = :pid LIMIT 1"
+            ),
             {"pid": project_id},
         )
         .mappings()
@@ -640,7 +651,9 @@ def fetch_ncd_payload(
     payload["safety_summaries"] = [
         dict(row)
         for row in db.execute(
-            sqltext("SELECT * FROM ncd_study_safety_summary WHERE study_id = ANY(:ids)"),
+            sqltext(
+                "SELECT * FROM ncd_study_safety_summary WHERE study_id = ANY(:ids)"
+            ),
             {"ids": study_ids},
         )
         .mappings()

@@ -159,16 +159,22 @@ class PipelineStreamingTests(unittest.TestCase):
                 return {2: "Recovered text via OCR"}, "tesseract"
             return {}, None
 
-        with patch.object(
-            PDFProcessingPipeline, "_select_text_stream", new=fake_select_text_stream
-        ), patch.object(
-            PDFProcessingPipeline,
-            "_extract_tables_for_pages",
-            new=fake_tables_for_pages,
-        ), patch.object(
-            PDFProcessingPipeline,
-            "_run_ocr_for_page_numbers",
-            new=fake_ocr,
+        with (
+            patch.object(
+                PDFProcessingPipeline,
+                "_select_text_stream",
+                new=fake_select_text_stream,
+            ),
+            patch.object(
+                PDFProcessingPipeline,
+                "_extract_tables_for_pages",
+                new=fake_tables_for_pages,
+            ),
+            patch.object(
+                PDFProcessingPipeline,
+                "_run_ocr_for_page_numbers",
+                new=fake_ocr,
+            ),
         ):
             chunks = list(
                 pipeline.stream(
@@ -213,23 +219,25 @@ class ApiEndpointTests(unittest.TestCase):
             }
         ]
 
-        with patch.object(server, "extract_pages_text", return_value=fake_pages), patch.object(
-            server, "extract_tables_all", return_value=fake_tables
-        ), patch.object(
-            server,
-            "generate_quality_report",
-            return_value={
-                "json": {
-                    "document": "demo.pdf",
-                    "stats": {
+        with (
+            patch.object(server, "extract_pages_text", return_value=fake_pages),
+            patch.object(server, "extract_tables_all", return_value=fake_tables),
+            patch.object(
+                server,
+                "generate_quality_report",
+                return_value={
+                    "json": {
                         "document": "demo.pdf",
-                        "pages_extracted": len(fake_pages),
-                        "tables_extracted": len(fake_tables),
+                        "stats": {
+                            "document": "demo.pdf",
+                            "pages_extracted": len(fake_pages),
+                            "tables_extracted": len(fake_tables),
+                        },
+                        "issues": [],
                     },
-                    "issues": [],
+                    "markdown": "# Quality",
                 },
-                "markdown": "# Quality",
-            },
+            ),
         ):
             client = TestClient(server.app)
             pdf_bytes = b"%PDF-1.4\n1 0 obj<<>>\nendobj\ntrailer<<>>\n%%EOF"
@@ -292,13 +300,17 @@ class ApiEndpointTests(unittest.TestCase):
         with patch.object(server, "PDFProcessingPipeline") as mock_pipeline:
             mock_pipeline.return_value.run.return_value = fake_pipeline_result
 
-            fake_exceptions = types.SimpleNamespace(BotoCoreError=Exception, ClientError=Exception)
+            fake_exceptions = types.SimpleNamespace(
+                BotoCoreError=Exception, ClientError=Exception
+            )
             fake_botocore = types.ModuleType("botocore")
             fake_botocore.exceptions = fake_exceptions
             with patch.dict(
                 sys.modules,
                 {
-                    "boto3": types.SimpleNamespace(client=lambda *args, **kwargs: fake_s3_client),
+                    "boto3": types.SimpleNamespace(
+                        client=lambda *args, **kwargs: fake_s3_client
+                    ),
                     "botocore": fake_botocore,
                     "botocore.exceptions": fake_exceptions,
                 },
@@ -327,9 +339,13 @@ class ApiEndpointTests(unittest.TestCase):
         self.assertEqual(key, "LT1009/Module 1.Quality/report.pdf")
         self.assertEqual(extra, {"VersionId": "abc123"})
         self.assertEqual(len(fake_s3_client.copy_calls), 1)
-        self.assertEqual(fake_s3_client.copy_calls[0]["Metadata"]["labels"], "pharmacology")
+        self.assertEqual(
+            fake_s3_client.copy_calls[0]["Metadata"]["labels"], "pharmacology"
+        )
         self.assertEqual(len(fake_s3_client.put_calls), 1)
-        self.assertTrue(fake_s3_client.put_calls[0]["Key"].endswith("report.pdf.meta.json"))
+        self.assertTrue(
+            fake_s3_client.put_calls[0]["Key"].endswith("report.pdf.meta.json")
+        )
 
     def test_fetch_s3_markdown_summary_endpoint(self) -> None:
         client = TestClient(server.app)
@@ -362,8 +378,16 @@ class ApiEndpointTests(unittest.TestCase):
                 return TopicSummaryResult(
                     summary="Overall study summary.",
                     topics=[
-                        TopicSection(title="Introduction", description="Context", anchor="introduction"),
-                        TopicSection(title="Findings", description="Key outcomes", anchor="findings"),
+                        TopicSection(
+                            title="Introduction",
+                            description="Context",
+                            anchor="introduction",
+                        ),
+                        TopicSection(
+                            title="Findings",
+                            description="Key outcomes",
+                            anchor="findings",
+                        ),
                     ],
                 )
 
@@ -373,13 +397,17 @@ class ApiEndpointTests(unittest.TestCase):
         with patch.object(server, "PDFProcessingPipeline") as mock_pipeline:
             mock_pipeline.return_value.run.return_value = fake_pipeline_result
 
-            fake_exceptions = types.SimpleNamespace(BotoCoreError=Exception, ClientError=Exception)
+            fake_exceptions = types.SimpleNamespace(
+                BotoCoreError=Exception, ClientError=Exception
+            )
             fake_botocore = types.ModuleType("botocore")
             fake_botocore.exceptions = fake_exceptions
             with patch.dict(
                 sys.modules,
                 {
-                    "boto3": types.SimpleNamespace(client=lambda *args, **kwargs: fake_s3_client),
+                    "boto3": types.SimpleNamespace(
+                        client=lambda *args, **kwargs: fake_s3_client
+                    ),
                     "botocore": fake_botocore,
                     "botocore.exceptions": fake_exceptions,
                 },
@@ -413,14 +441,18 @@ class ApiEndpointTests(unittest.TestCase):
             return {"VersionId": "ver-002"}
 
         fake_s3_client = types.SimpleNamespace(put_object=put_object)
-        fake_exceptions = types.SimpleNamespace(BotoCoreError=Exception, ClientError=Exception)
+        fake_exceptions = types.SimpleNamespace(
+            BotoCoreError=Exception, ClientError=Exception
+        )
         fake_botocore = types.ModuleType("botocore")
         fake_botocore.exceptions = fake_exceptions
 
         with patch.dict(
             sys.modules,
             {
-                "boto3": types.SimpleNamespace(client=lambda *args, **kwargs: fake_s3_client),
+                "boto3": types.SimpleNamespace(
+                    client=lambda *args, **kwargs: fake_s3_client
+                ),
                 "botocore": fake_botocore,
                 "botocore.exceptions": fake_exceptions,
             },
@@ -442,23 +474,34 @@ class ApiEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["bucket"], "demo-bucket")
-        self.assertEqual(payload["key"], "filynai.com/LT1009/Module 1.Quality/report.md")
+        self.assertEqual(
+            payload["key"], "filynai.com/LT1009/Module 1.Quality/report.md"
+        )
         self.assertEqual(payload["version_id"], "ver-002")
         self.assertEqual(payload["label"], "annotated")
         self.assertEqual(payload["tags"], {"status": "draft", "reviewer": "QA"})
 
-        self.assertEqual(payload["metadata"], {"source": "editor", "label": "annotated"})
+        self.assertEqual(
+            payload["metadata"], {"source": "editor", "label": "annotated"}
+        )
 
         self.assertGreaterEqual(len(put_calls), 1)
         primary_put = put_calls[0]
         self.assertEqual(primary_put["Bucket"], "demo-bucket")
-        self.assertEqual(primary_put["Key"], "filynai.com/LT1009/Module 1.Quality/report.md")
+        self.assertEqual(
+            primary_put["Key"], "filynai.com/LT1009/Module 1.Quality/report.md"
+        )
         self.assertEqual(primary_put["ContentType"], "text/markdown")
         self.assertIn(b"# updated", primary_put["Body"])
-        self.assertEqual(primary_put["Metadata"], {"source": "editor", "label": "annotated"})
+        self.assertEqual(
+            primary_put["Metadata"], {"source": "editor", "label": "annotated"}
+        )
 
         self.assertTrue(
-            any(call.get("Key", "").endswith("report.md.meta.json") for call in put_calls),
+            any(
+                call.get("Key", "").endswith("report.md.meta.json")
+                for call in put_calls
+            ),
             "Metadata JSON upload not detected",
         )
 

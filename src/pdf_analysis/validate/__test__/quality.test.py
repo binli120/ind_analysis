@@ -48,7 +48,12 @@ def test_missing_cell_count() -> None:
 def test_generate_quality_report_flags_mismatch(tmp_path: Path) -> None:
     pdf_path = tmp_path / "report-1.pdf"
     pages = [{"page_number": "1", "text": "text"}]
-    df = pd.DataFrame([{"Key": "Report Number", "Value": "XYZ"}, {"Key": "Number of Pages", "Value": "2"}])
+    df = pd.DataFrame(
+        [
+            {"Key": "Report Number", "Value": "XYZ"},
+            {"Key": "Number of Pages", "Value": "2"},
+        ]
+    )
     tables = [{"page_number": 1, "index_on_page": 1, "dataframe": df}]
 
     report = quality.generate_quality_report(pdf_path, pages, tables)

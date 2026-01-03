@@ -103,7 +103,12 @@ def _row_header_score(cells: List[str]) -> float:
     for cell in non_empty:
         lowered = cell.lower()
         keyword_hits += sum(1 for kw in _HEADER_KEYWORDS if kw in lowered)
-    return alpha_cells + (0.5 * len(non_empty)) + (1.5 * keyword_hits) - (0.75 * numeric_cells)
+    return (
+        alpha_cells
+        + (0.5 * len(non_empty))
+        + (1.5 * keyword_hits)
+        - (0.75 * numeric_cells)
+    )
 
 
 def _is_title_row(cells: List[str]) -> bool:
@@ -255,6 +260,8 @@ def _is_metadata_table(header: List[str], data_rows: List[List[str]]) -> bool:
 def _looks_like_text_block(rows: List[List[str]]) -> bool:
     if not rows:
         return False
+    if any(_row_has_keywords(row) and not _row_is_metadata_like(row) for row in rows):
+        return False
     candidates = 0
     for row in rows:
         cells = [cell for cell in row if cell]
@@ -263,7 +270,7 @@ def _looks_like_text_block(rows: List[List[str]]) -> bool:
         if any(_cell_is_numeric(cell) for cell in cells):
             continue
         joined = " ".join(cells)
-        if len(joined) < 60:
+        if len(joined) < 40:
             continue
         avg_len = sum(len(cell) for cell in cells) / max(len(cells), 1)
         if avg_len <= 25:
@@ -279,7 +286,17 @@ def _looks_like_fragmented_text(rows: List[List[str]]) -> bool:
         cells = [cell for cell in row if cell]
         if len(cells) < 4:
             continue
-        if sum(1 for cell in cells if _LEADER_RE.match(cell)) >= max(1, len(cells) // 2):
+        if _row_has_keywords(cells):
+            continue
+        avg_len = sum(len(cell) for cell in cells) / max(len(cells), 1)
+        short_cells = sum(1 for cell in cells if len(cell) <= 6)
+        if avg_len <= 6 and short_cells / max(len(cells), 1) >= 0.6:
+            if _row_alpha_ratio(cells) >= 0.7 and _row_numeric_ratio(cells) == 0:
+                candidates += 1
+                continue
+        if sum(1 for cell in cells if _LEADER_RE.match(cell)) >= max(
+            1, len(cells) // 2
+        ):
             candidates += 1
             continue
         joined = " ".join(cells)
@@ -334,7 +351,10 @@ def _recover_header_and_data(
                 continue
             if _row_is_mostly_numeric(candidate):
                 continue
-            if _row_has_keywords(candidate) or _row_header_score(candidate) >= _row_header_score(header) + 1:
+            if (
+                _row_has_keywords(candidate)
+                or _row_header_score(candidate) >= _row_header_score(header) + 1
+            ):
                 header_idx = candidate_idx
                 header = candidate
                 break
@@ -372,7 +392,9 @@ def _recover_header_and_data(
                 header = _apply_label_row(header, next_row)
                 data_start += 1
         elif _row_alpha_count(header) < 2 and _row_alpha_count(next_row) >= 2:
-            if not _row_is_mostly_numeric(next_row) and _row_header_score(next_row) > _row_header_score(header):
+            if not _row_is_mostly_numeric(next_row) and _row_header_score(
+                next_row
+            ) > _row_header_score(header):
                 header = next_row
                 data_start += 1
     if data_start < len(rows) and _is_unit_row(rows[data_start]):
@@ -654,6 +676,7 @@ def extract_tables(
     if engine == "pdfplumber":
         try:
             from pdfminer import pdfinterp as _pdfinterp  # type: ignore
+
             if not hasattr(_pdfinterp, "PDFStackT"):
                 from typing import Any as _Any
 
@@ -696,52 +719,25 @@ def extract_tables(
         else:
             page_range = ",".join(str(p) for p in page_selection)
 
-        lattice_pages: set[int] = set()
-        try:
-            tables = camelot.read_pdf(str(pdf_path), flavor="lattice", pages=page_range)
-            for t in tables:
-                df = _build_dataframe_from_rows(_dataframe_to_rows(t.df))
-                if df is None:
-                    continue
-                try:
-                    pno = int(t.page)
-                except (TypeError, ValueError):
-                    pno = t.page
-                if isinstance(pno, int):
-                    lattice_pages.add(pno)
-                results.append(
-                    {
-                        "page_number": pno,
-                        "index_on_page": 1,
-                        "engine": "camelot/lattice",
-                        "dataframe": df,
-                    }
+        # Lattice for ruled tables, Stream for non-ruled; try both
+        for flavor in ("lattice", "stream"):
+            try:
+                tables = camelot.read_pdf(
+                    str(pdf_path), flavor=flavor, pages=page_range
                 )
-        except Exception:
-            pass
-
-        try:
-            tables = camelot.read_pdf(str(pdf_path), flavor="stream", pages=page_range)
-            for t in tables:
-                df = _build_dataframe_from_rows(_dataframe_to_rows(t.df))
-                if df is None:
-                    continue
-                try:
-                    pno = int(t.page)
-                except (TypeError, ValueError):
+                for t in tables:
+                    df = t.df
                     pno = t.page
-                if isinstance(pno, int) and pno in lattice_pages:
-                    continue
-                results.append(
-                    {
-                        "page_number": pno,
-                        "index_on_page": 1,
-                        "engine": "camelot/stream",
-                        "dataframe": df,
-                    }
-                )
-        except Exception:
-            pass  # continue
+                    results.append(
+                        {
+                            "page_number": pno,
+                            "index_on_page": 1,
+                            "engine": f"camelot/{flavor}",
+                            "dataframe": df,
+                        }
+                    )
+            except Exception:
+                pass  # continue
 
     elif engine == "tabula":
         try:
@@ -757,9 +753,7 @@ def extract_tables(
             page_range = ",".join(str(p) for p in page_selection)
 
         try:
-            dfs = tabula.read_pdf(
-                str(pdf_path), pages=page_range, multiple_tables=True
-            )
+            dfs = tabula.read_pdf(str(pdf_path), pages=page_range, multiple_tables=True)
             for idx, df in enumerate(dfs, start=1):
                 normalized = _build_dataframe_from_rows(_dataframe_to_rows(df))
                 if normalized is None:

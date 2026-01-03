@@ -56,7 +56,9 @@ def _parse_modules(raw: str | None) -> Sequence[int]:
         try:
             number = int(entry)
         except ValueError as exc:
-            raise SystemExit(f"Invalid module number '{entry}'. Expected integers.") from exc
+            raise SystemExit(
+                f"Invalid module number '{entry}'. Expected integers."
+            ) from exc
         items.append(number)
     return tuple(items)
 
@@ -192,7 +194,9 @@ def main(argv: Sequence[str]) -> int:
     """Entrypoint for syncing documents from S3 into Redis and optional backends."""
     args = parse_args(argv)
     if not args.bucket:
-        raise SystemExit("S3 bucket is required. Set --bucket or S3_BUCKET in environment/.env.local.")
+        raise SystemExit(
+            "S3 bucket is required. Set --bucket or S3_BUCKET in environment/.env.local."
+        )
     logging.basicConfig(level=args.log_level.upper())
 
     modules = _parse_modules(args.modules)
@@ -215,7 +219,9 @@ def main(argv: Sequence[str]) -> int:
         force=args.force,
     )
 
-    enable_ai = args.ai_metadata or os.getenv("ENABLE_AI_METADATA", "false").lower() == "true"
+    enable_ai = (
+        args.ai_metadata or os.getenv("ENABLE_AI_METADATA", "false").lower() == "true"
+    )
     if not enable_ai and os.getenv("ENABLE_AI_META_DATA", "false").lower() == "true":
         enable_ai = True
 
@@ -226,9 +232,14 @@ def main(argv: Sequence[str]) -> int:
 
             metadata_generator = OpenAIMetadataGenerator(model=args.ai_model)
         except ModuleNotFoundError:
-            logging.warning("OpenAI metadata generator unavailable. Install infra extras to enable it.")
+            logging.warning(
+                "OpenAI metadata generator unavailable. Install infra extras to enable it."
+            )
 
-    enable_embeddings = args.ai_embeddings or os.getenv("ENABLE_AI_EMBEDDINGS", "false").lower() == "true"
+    enable_embeddings = (
+        args.ai_embeddings
+        or os.getenv("ENABLE_AI_EMBEDDINGS", "false").lower() == "true"
+    )
 
     embedding_store = None
     if enable_embeddings:
@@ -246,20 +257,30 @@ def main(argv: Sequence[str]) -> int:
                     "Supabase embedding store not fully configured; embeddings will be skipped."
                 )
         except ModuleNotFoundError:
-            logging.warning("Supabase embedding store unavailable. Install infra extras to enable it.")
+            logging.warning(
+                "Supabase embedding store unavailable. Install infra extras to enable it."
+            )
 
-    enable_summary = args.ai_summary or os.getenv("ENABLE_AI_SUMMARY", "false").lower() == "true"
+    enable_summary = (
+        args.ai_summary or os.getenv("ENABLE_AI_SUMMARY", "false").lower() == "true"
+    )
     summary_generator = None
     if enable_summary:
         try:
-            from pdf_analysis.service.document_summarizer import OpenAIDocumentSummarizer
+            from pdf_analysis.service.document_summarizer import (
+                OpenAIDocumentSummarizer,
+            )
 
             summary_generator = OpenAIDocumentSummarizer(model=args.summary_model)
             if not summary_generator.is_available():
-                logging.warning("Document summarizer is not available; summary generation skipped.")
+                logging.warning(
+                    "Document summarizer is not available; summary generation skipped."
+                )
                 summary_generator = None
         except ModuleNotFoundError:
-            logging.warning("Document summarizer unavailable. Install infra extras to enable it.")
+            logging.warning(
+                "Document summarizer unavailable. Install infra extras to enable it."
+            )
 
     service = S3RedisSyncService(
         config,

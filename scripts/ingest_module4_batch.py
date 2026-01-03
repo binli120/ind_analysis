@@ -280,7 +280,11 @@ def _s3_object_exists(client: Any, bucket: str, key: str) -> bool:
         client.head_object(Bucket=bucket, Key=key)
         return True
     except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") in {"404", "NoSuchKey", "NotFound"}:
+        if exc.response.get("Error", {}).get("Code") in {
+            "404",
+            "NoSuchKey",
+            "NotFound",
+        }:
             return False
         if exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404:
             return False
@@ -293,7 +297,9 @@ def _download_s3_pdf(
     tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
     tmp.close()
     extra_args = {"VersionId": version_id} if version_id else None
-    client.download_file(Bucket=bucket, Key=key, Filename=tmp.name, ExtraArgs=extra_args)
+    client.download_file(
+        Bucket=bucket, Key=key, Filename=tmp.name, ExtraArgs=extra_args
+    )
     return Path(tmp.name)
 
 
@@ -459,12 +465,26 @@ def _upload_meta_json(
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Batch ingest Module 4 PDFs from S3 into the DB.")
-    parser.add_argument("--bucket", default=os.getenv("S3_BUCKET"), help="S3 bucket name.")
-    parser.add_argument("--company", default=os.getenv("COMPANY", "filynai.com"), help="Company prefix.")
-    parser.add_argument("--project", default=os.getenv("PROJECT"), help="Project name under company.")
-    parser.add_argument("--project-id", default=os.getenv("PROJECT_ID"), help="Project UUID for NCD tox pipeline.")
-    parser.add_argument("--module", type=int, default=4, help="Module number to ingest.")
+    parser = argparse.ArgumentParser(
+        description="Batch ingest Module 4 PDFs from S3 into the DB."
+    )
+    parser.add_argument(
+        "--bucket", default=os.getenv("S3_BUCKET"), help="S3 bucket name."
+    )
+    parser.add_argument(
+        "--company", default=os.getenv("COMPANY", "filynai.com"), help="Company prefix."
+    )
+    parser.add_argument(
+        "--project", default=os.getenv("PROJECT"), help="Project name under company."
+    )
+    parser.add_argument(
+        "--project-id",
+        default=os.getenv("PROJECT_ID"),
+        help="Project UUID for NCD tox pipeline.",
+    )
+    parser.add_argument(
+        "--module", type=int, default=4, help="Module number to ingest."
+    )
     parser.add_argument(
         "--all-modules",
         action="store_true",
@@ -475,14 +495,28 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=None,
         help="Override S3 prefix (defaults to <company>/<project>/).",
     )
-    parser.add_argument("--aws-region", default=os.getenv("AWS_REGION"), help="AWS region override.")
-    parser.add_argument("--tenant-id", default=os.getenv("DEFAULT_TENANT_ID"), help="Tenant UUID.")
-    parser.add_argument("--created-by", default=os.getenv("DEFAULT_USER_ID"), help="User UUID.")
-    parser.add_argument("--limit", type=int, default=None, help="Limit on number of PDFs to process.")
-    parser.add_argument("--workers", type=int, default=4, help="Concurrent worker threads.")
+    parser.add_argument(
+        "--aws-region", default=os.getenv("AWS_REGION"), help="AWS region override."
+    )
+    parser.add_argument(
+        "--tenant-id", default=os.getenv("DEFAULT_TENANT_ID"), help="Tenant UUID."
+    )
+    parser.add_argument(
+        "--created-by", default=os.getenv("DEFAULT_USER_ID"), help="User UUID."
+    )
+    parser.add_argument(
+        "--limit", type=int, default=None, help="Limit on number of PDFs to process."
+    )
+    parser.add_argument(
+        "--workers", type=int, default=4, help="Concurrent worker threads."
+    )
     parser.add_argument("--mode", choices=("auto", "core", "tox"), default="core")
-    parser.add_argument("--core-check", choices=("md", "status", "both"), default="both")
-    parser.add_argument("--md-suffix", default=".extracted.md", help="Markdown sidecar suffix.")
+    parser.add_argument(
+        "--core-check", choices=("md", "status", "both"), default="both"
+    )
+    parser.add_argument(
+        "--md-suffix", default=".extracted.md", help="Markdown sidecar suffix."
+    )
     parser.add_argument(
         "--skip-langchain",
         action="store_true",
@@ -528,7 +562,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         dest="force_core",
         help="Respect core prechecks (disable default force).",
     )
-    parser.add_argument("--force-tox", action="store_true", help="Re-run tox pipeline regardless of checks.")
+    parser.add_argument(
+        "--force-tox",
+        action="store_true",
+        help="Re-run tox pipeline regardless of checks.",
+    )
     parser.add_argument(
         "--no-precheck",
         action="store_true",
@@ -541,7 +579,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         dest="no_precheck",
         help="Enable ingestion status precheck (overrides default no-precheck).",
     )
-    parser.add_argument("--dry-run", action="store_true", help="List matches without processing.")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="List matches without processing."
+    )
     parser.add_argument(
         "--tox-llm",
         choices=("real", "dummy"),
@@ -747,17 +787,31 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                     if core_status_row and core_status_row.get("content_hash"):
                         content_hash = str(core_status_row.get("content_hash") or "")
                     if core_status_row and core_status_row.get("document_version_id"):
-                        document_version_id = str(core_status_row.get("document_version_id"))
-                    if not document_version_id and langchain_status_row and langchain_status_row.get("document_version_id"):
-                        document_version_id = str(langchain_status_row.get("document_version_id"))
+                        document_version_id = str(
+                            core_status_row.get("document_version_id")
+                        )
+                    if (
+                        not document_version_id
+                        and langchain_status_row
+                        and langchain_status_row.get("document_version_id")
+                    ):
+                        document_version_id = str(
+                            langchain_status_row.get("document_version_id")
+                        )
                     if core_status_row:
                         core_status = str(core_status_row.get("status") or core_status)
                     if langchain_status_row:
-                        langchain_status = str(langchain_status_row.get("status") or langchain_status)
+                        langchain_status = str(
+                            langchain_status_row.get("status") or langchain_status
+                        )
                     if summary_status_row:
-                        summary_status = str(summary_status_row.get("status") or summary_status)
+                        summary_status = str(
+                            summary_status_row.get("status") or summary_status
+                        )
                     if context_status_row:
-                        context_status = str(context_status_row.get("status") or context_status)
+                        context_status = str(
+                            context_status_row.get("status") or context_status
+                        )
                 except Exception as exc:
                     status_completed = False
                     core_error = _format_error(exc)
@@ -772,19 +826,29 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
             if args.skip_langchain:
                 langchain_required = False
             else:
-                langchain_required = bool(args.force_langchain) or langchain_status != "completed"
+                langchain_required = (
+                    bool(args.force_langchain) or langchain_status != "completed"
+                )
 
             if langchain_required and not document_version_id:
                 core_required = True
 
             summary_required = bool(args.section_summary)
-            if summary_required and summary_status == "completed" and not args.force_section_summary:
+            if (
+                summary_required
+                and summary_status == "completed"
+                and not args.force_section_summary
+            ):
                 summary_required = False
             if args.force_section_summary:
                 summary_required = True
 
             context_required = bool(args.context)
-            if context_required and context_status == "completed" and not args.force_context:
+            if (
+                context_required
+                and context_status == "completed"
+                and not args.force_context
+            ):
                 context_required = False
             if args.force_context:
                 context_required = True
@@ -805,7 +869,9 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                 if tox_status_row:
                     tox_status = str(tox_status_row.get("status") or tox_status)
                 tox_data_exists = _has_tox_data(repo, args.project_id, file_name)
-                tox_required = args.force_tox or tox_status != "completed" or not tox_data_exists
+                tox_required = (
+                    args.force_tox or tox_status != "completed" or not tox_data_exists
+                )
             except Exception as exc:
                 tox_data_exists = False
                 tox_required = True
@@ -846,7 +912,10 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                 "meta_key": meta_key,
             }
 
-        if (core_required or langchain_required or context_required) and args.mode in {"auto", "core"}:
+        if (core_required or langchain_required or context_required) and args.mode in {
+            "auto",
+            "core",
+        }:
             started = datetime.now(timezone.utc)
             try:
                 result = process_message(
@@ -869,9 +938,15 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                 core_error = result.get("core_error") or core_error
                 langchain_error = result.get("langchain_error") or langchain_error
                 context_error = result.get("context_error") or context_error
-                core_duration = float(result.get("core_duration_seconds") or core_duration)
-                langchain_duration = float(result.get("langchain_duration_seconds") or langchain_duration)
-                context_duration = float(result.get("context_duration_seconds") or context_duration)
+                core_duration = float(
+                    result.get("core_duration_seconds") or core_duration
+                )
+                langchain_duration = float(
+                    result.get("langchain_duration_seconds") or langchain_duration
+                )
+                context_duration = float(
+                    result.get("context_duration_seconds") or context_duration
+                )
                 if result.get("document_version_id"):
                     document_version_id = str(result.get("document_version_id"))
             except Exception as exc:
@@ -884,7 +959,9 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                 if context_required:
                     context_status = "failed"
                     context_error = _format_error(exc)
-            core_duration = max(core_duration, (datetime.now(timezone.utc) - started).total_seconds())
+            core_duration = max(
+                core_duration, (datetime.now(timezone.utc) - started).total_seconds()
+            )
             if not content_hash:
                 try:
                     repo = repo or NCDRepository()
@@ -965,13 +1042,21 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
             started = datetime.now(timezone.utc)
             try:
                 if args.summary_min_chars is not None:
-                    os.environ["SECTION_SUMMARY_MIN_CHARS"] = str(args.summary_min_chars)
+                    os.environ["SECTION_SUMMARY_MIN_CHARS"] = str(
+                        args.summary_min_chars
+                    )
                 if args.summary_max_chars is not None:
-                    os.environ["SECTION_SUMMARY_MAX_CHARS"] = str(args.summary_max_chars)
+                    os.environ["SECTION_SUMMARY_MAX_CHARS"] = str(
+                        args.summary_max_chars
+                    )
                 if args.summary_keywords_min is not None:
-                    os.environ["SECTION_SUMMARY_KEYWORDS_MIN"] = str(args.summary_keywords_min)
+                    os.environ["SECTION_SUMMARY_KEYWORDS_MIN"] = str(
+                        args.summary_keywords_min
+                    )
                 if args.summary_keywords_max is not None:
-                    os.environ["SECTION_SUMMARY_KEYWORDS_MAX"] = str(args.summary_keywords_max)
+                    os.environ["SECTION_SUMMARY_KEYWORDS_MAX"] = str(
+                        args.summary_keywords_max
+                    )
                 if args.summary_purpose is not None:
                     os.environ["SECTION_SUMMARY_PURPOSE"] = str(args.summary_purpose)
                 if args.summary_type is not None:
@@ -995,9 +1080,13 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                             content_hash=content_hash,
                         )
                         if status_row and status_row.get("document_version_id"):
-                            document_version_id = str(status_row.get("document_version_id"))
+                            document_version_id = str(
+                                status_row.get("document_version_id")
+                            )
                 if not document_version_id:
-                    raise RuntimeError("document_version_id is required for section summaries")
+                    raise RuntimeError(
+                        "document_version_id is required for section summaries"
+                    )
                 if not content_hash:
                     raise RuntimeError("content_hash is required for section summaries")
 
@@ -1048,7 +1137,9 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                         snippet = text
                         if args.summary_max_chars is not None:
                             snippet = snippet[: args.summary_max_chars]
-                        payload = section_summary._summarize_section(llm_client, section, snippet)
+                        payload = section_summary._summarize_section(
+                            llm_client, section, snippet
+                        )
                         if payload:
                             summary_text = payload.get("summary_text") or {}
                             keywords = payload.get("keywords") or []
@@ -1126,9 +1217,13 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                     "section_summary_count": summary_count,
                     "tox_status": tox_status,
                 }
-                meta_key = _upload_meta_json(s3_client, args.bucket, key, meta_payload) or ""
+                meta_key = (
+                    _upload_meta_json(s3_client, args.bucket, key, meta_payload) or ""
+                )
             except Exception as exc:
-                print(f"[WARN] meta file upload failed for {key}: {exc}", file=sys.stderr)
+                print(
+                    f"[WARN] meta file upload failed for {key}: {exc}", file=sys.stderr
+                )
         return {
             "key": key,
             "version_id": version_id,
@@ -1210,15 +1305,24 @@ def main(argv: list[str]) -> int:
 
     if args.mode in {"auto", "core"}:
         if not args.tenant_id:
-            print("tenant_id is required (set --tenant-id or DEFAULT_TENANT_ID).", file=sys.stderr)
+            print(
+                "tenant_id is required (set --tenant-id or DEFAULT_TENANT_ID).",
+                file=sys.stderr,
+            )
             return 1
         if not args.created_by:
-            print("created_by is required (set --created-by or DEFAULT_USER_ID).", file=sys.stderr)
+            print(
+                "created_by is required (set --created-by or DEFAULT_USER_ID).",
+                file=sys.stderr,
+            )
             return 1
 
     if args.mode in {"auto", "tox"} and not args.project_id:
         if not args.project:
-            print("project is required to auto-create project_id for tox pipeline.", file=sys.stderr)
+            print(
+                "project is required to auto-create project_id for tox pipeline.",
+                file=sys.stderr,
+            )
             return 1
         try:
             repo = NCDRepository()
@@ -1307,9 +1411,18 @@ def main(argv: list[str]) -> int:
             )
             failed = (
                 (entry.get("core_required") and entry.get("core_status") == "failed")
-                or (entry.get("langchain_required") and entry.get("langchain_status") == "failed")
-                or (entry.get("context_required") and entry.get("context_status") == "failed")
-                or (entry.get("summary_required") and entry.get("summary_status") == "failed")
+                or (
+                    entry.get("langchain_required")
+                    and entry.get("langchain_status") == "failed"
+                )
+                or (
+                    entry.get("context_required")
+                    and entry.get("context_status") == "failed"
+                )
+                or (
+                    entry.get("summary_required")
+                    and entry.get("summary_status") == "failed"
+                )
                 or (entry.get("tox_required") and entry.get("tox_status") == "failed")
             )
 
@@ -1362,7 +1475,10 @@ def main(argv: list[str]) -> int:
                 if entry.get("core_error"):
                     print(f"  core_error: {entry['core_error']}", file=sys.stderr)
                 if entry.get("langchain_error"):
-                    print(f"  langchain_error: {entry['langchain_error']}", file=sys.stderr)
+                    print(
+                        f"  langchain_error: {entry['langchain_error']}",
+                        file=sys.stderr,
+                    )
                 if entry.get("context_error"):
                     print(f"  context_error: {entry['context_error']}", file=sys.stderr)
                 if entry.get("summary_error"):
@@ -1510,7 +1626,10 @@ def main(argv: list[str]) -> int:
                     )
                 )
         except Exception as exc:
-            print(f"[WARN] Unable to refresh 2.4 element references: {exc}", file=sys.stderr)
+            print(
+                f"[WARN] Unable to refresh 2.4 element references: {exc}",
+                file=sys.stderr,
+            )
         finally:
             try:
                 repo.close()

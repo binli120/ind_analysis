@@ -5,8 +5,11 @@
 try:
     from pydantic_settings import BaseSettings  # Pydantic v2 preferred location
     from pydantic import ConfigDict
-except ImportError:  # pragma: no cover - fallback for environments without pydantic-settings
+except (
+    ImportError
+):  # pragma: no cover - fallback for environments without pydantic-settings
     from pydantic import BaseSettings
+
     try:  # pragma: no cover - pydantic v1 fallback
         from pydantic import ConfigDict
     except Exception:  # pragma: no cover - ConfigDict unavailable
@@ -22,6 +25,7 @@ class Settings(BaseSettings):
     if ConfigDict:
         model_config = ConfigDict(env_file=".env")
     else:
+
         class Config:  # pragma: no cover - legacy pydantic fallback
             env_file = ".env"
 

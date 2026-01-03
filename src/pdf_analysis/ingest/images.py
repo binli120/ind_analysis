@@ -36,7 +36,9 @@ def _convert_to_pil(raw_image: Any) -> Image.Image:
     raise TypeError("Unknown image format from pdfplumber.to_image()")
 
 
-def _extract_image_caption(page: Any, bbox: tuple[float, float, float, float], window: int = 60) -> str | None:
+def _extract_image_caption(
+    page: Any, bbox: tuple[float, float, float, float], window: int = 60
+) -> str | None:
     x0, top, x1, bottom = bbox
     words = page.extract_words() or []
     caption_words = [w for w in words if bottom <= w.get("top", 0) <= bottom + window]

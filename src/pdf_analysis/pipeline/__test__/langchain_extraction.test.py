@@ -30,7 +30,9 @@ def test_normalize_list_handles_dict() -> None:
         noael_chain=FakeChain({"items": []}),
         repository=FakeRepo(),
     )
-    assert pipeline._normalize_list({"items": [{"a": 1}]}, field_name="items") == [{"a": 1}]
+    assert pipeline._normalize_list({"items": [{"a": 1}]}, field_name="items") == [
+        {"a": 1}
+    ]
     assert pipeline._normalize_list({"a": 1}, field_name=None) == [{"a": 1}]
 
 
@@ -51,7 +53,11 @@ def test_render_chunks_for_prompt() -> None:
         noael_chain=FakeChain({"items": []}),
         repository=FakeRepo(),
     )
-    chunks = [DocumentChunk(chunk_id="c1", page=1, text="Text", bbox=None, offset_start=0, offset_end=4)]
+    chunks = [
+        DocumentChunk(
+            chunk_id="c1", page=1, text="Text", bbox=None, offset_start=0, offset_end=4
+        )
+    ]
     rendered = pipeline._render_chunks_for_prompt(chunks)
     assert "[page=1" in rendered
     assert "Text" in rendered
@@ -73,7 +79,13 @@ def test_segment_studies_parses_payload() -> None:
         noael_chain=FakeChain({"items": []}),
         repository=FakeRepo(),
     )
-    segments = pipeline.segment_studies([DocumentChunk(chunk_id="c", page=1, text="t", bbox=None, offset_start=0, offset_end=1)])
+    segments = pipeline.segment_studies(
+        [
+            DocumentChunk(
+                chunk_id="c", page=1, text="t", bbox=None, offset_start=0, offset_end=1
+            )
+        ]
+    )
     assert len(segments) == 1
     assert segments[0].study_id == "s1"
 
@@ -97,7 +109,9 @@ def test_extract_noael_returns_results() -> None:
         noael_chain=FakeChain(response),
         repository=FakeRepo(),
     )
-    chunk = DocumentChunk(chunk_id="c1", page=1, text="Text", bbox=None, offset_start=0, offset_end=4)
+    chunk = DocumentChunk(
+        chunk_id="c1", page=1, text="Text", bbox=None, offset_start=0, offset_end=4
+    )
     results = pipeline.extract_noael([chunk])
     assert len(results) == 1
     record, returned_chunk = results[0]
@@ -124,7 +138,9 @@ def test_extract_pk_returns_results() -> None:
         pk_chain=FakeChain(response),
         repository=FakeRepo(),
     )
-    chunk = DocumentChunk(chunk_id="c1", page=1, text="Text", bbox=None, offset_start=0, offset_end=4)
+    chunk = DocumentChunk(
+        chunk_id="c1", page=1, text="Text", bbox=None, offset_start=0, offset_end=4
+    )
     results = pipeline.extract_pk([chunk])
     assert len(results) == 1
     record, returned_chunk = results[0]

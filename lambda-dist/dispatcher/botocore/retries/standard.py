@@ -50,7 +50,7 @@ def register_retry_handler(client, max_attempts=DEFAULT_MAX_ATTEMPTS):
     service_id = client.meta.service_model.service_id
     service_event_name = service_id.hyphenize()
     client.meta.events.register(
-        f'after-call.{service_event_name}', retry_quota.release_retry_quota
+        f"after-call.{service_event_name}", retry_quota.release_retry_quota
     )
 
     handler = RetryHandler(
@@ -62,9 +62,9 @@ def register_retry_handler(client, max_attempts=DEFAULT_MAX_ATTEMPTS):
         retry_quota=retry_quota,
     )
 
-    unique_id = f'retry-config-{service_event_name}'
+    unique_id = f"retry-config-{service_event_name}"
     client.meta.events.register(
-        f'needs-retry.{service_event_name}',
+        f"needs-retry.{service_event_name}",
         handler.needs_retry,
         unique_id=unique_id,
     )
@@ -98,8 +98,7 @@ class RetryHandler:
                 )
             else:
                 logger.debug(
-                    "Retry needed but retry quota reached, "
-                    "not retrying request."
+                    "Retry needed but retry quota reached, " "not retrying request."
                 )
         else:
             logger.debug("Not retrying request.")
@@ -120,7 +119,7 @@ class RetryEventAdapter:
 
     def create_retry_context(self, **kwargs):
         """Create context based on needs-retry kwargs."""
-        response = kwargs['response']
+        response = kwargs["response"]
         if response is None:
             # If response is None it means that an exception was raised
             # because we never received a response from the service.  This
@@ -134,12 +133,12 @@ class RetryEventAdapter:
         # needs-retry event, and what this module uses to check for
         # retries.
         context = RetryContext(
-            attempt_number=kwargs['attempts'],
-            operation_model=kwargs['operation'],
+            attempt_number=kwargs["attempts"],
+            operation_model=kwargs["operation"],
             http_response=http_response,
             parsed_response=parsed_response,
-            caught_exception=kwargs['caught_exception'],
-            request_context=kwargs['request_dict']['context'],
+            caught_exception=kwargs["caught_exception"],
+            request_context=kwargs["request_dict"]["context"],
         )
         return context
 
@@ -150,9 +149,7 @@ class RetryEventAdapter:
         # don't mutate any input parameters from the needs-retry event.
         metadata = context.get_retry_metadata()
         if context.parsed_response is not None:
-            context.parsed_response.setdefault('ResponseMetadata', {}).update(
-                metadata
-            )
+            context.parsed_response.setdefault("ResponseMetadata", {}).update(metadata)
 
 
 # Implementation note: this is meant to encapsulate all the misc stuff
@@ -221,10 +218,10 @@ class RetryContext:
         """
         if self.parsed_response is None:
             return
-        error = self.parsed_response.get('Error', {})
+        error = self.parsed_response.get("Error", {})
         if not isinstance(error, dict):
             return
-        return error.get('Code')
+        return error.get("Code")
 
     def add_retry_metadata(self, **kwargs):
         """Add key/value pairs to the retry metadata.
@@ -288,10 +285,10 @@ class MaxAttemptsChecker(BaseRetryableChecker):
 
     def is_retryable(self, context):
         under_max_attempts = context.attempt_number < self._max_attempts
-        retries_context = context.request_context.get('retries')
+        retries_context = context.request_context.get("retries")
         if retries_context:
-            retries_context['max'] = max(
-                retries_context.get('max', 0), self._max_attempts
+            retries_context["max"] = max(
+                retries_context.get("max", 0), self._max_attempts
             )
         if not under_max_attempts:
             logger.debug("Max attempts of %s reached.", self._max_attempts)
@@ -301,9 +298,9 @@ class MaxAttemptsChecker(BaseRetryableChecker):
 
 class TransientRetryableChecker(BaseRetryableChecker):
     _TRANSIENT_ERROR_CODES = [
-        'RequestTimeout',
-        'RequestTimeoutException',
-        'PriorRequestNotComplete',
+        "RequestTimeout",
+        "RequestTimeoutException",
+        "PriorRequestNotComplete",
     ]
     _TRANSIENT_STATUS_CODES = [500, 502, 503, 504]
     _TRANSIENT_EXCEPTION_CLS = (
@@ -331,15 +328,10 @@ class TransientRetryableChecker(BaseRetryableChecker):
         if context.get_error_code() in self._transient_error_codes:
             return True
         if context.http_response is not None:
-            if (
-                context.http_response.status_code
-                in self._transient_status_codes
-            ):
+            if context.http_response.status_code in self._transient_status_codes:
                 return True
         if context.caught_exception is not None:
-            return isinstance(
-                context.caught_exception, self._transient_exception_cls
-            )
+            return isinstance(context.caught_exception, self._transient_exception_cls)
         return False
 
 
@@ -347,20 +339,20 @@ class ThrottledRetryableChecker(BaseRetryableChecker):
     # This is the union of all error codes we've seen that represent
     # a throttled error.
     _THROTTLED_ERROR_CODES = [
-        'Throttling',
-        'ThrottlingException',
-        'ThrottledException',
-        'RequestThrottledException',
-        'TooManyRequestsException',
-        'ProvisionedThroughputExceededException',
-        'TransactionInProgressException',
-        'RequestLimitExceeded',
-        'BandwidthLimitExceeded',
-        'LimitExceededException',
-        'RequestThrottled',
-        'SlowDown',
-        'PriorRequestNotComplete',
-        'EC2ThrottledException',
+        "Throttling",
+        "ThrottlingException",
+        "ThrottledException",
+        "RequestThrottledException",
+        "TooManyRequestsException",
+        "ProvisionedThroughputExceededException",
+        "TransactionInProgressException",
+        "RequestLimitExceeded",
+        "BandwidthLimitExceeded",
+        "LimitExceededException",
+        "RequestThrottled",
+        "SlowDown",
+        "PriorRequestNotComplete",
+        "EC2ThrottledException",
     ]
 
     def __init__(self, throttled_error_codes=None):
@@ -391,8 +383,8 @@ class ModeledRetryErrorDetector:
     """Checks whether or not an error is a modeled retryable error."""
 
     # There are return values from the detect_error_type() method.
-    TRANSIENT_ERROR = 'TRANSIENT_ERROR'
-    THROTTLING_ERROR = 'THROTTLING_ERROR'
+    TRANSIENT_ERROR = "TRANSIENT_ERROR"
+    THROTTLING_ERROR = "THROTTLING_ERROR"
     # This class is lower level than ModeledRetryableChecker, which
     # implements BaseRetryableChecker.  This object allows you to distinguish
     # between the various types of retryable errors.
@@ -412,14 +404,14 @@ class ModeledRetryErrorDetector:
         if op_model is None or not op_model.error_shapes:
             return
         for shape in op_model.error_shapes:
-            if shape.metadata.get('retryable') is not None:
+            if shape.metadata.get("retryable") is not None:
                 # Check if this error code matches the shape.  This can
                 # be either by name or by a modeled error code.
                 error_code_to_check = (
-                    shape.metadata.get('error', {}).get('code') or shape.name
+                    shape.metadata.get("error", {}).get("code") or shape.name
                 )
                 if error_code == error_code_to_check:
-                    if shape.metadata['retryable'].get('throttling'):
+                    if shape.metadata["retryable"].get("throttling"):
                         return self.THROTTLING_ERROR
                     return self.TRANSIENT_ERROR
 
@@ -507,7 +499,7 @@ class RetryQuotaChecker:
             # We add the capacity amount to the request context so we know
             # how much to release later.  The capacity amount can vary based
             # on the error.
-            context.request_context['retry_quota_capacity'] = capacity_amount
+            context.request_context["retry_quota_capacity"] = capacity_amount
             return True
         context.add_retry_metadata(RetryQuotaReached=True)
         return False
@@ -529,8 +521,8 @@ class RetryQuotaChecker:
             return
         status_code = http_response.status_code
         if 200 <= status_code < 300:
-            if 'retry_quota_capacity' not in context:
+            if "retry_quota_capacity" not in context:
                 self._quota.release(self._NO_RETRY_INCREMENT)
             else:
-                capacity_amount = context['retry_quota_capacity']
+                capacity_amount = context["retry_quota_capacity"]
                 self._quota.release(capacity_amount)

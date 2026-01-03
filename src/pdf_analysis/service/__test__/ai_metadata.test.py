@@ -19,8 +19,8 @@ def test_ensure_list_dedupes_and_limits() -> None:
 
 
 def test_strip_code_fence_json() -> None:
-    text = "```json\n{\"a\": 1}\n```"
-    assert ai_metadata._strip_code_fence(text) == "{\"a\": 1}"
+    text = '```json\n{"a": 1}\n```'
+    assert ai_metadata._strip_code_fence(text) == '{"a": 1}'
 
 
 def test_collect_text_fragments_handles_dict() -> None:

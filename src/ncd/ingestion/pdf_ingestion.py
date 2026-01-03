@@ -16,6 +16,7 @@ email: blee@filynai.com
 PDF ingestion utilities for NCD document processing.
 """
 
+
 def sha256_file(path: str) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -32,12 +33,14 @@ def create_source_document(
 
     # If file already ingested for the same project, return its ID
     row = db.execute(
-        sqltext("""
+        sqltext(
+            """
             SELECT id
             FROM ncd_source_document
             WHERE project_id = :pid
               AND sha256 = :sha
-        """),
+        """
+        ),
         {"pid": project_id, "sha": file_hash},
     ).scalar()
 
@@ -65,10 +68,12 @@ def create_source_document(
 def extract_pages(db: Session, source_document_id: str, file_path: str) -> None:
     # Clear existing pages for reprocessing
     db.execute(
-        sqltext("""
+        sqltext(
+            """
             DELETE FROM ncd_document_page
             WHERE source_document_id = :sid
-        """),
+        """
+        ),
         {"sid": source_document_id},
     )
 
@@ -81,13 +86,15 @@ def extract_pages(db: Session, source_document_id: str, file_path: str) -> None:
         text = page.get_text("text")
 
         db.execute(
-            sqltext("""
+            sqltext(
+                """
                 INSERT INTO ncd_document_page (
                     source_document_id, page_number, text
                 ) VALUES (
                     :sid, :pnum, :txt
                 )
-            """),
+            """
+            ),
             {"sid": source_document_id, "pnum": i + 1, "txt": text},
         )
 

@@ -110,10 +110,14 @@ def build_noael_chain(
 
     class NOAELSchema(BaseModel):
         dose: Optional[float] = Field(None, description="Dose numeric value")
-        dose_unit: Optional[str] = Field(None, description="Unit for dose (e.g., mg/kg)")
+        dose_unit: Optional[str] = Field(
+            None, description="Unit for dose (e.g., mg/kg)"
+        )
         species: Optional[str] = Field(None, description="Species explicitly stated")
         sex: Optional[str] = Field(None, description="Sex if specified")
-        endpoint: Optional[str] = Field(None, description="Endpoint/context for the NOAEL")
+        endpoint: Optional[str] = Field(
+            None, description="Endpoint/context for the NOAEL"
+        )
         quote: str = Field(..., description="Verbatim citation for the NOAEL statement")
         confidence: Optional[float] = Field(
             None, description="LLM confidence 0-1 if available"
@@ -157,12 +161,20 @@ def build_pk_chain(
     BaseModel, Field = _pydantic()
 
     class PKSchema(BaseModel):
-        parameter: str = Field(..., description="PK parameter e.g., AUC, Cmax, Tmax, t1/2, CL, Vd")
-        value: Optional[float] = Field(None, description="Numeric value for the parameter")
+        parameter: str = Field(
+            ..., description="PK parameter e.g., AUC, Cmax, Tmax, t1/2, CL, Vd"
+        )
+        value: Optional[float] = Field(
+            None, description="Numeric value for the parameter"
+        )
         unit: Optional[str] = Field(None, description="Unit for the parameter")
-        dose_group: Optional[str] = Field(None, description="Dose group or arm label, if stated")
+        dose_group: Optional[str] = Field(
+            None, description="Dose group or arm label, if stated"
+        )
         quote: str = Field(..., description="Verbatim citation for the PK value")
-        confidence: Optional[float] = Field(None, description="LLM confidence 0-1 if available")
+        confidence: Optional[float] = Field(
+            None, description="LLM confidence 0-1 if available"
+        )
 
     class PKList(BaseModel):
         items: List[PKSchema] = Field(default_factory=list)

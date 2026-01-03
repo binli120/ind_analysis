@@ -26,11 +26,13 @@ def embed_chunks(db: Session, chunk_ids: List[str]):
 
     rows = (
         db.execute(
-            sqltext("""
+            sqltext(
+                """
             SELECT id, raw_text
             FROM ncd_text_chunk
             WHERE id = ANY(:ids)
-        """),
+        """
+            ),
             {"ids": chunk_ids},
         )
         .mappings()
@@ -45,11 +47,13 @@ def embed_chunks(db: Session, chunk_ids: List[str]):
         # pgvector accepts either a Python list or a string literal; use string to avoid adapter issues
         vec_literal = "[" + ",".join(f"{v:.6f}" for v in clean_vec) + "]"
         db.execute(
-            sqltext("""
+            sqltext(
+                """
                 INSERT INTO ncd_text_chunk_embedding (chunk_id, embedding)
                 VALUES (:cid, CAST(:emb AS vector))
                 ON CONFLICT (chunk_id) DO UPDATE SET embedding = EXCLUDED.embedding;
-            """),
+            """
+            ),
             {"cid": r["id"], "emb": vec_literal},
         )
 

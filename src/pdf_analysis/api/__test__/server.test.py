@@ -66,7 +66,12 @@ def test_table_to_payload_limits_rows(server: Any) -> None:
             {"A": 2, "B": "text"},
         ]
     )
-    table = {"page_number": 3, "index_on_page": 1, "engine": "pdfplumber", "dataframe": df}
+    table = {
+        "page_number": 3,
+        "index_on_page": 1,
+        "engine": "pdfplumber",
+        "dataframe": df,
+    }
     payload = server._table_to_payload(table, max_rows=1)
 
     assert payload["page_number"] == 3
@@ -78,7 +83,12 @@ def test_table_to_payload_limits_rows(server: Any) -> None:
 
 def test_build_table_manifest_preview_rows(server: Any) -> None:
     df = pd.DataFrame([{"A": "x"}, {"A": "y"}])
-    table = {"page_number": 1, "index_on_page": 1, "engine": "pdfplumber", "dataframe": df}
+    table = {
+        "page_number": 1,
+        "index_on_page": 1,
+        "engine": "pdfplumber",
+        "dataframe": df,
+    }
     manifest = server._build_table_manifest([table], preview_rows=1)
 
     assert len(manifest) == 1

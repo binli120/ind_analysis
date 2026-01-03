@@ -112,7 +112,9 @@ def build_fast_extract_index() -> Dict[str, FastExtractRule]:
         existing = index.get(section)
         if existing:
             existing.keywords.extend(k for k in keywords if k not in existing.keywords)
-            existing.table_cues.extend(c for c in table_cues if c not in existing.table_cues)
+            existing.table_cues.extend(
+                c for c in table_cues if c not in existing.table_cues
+            )
             existing.regex_patterns.extend(
                 p for p in regex_patterns if p not in existing.regex_patterns
             )
@@ -147,7 +149,9 @@ def match_fast_extract(
         if prefixes and not section.startswith(prefixes):
             continue
         matched_keywords = [kw for kw in rule.keywords if kw.lower() in lowered]
-        matched_regex = [pat for pat in rule.regex_patterns if _regex_hits(rule, pat, combined)]
+        matched_regex = [
+            pat for pat in rule.regex_patterns if _regex_hits(rule, pat, combined)
+        ]
         matched_table = [kw for kw in rule.table_cues if kw.lower() in lowered]
         if matched_keywords or matched_regex or matched_table:
             matches.append(

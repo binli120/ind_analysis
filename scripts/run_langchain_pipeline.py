@@ -67,22 +67,65 @@ class StubRepo:
         # Stub: just return generated IDs
         doc_id = str(uuid.uuid4())
         dvid = str(uuid.uuid4())
-        self.calls.append(("ensure_document_and_version", kwargs | {"document_id": doc_id, "document_version_id": dvid}))
+        self.calls.append(
+            (
+                "ensure_document_and_version",
+                kwargs | {"document_id": doc_id, "document_version_id": dvid},
+            )
+        )
         return doc_id, dvid
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run LangChain + NCD pipeline locally.")
+    parser = argparse.ArgumentParser(
+        description="Run LangChain + NCD pipeline locally."
+    )
     parser.add_argument("--pdf", required=True, type=Path, help="Path to local PDF")
-    parser.add_argument("--document-version-id", default=None, help="Document version UUID (auto-created if omitted with --use-db)")
-    parser.add_argument("--source-document-id", default=None, help="Source document UUID (auto-created if omitted with --use-db)")
-    parser.add_argument("--created-by", default=str(uuid.uuid4()), help="User UUID for created_by fields")
-    parser.add_argument("--tenant-id", default=None, help="Tenant UUID (required to auto-create documents when using --use-db)")
-    parser.add_argument("--use-db", action="store_true", help="Use real DB repository (requires DATABASE_URL config)")
-    parser.add_argument("--model", default="gpt-4o-mini", help="LLM model name for chains (requires API key)")
-    parser.add_argument("--stub-chains", action="store_true", help="Use stub LangChain chains (no LLM calls, deterministic outputs).")
-    parser.add_argument("--s3-bucket", default="local-bucket", help="Synthetic bucket name when auto-creating document_versions")
-    parser.add_argument("--s3-key", default=None, help="Synthetic key when auto-creating document_versions; defaults to PDF filename")
+    parser.add_argument(
+        "--document-version-id",
+        default=None,
+        help="Document version UUID (auto-created if omitted with --use-db)",
+    )
+    parser.add_argument(
+        "--source-document-id",
+        default=None,
+        help="Source document UUID (auto-created if omitted with --use-db)",
+    )
+    parser.add_argument(
+        "--created-by",
+        default=str(uuid.uuid4()),
+        help="User UUID for created_by fields",
+    )
+    parser.add_argument(
+        "--tenant-id",
+        default=None,
+        help="Tenant UUID (required to auto-create documents when using --use-db)",
+    )
+    parser.add_argument(
+        "--use-db",
+        action="store_true",
+        help="Use real DB repository (requires DATABASE_URL config)",
+    )
+    parser.add_argument(
+        "--model",
+        default="gpt-4o-mini",
+        help="LLM model name for chains (requires API key)",
+    )
+    parser.add_argument(
+        "--stub-chains",
+        action="store_true",
+        help="Use stub LangChain chains (no LLM calls, deterministic outputs).",
+    )
+    parser.add_argument(
+        "--s3-bucket",
+        default="local-bucket",
+        help="Synthetic bucket name when auto-creating document_versions",
+    )
+    parser.add_argument(
+        "--s3-key",
+        default=None,
+        help="Synthetic key when auto-creating document_versions; defaults to PDF filename",
+    )
     return parser.parse_args()
 
 
@@ -104,7 +147,18 @@ def _build_stub_chains():
         def invoke(self, _):
             return self.payload
 
-    seg = StubChain({"studies": [{"study_id": "STUB-1", "study_type": "repeat_dose_tox", "start_page": 1, "end_page": 3}]})
+    seg = StubChain(
+        {
+            "studies": [
+                {
+                    "study_id": "STUB-1",
+                    "study_type": "repeat_dose_tox",
+                    "start_page": 1,
+                    "end_page": 3,
+                }
+            ]
+        }
+    )
     noael = StubChain(
         {
             "items": [
@@ -162,7 +216,9 @@ def main() -> None:
     ctx = PipelineContext(pdf_path=args.pdf, pages=result.pages, tables=result.tables)
     chunks = pdf_pipeline._build_document_chunks(ctx)
 
-    print(f"[pipeline] pages={len(result.pages)} tables={len(result.tables)} chunks={len(chunks)}")
+    print(
+        f"[pipeline] pages={len(result.pages)} tables={len(result.tables)} chunks={len(chunks)}"
+    )
     if chunks:
         print(f"[pipeline] first chunk page={chunks[0].page} len={len(chunks[0].text)}")
 
@@ -191,7 +247,9 @@ def main() -> None:
     document_version_id = args.document_version_id
     if args.use_db and (document_id is None or document_version_id is None):
         if not args.tenant_id:
-            raise SystemExit("tenant_id is required when auto-creating documents with --use-db")
+            raise SystemExit(
+                "tenant_id is required when auto-creating documents with --use-db"
+            )
         synthetic_key = args.s3_key or args.pdf.name
         content_hash = _sha256_file(args.pdf)
         document_id, document_version_id = repo.ensure_document_and_version(
