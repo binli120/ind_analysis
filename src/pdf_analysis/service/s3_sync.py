@@ -84,7 +84,9 @@ class S3RedisSyncService:
         self,
         config: S3SyncConfig,
         *,
-        pipeline_factory: Optional[Callable[[PipelineConfig], PDFProcessingPipeline]] = None,
+        pipeline_factory: Optional[
+            Callable[[PipelineConfig], PDFProcessingPipeline]
+        ] = None,
         metadata_generator: Optional[Callable[[str], Dict[str, Any]]] = None,
         embedding_store: Optional[Any] = None,
         summarizer: Optional[OpenAIDocumentSummarizer] = None,
@@ -108,10 +110,15 @@ class S3RedisSyncService:
         processed = 0
 
         for document in self._iter_latest_documents(s3_client):
-            if self.config.maximum_documents and processed >= self.config.maximum_documents:
+            if (
+                self.config.maximum_documents
+                and processed >= self.config.maximum_documents
+            ):
                 break
 
-            if not self.config.force and self._should_skip_document(s3_client, document):
+            if not self.config.force and self._should_skip_document(
+                s3_client, document
+            ):
                 logger.debug(
                     "Skipping %s@%s (existing markdown/meta sidecars detected)",
                     document.key,
@@ -122,7 +129,12 @@ class S3RedisSyncService:
             try:
                 markdown = self._process_document(pipeline, s3_client, document)
             except Exception as exc:  # pragma: no cover - defensive
-                logger.warning("Failed to process %s@%s: %s", document.key, document.version_id, exc)
+                logger.warning(
+                    "Failed to process %s@%s: %s",
+                    document.key,
+                    document.version_id,
+                    exc,
+                )
                 continue
 
             if not markdown:
@@ -135,18 +147,24 @@ class S3RedisSyncService:
                 try:
                     summary_result = self._summarizer(markdown)
                 except Exception as exc:  # pragma: no cover - defensive
-                    logger.warning("Summary generation failed for %s: %s", document.key, exc)
+                    logger.warning(
+                        "Summary generation failed for %s: %s", document.key, exc
+                    )
                     summary_result = None
                 if summary_result:
                     summary_text = format_summary_text(summary_result)
-                    markdown = embed_topics_into_markdown(markdown, summary_result.topics)
+                    markdown = embed_topics_into_markdown(
+                        markdown, summary_result.topics
+                    )
 
             metadata_fields: Dict[str, Any] = {}
             if self._metadata_generator:
                 try:
                     metadata_fields = self._metadata_generator(markdown) or {}
                 except Exception as exc:  # pragma: no cover - defensive
-                    logger.warning("Metadata generation failed for %s: %s", document.key, exc)
+                    logger.warning(
+                        "Metadata generation failed for %s: %s", document.key, exc
+                    )
                     metadata_fields = {}
             metadata_fields.setdefault("analyzed", True)
 
@@ -156,7 +174,9 @@ class S3RedisSyncService:
                 project_slug=document.project_slug,
                 module=document.module_label,
                 module_slug=document.module_slug,
-                module_number=document.module_number if document.module_number is not None else "",
+                module_number=(
+                    document.module_number if document.module_number is not None else ""
+                ),
                 filename=document.filename,
             )
 
@@ -168,7 +188,9 @@ class S3RedisSyncService:
                 "s3_bucket": self.config.bucket,
                 "s3_key": document.key,
                 "s3_version": document.version_id,
-                "last_modified": document.last_modified.astimezone(timezone.utc).isoformat(),
+                "last_modified": document.last_modified.astimezone(
+                    timezone.utc
+                ).isoformat(),
                 "company": document.company,
                 "project": document.project,
                 "module_label": document.module_label,
@@ -192,7 +214,11 @@ class S3RedisSyncService:
             redis_client.hset(redis_key, mapping=redis_payload)
             if self.config.redis_expire_seconds:
                 redis_client.expire(redis_key, int(self.config.redis_expire_seconds))
-            logger.debug("Persisted markdown to redis key=%s version=%s", redis_key, document.version_id)
+            logger.debug(
+                "Persisted markdown to redis key=%s version=%s",
+                redis_key,
+                document.version_id,
+            )
 
             redis_snapshot = {
                 key: value for key, value in redis_payload.items() if key != "markdown"
@@ -210,7 +236,9 @@ class S3RedisSyncService:
             }
             summary_key = None
             if summary_text:
-                summary_key = self._upload_summary_document(s3_client, document, summary_text)
+                summary_key = self._upload_summary_document(
+                    s3_client, document, summary_text
+                )
                 if summary_key:
                     meta_payload["summary_key"] = summary_key
 
@@ -242,7 +270,9 @@ class S3RedisSyncService:
                         language=metadata_fields.get("language"),
                     )
                 except Exception as exc:  # pragma: no cover - defensive
-                    logger.warning("Embedding storage failed for %s: %s", document.key, exc)
+                    logger.warning(
+                        "Embedding storage failed for %s: %s", document.key, exc
+                    )
 
             if output_dir is not None:
                 self._persist_markdown_file(
@@ -279,7 +309,9 @@ class S3RedisSyncService:
     ) -> None:
         relative = Path(document.key)
         parent = relative.parent
-        safe_version = _safe_version(document.version_id) if document.version_id else None
+        safe_version = (
+            _safe_version(document.version_id) if document.version_id else None
+        )
 
         filename = relative.name
         if filename.lower().endswith(".pdf"):
@@ -302,10 +334,16 @@ class S3RedisSyncService:
                 meta_filename = f"{filename}.meta.json"
                 summary_filename = f"{filename}.summary.txt"
 
-        rel_md_path = (parent / md_filename) if str(parent) != "." else Path(md_filename)
-        rel_meta_path = (parent / meta_filename) if str(parent) != "." else Path(meta_filename)
+        rel_md_path = (
+            (parent / md_filename) if str(parent) != "." else Path(md_filename)
+        )
+        rel_meta_path = (
+            (parent / meta_filename) if str(parent) != "." else Path(meta_filename)
+        )
         rel_summary_path = (
-            (parent / summary_filename) if str(parent) != "." else Path(summary_filename)
+            (parent / summary_filename)
+            if str(parent) != "."
+            else Path(summary_filename)
         )
 
         md_path = base_dir / rel_md_path
@@ -325,19 +363,27 @@ class S3RedisSyncService:
             logger.debug("Wrote summary to %s", summary_path)
 
     @contextlib.contextmanager
-    def _download_to_tempfile(self, s3_client: Any, document: S3Document) -> Iterator[Path]:
+    def _download_to_tempfile(
+        self, s3_client: Any, document: S3Document
+    ) -> Iterator[Path]:
         tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
         try:
             with tmp:
-                extra: Dict[str, Any] = {"VersionId": document.version_id} if document.version_id else {}
-                s3_client.download_fileobj(self.config.bucket, document.key, tmp, ExtraArgs=extra)
+                extra: Dict[str, Any] = (
+                    {"VersionId": document.version_id} if document.version_id else {}
+                )
+                s3_client.download_fileobj(
+                    self.config.bucket, document.key, tmp, ExtraArgs=extra
+                )
                 tmp.flush()
             yield Path(tmp.name)
         finally:
             try:
                 Path(tmp.name).unlink(missing_ok=True)
             except Exception:  # pragma: no cover - best effort cleanup
-                logger.debug("Unable to remove temporary file %s", tmp.name, exc_info=True)
+                logger.debug(
+                    "Unable to remove temporary file %s", tmp.name, exc_info=True
+                )
 
     # ------------------------------------------------------------------
     def _iter_latest_documents(self, s3_client: Any) -> Iterable[S3Document]:
@@ -422,7 +468,11 @@ class S3RedisSyncService:
         if self.config.aws_region:
             session_kwargs["region_name"] = self.config.aws_region
 
-        logger.debug("Creating S3 client for bucket=%s region=%s", self.config.bucket, self.config.aws_region)
+        logger.debug(
+            "Creating S3 client for bucket=%s region=%s",
+            self.config.bucket,
+            self.config.aws_region,
+        )
         return boto3.client("s3", **session_kwargs)
 
     def _resolve_redis_client(self) -> Any:
@@ -435,7 +485,9 @@ class S3RedisSyncService:
             self._redis_client = self.config.redis_factory()
             return self._redis_client
         if not self.config.redis_url:
-            raise RuntimeError("Redis configuration missing: provide redis_client, redis_factory, or redis_url.")
+            raise RuntimeError(
+                "Redis configuration missing: provide redis_client, redis_factory, or redis_url."
+            )
 
         try:
             import redis
@@ -485,7 +537,10 @@ class S3RedisSyncService:
             new_metadata["language"] = str(language)
         new_metadata["analyzed"] = "true"
 
-        copy_source: Dict[str, Any] = {"Bucket": self.config.bucket, "Key": document.key}
+        copy_source: Dict[str, Any] = {
+            "Bucket": self.config.bucket,
+            "Key": document.key,
+        }
         if document.version_id:
             copy_source["VersionId"] = document.version_id
 

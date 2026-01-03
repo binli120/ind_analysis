@@ -76,7 +76,9 @@ def _load_json(source: str, *, bucket: str | None = None) -> Any:
     if source.startswith("s3://"):
         bucket, key = _parse_s3_uri(source)
         if boto3 is None:
-            raise SystemExit("boto3 is required for S3 validation. Install infra extras.")
+            raise SystemExit(
+                "boto3 is required for S3 validation. Install infra extras."
+            )
         s3 = boto3.client("s3")
         try:
             obj = s3.get_object(Bucket=bucket, Key=key)
@@ -88,7 +90,9 @@ def _load_json(source: str, *, bucket: str | None = None) -> Any:
                 "(e.g., aws sso login) and retry."
             ) from exc
         except Exception as exc:
-            raise SystemExit(f"Failed to load S3 object s3://{bucket}/{key}: {exc}") from exc
+            raise SystemExit(
+                f"Failed to load S3 object s3://{bucket}/{key}: {exc}"
+            ) from exc
 
     # Otherwise treat as local path only.
     local_path = Path(source).expanduser()

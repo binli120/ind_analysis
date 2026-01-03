@@ -20,7 +20,7 @@ def parse_s3_uri(uri: str) -> Tuple[str, str]:
     prefix = "s3://"
     if not uri.startswith(prefix):
         raise ValueError(f"Unsupported S3 URI format: {uri}")
-    remainder = uri[len(prefix):]
+    remainder = uri[len(prefix) :]
     bucket, _, key = remainder.partition("/")
     if not bucket or not key:
         raise ValueError(f"Malformed S3 URI: {uri}")

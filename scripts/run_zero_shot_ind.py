@@ -38,6 +38,7 @@ def _load_env_files() -> None:
 
 _load_env_files()
 
+
 def _ensure_src_on_path() -> None:
     """Guarantee that the src directory is importable at runtime."""
     if str(SRC_DIR) not in sys.path:
@@ -157,7 +158,9 @@ def main() -> None:
             "ind_document_type": metadata.get("ind_document_type"),
             "ind_section_number": metadata.get("ind_section_number"),
             "ind_section_title": metadata.get("ind_section_title"),
-            "ind_classification_confidence": metadata.get("ind_classification_confidence"),
+            "ind_classification_confidence": metadata.get(
+                "ind_classification_confidence"
+            ),
         },
         "labels": metadata.get("labels", []),
         "keywords": metadata.get("keywords", []),

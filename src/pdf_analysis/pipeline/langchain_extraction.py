@@ -34,9 +34,7 @@ _STUDY_ID_RE = re.compile(
     re.IGNORECASE,
 )
 _STUDY_ID_PREFIX_RE = re.compile(r"^(?:stf-|study-)", re.IGNORECASE)
-_STUDY_ID_EXT_RE = re.compile(
-    r"\.(?:pdf|xml|docx|txt|csv|json|md)$", re.IGNORECASE
-)
+_STUDY_ID_EXT_RE = re.compile(r"\.(?:pdf|xml|docx|txt|csv|json|md)$", re.IGNORECASE)
 
 
 def _extract_study_id_from_key(key: str | None) -> str | None:
@@ -193,7 +191,9 @@ class LangChainExtractionPipeline:
                 study_segments[0].study_id = fallback_id
         elif fallback_id:
             has_valid = any(
-                seg.study_id and _STUDY_ID_RE.fullmatch(seg.study_id) and not seg.study_id.lower().startswith("study-")
+                seg.study_id
+                and _STUDY_ID_RE.fullmatch(seg.study_id)
+                and not seg.study_id.lower().startswith("study-")
                 for seg in study_segments
             )
             if not has_valid and study_segments:
@@ -247,7 +247,9 @@ class LangChainExtractionPipeline:
                         value=record.quote,
                     )
                 except Exception as exc:  # pragma: no cover - schema drift
-                    logger.warning("Skipping NOAEL insert for %s: %s", segment.study_id, exc)
+                    logger.warning(
+                        "Skipping NOAEL insert for %s: %s", segment.study_id, exc
+                    )
                     try:
                         self.repo.session.rollback()
                     except Exception:
@@ -261,7 +263,10 @@ class LangChainExtractionPipeline:
                     anchor=anchor.to_dict(),
                     confidence=confidence,
                 )
-                if confidence is not None and confidence < self.low_confidence_threshold:
+                if (
+                    confidence is not None
+                    and confidence < self.low_confidence_threshold
+                ):
                     self.repo.create_low_confidence_comment(
                         document_version_id=document_version_id,
                         anchor=anchor.to_dict(),
@@ -286,7 +291,9 @@ class LangChainExtractionPipeline:
                         dose_group=record.dose_group,
                     )
                 except Exception as exc:  # pragma: no cover - schema drift
-                    logger.warning("Skipping PK insert for %s: %s", segment.study_id, exc)
+                    logger.warning(
+                        "Skipping PK insert for %s: %s", segment.study_id, exc
+                    )
                     try:
                         self.repo.session.rollback()
                     except Exception:
@@ -300,7 +307,10 @@ class LangChainExtractionPipeline:
                     anchor=anchor.to_dict(),
                     confidence=confidence,
                 )
-                if confidence is not None and confidence < self.low_confidence_threshold:
+                if (
+                    confidence is not None
+                    and confidence < self.low_confidence_threshold
+                ):
                     self.repo.create_low_confidence_comment(
                         document_version_id=document_version_id,
                         anchor=anchor.to_dict(),
@@ -327,13 +337,41 @@ class LangChainExtractionPipeline:
         for raw in raw_segments:
             try:
                 segment = StudySegment(
-                    study_id=raw.get("study_id") if isinstance(raw, dict) else getattr(raw, "study_id", None) or f"study-{uuid4()}",
-                    study_type=raw.get("study_type") if isinstance(raw, dict) else getattr(raw, "study_type", None) or "tox",
-                    start_page=int(raw.get("start_page", 1)) if isinstance(raw, dict) else int(getattr(raw, "start_page", 1)),
-                    end_page=int(raw.get("end_page", 1)) if isinstance(raw, dict) else int(getattr(raw, "end_page", 1)),
-                    species=raw.get("species") if isinstance(raw, dict) else getattr(raw, "species", None),
-                    route=raw.get("route") if isinstance(raw, dict) else getattr(raw, "route", None),
-                    duration=raw.get("duration") if isinstance(raw, dict) else getattr(raw, "duration", None),
+                    study_id=(
+                        raw.get("study_id")
+                        if isinstance(raw, dict)
+                        else getattr(raw, "study_id", None) or f"study-{uuid4()}"
+                    ),
+                    study_type=(
+                        raw.get("study_type")
+                        if isinstance(raw, dict)
+                        else getattr(raw, "study_type", None) or "tox"
+                    ),
+                    start_page=(
+                        int(raw.get("start_page", 1))
+                        if isinstance(raw, dict)
+                        else int(getattr(raw, "start_page", 1))
+                    ),
+                    end_page=(
+                        int(raw.get("end_page", 1))
+                        if isinstance(raw, dict)
+                        else int(getattr(raw, "end_page", 1))
+                    ),
+                    species=(
+                        raw.get("species")
+                        if isinstance(raw, dict)
+                        else getattr(raw, "species", None)
+                    ),
+                    route=(
+                        raw.get("route")
+                        if isinstance(raw, dict)
+                        else getattr(raw, "route", None)
+                    ),
+                    duration=(
+                        raw.get("duration")
+                        if isinstance(raw, dict)
+                        else getattr(raw, "duration", None)
+                    ),
                 )
                 segments.append(segment)
             except Exception as exc:  # pragma: no cover - defensive
@@ -362,7 +400,9 @@ class LangChainExtractionPipeline:
                     )
                     results.append((result, chunk))
                 except Exception as exc:  # pragma: no cover - defensive
-                    logger.warning("Skipping malformed NOAEL payload %s: %s", payload, exc)
+                    logger.warning(
+                        "Skipping malformed NOAEL payload %s: %s", payload, exc
+                    )
         return results
 
     def extract_pk(
@@ -403,7 +443,9 @@ class LangChainExtractionPipeline:
             bbox=getattr(chunk, "bbox", None),
         )
 
-    def _composite_confidence(self, scores: Dict[str, Optional[float]]) -> Optional[float]:
+    def _composite_confidence(
+        self, scores: Dict[str, Optional[float]]
+    ) -> Optional[float]:
         """
         Composite confidence using weighted mean; skips missing scores.
         """
@@ -434,7 +476,9 @@ class LangChainExtractionPipeline:
             lines.append(f"[page={chunk.page} chunk={chunk.chunk_id}] {chunk.text}")
         return "\n\n".join(lines)
 
-    def _normalize_list(self, response: Any, field_name: str | None = None) -> List[Any]:
+    def _normalize_list(
+        self, response: Any, field_name: str | None = None
+    ) -> List[Any]:
         """
         Accept list, BaseModel, or dict payloads and return a list of dict-like items.
         """

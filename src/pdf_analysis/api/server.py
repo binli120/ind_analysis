@@ -41,12 +41,16 @@ from sqlalchemy.orm import Session
 from pdf_analysis.ingest.pdf_text import extract_pages_text
 from pdf_analysis.ingest.tables import extract_tables_all
 from pdf_analysis.pipeline import PDFProcessingPipeline
-from pdf_analysis.service.ai_metadata import OpenAIMetadataGenerator, _extract_text_from_response
+from pdf_analysis.service.ai_metadata import (
+    OpenAIMetadataGenerator,
+    _extract_text_from_response,
+)
 from pdf_analysis.service.document_summarizer import (
     OpenAIDocumentSummarizer,
     embed_topics_into_markdown,
     format_summary_text,
 )
+
 try:  # Optional OpenAI dependency for section summary embeddings.
     from openai import OpenAI
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
@@ -99,6 +103,8 @@ app = FastAPI(
 @app.get("/health", tags=["health"])
 def health_check() -> Dict[str, str]:
     return {"status": "ok"}
+
+
 upload_router = APIRouter(tags=["upload"])
 ncd_router = APIRouter(prefix="/ncd", tags=["ncd"])
 dev_router = APIRouter(prefix="/dev", tags=["dev"])
@@ -451,13 +457,16 @@ def _upload_analysis_json_to_s3(
             ContentType="application/json",
         )
     except Exception as exc:  # pragma: no cover - best effort
-        logger.warning("Failed to upload analysis payload for %s: %s", analysis_key, exc)
+        logger.warning(
+            "Failed to upload analysis payload for %s: %s", analysis_key, exc
+        )
     return analysis_key
 
 
 def _boto3_client(service: str, region_name: Optional[str] = None) -> Any:
     try:
         import importlib
+
         boto3_module = importlib.import_module("boto3")
     except ModuleNotFoundError as exc:
         raise HTTPException(
@@ -473,7 +482,9 @@ def _require_valid_user_id(db: Session, user_id: str) -> str:
     try:
         normalized = str(uuid.UUID(user_id))
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="user_id must be a valid UUID") from exc
+        raise HTTPException(
+            status_code=400, detail="user_id must be a valid UUID"
+        ) from exc
     row = db.execute(
         sqltext("SELECT 1 FROM users WHERE id = :uid"),
         {"uid": normalized},
@@ -546,9 +557,7 @@ def _load_ind_template_sections() -> List[Dict[str, str]]:
         if not section_id:
             continue
         title = str(
-            entry.get("Subsection Header")
-            or entry.get("Section Header")
-            or section_id
+            entry.get("Subsection Header") or entry.get("Section Header") or section_id
         ).strip()
         content_parts = [
             entry.get("Section Header") or "",
@@ -601,7 +610,9 @@ def _load_ind_template_entries() -> List[Dict[str, Any]]:
     return _IND_TEMPLATE_ENTRIES
 
 
-def _fetch_template_overrides(db: Session, user_id: str, section: str) -> List[Dict[str, Any]]:
+def _fetch_template_overrides(
+    db: Session, user_id: str, section: str
+) -> List[Dict[str, Any]]:
     """
     Fetch overrides for a user matching a section or subsection prefix.
     Assumes table ncd_template_override(user_id UUID, section TEXT, subsection TEXT, payload JSONB, updated_at TIMESTAMPTZ, created_at TIMESTAMPTZ).
@@ -639,7 +650,11 @@ def _fetch_template_overrides(db: Session, user_id: str, section: str) -> List[D
 
 
 def _upsert_template_override(
-    db: Session, user_id: str, section: str, subsection: Optional[str], payload: Dict[str, Any]
+    db: Session,
+    user_id: str,
+    section: str,
+    subsection: Optional[str],
+    payload: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Insert or update a template override for a user."""
     existing = db.execute(
@@ -666,7 +681,12 @@ def _upsert_template_override(
             {"payload": json.dumps(payload), "id": existing},
         )
         db.commit()
-        return {"id": str(existing), "section": section, "subsection": subsection, "payload": payload}
+        return {
+            "id": str(existing),
+            "section": section,
+            "subsection": subsection,
+            "payload": payload,
+        }
 
     new_id = db.execute(
         sqltext(
@@ -676,13 +696,25 @@ def _upsert_template_override(
             RETURNING id
             """
         ),
-        {"uid": user_id, "sec": section, "sub": subsection, "payload": json.dumps(payload)},
+        {
+            "uid": user_id,
+            "sec": section,
+            "sub": subsection,
+            "payload": json.dumps(payload),
+        },
     ).scalar()
     db.commit()
-    return {"id": str(new_id), "section": section, "subsection": subsection, "payload": payload}
+    return {
+        "id": str(new_id),
+        "section": section,
+        "subsection": subsection,
+        "payload": payload,
+    }
 
 
-def _match_section_regex(text: str, sections: List[Dict[str, str]]) -> Tuple[str, str, float] | None:
+def _match_section_regex(
+    text: str, sections: List[Dict[str, str]]
+) -> Tuple[str, str, float] | None:
     """Find direct section-number mentions in text."""
     for entry in sections:
         sec = entry["section"]
@@ -694,7 +726,9 @@ def _match_section_regex(text: str, sections: List[Dict[str, str]]) -> Tuple[str
     return None
 
 
-def _score_sections_similarity(text: str, sections: List[Dict[str, str]]) -> Tuple[str, str, float] | None:
+def _score_sections_similarity(
+    text: str, sections: List[Dict[str, str]]
+) -> Tuple[str, str, float] | None:
     """Score sections using fuzzy similarity against headers/content."""
     if not text.strip():
         return None
@@ -703,13 +737,18 @@ def _score_sections_similarity(text: str, sections: List[Dict[str, str]]) -> Tup
     for entry in sections:
         title = entry["title"].lower()
         blob = entry["blob"].lower() if entry["blob"] else title
-        score = max(fuzz.partial_ratio(sample, title), fuzz.partial_ratio(sample, blob)) / 100.0
+        score = (
+            max(fuzz.partial_ratio(sample, title), fuzz.partial_ratio(sample, blob))
+            / 100.0
+        )
         if best is None or score > best[2]:
             best = (entry["section"], entry["title"], round(score, 3))
     return best
 
 
-def _guess_section_from_name(name: str, sections: List[Dict[str, str]]) -> Tuple[str, str, float] | None:
+def _guess_section_from_name(
+    name: str, sections: List[Dict[str, str]]
+) -> Tuple[str, str, float] | None:
     """Infer section directly from filename/key if it contains a number."""
     if not name:
         return None
@@ -742,7 +781,10 @@ def _top_section_candidates(
     for entry in sections:
         title = entry["title"].lower()
         blob = entry["blob"].lower() if entry["blob"] else title
-        score = max(fuzz.partial_ratio(sample, title), fuzz.partial_ratio(sample, blob)) / 100.0
+        score = (
+            max(fuzz.partial_ratio(sample, title), fuzz.partial_ratio(sample, blob))
+            / 100.0
+        )
         scored.append((score, entry))
     scored.sort(key=lambda pair: pair[0], reverse=True)
     top = []
@@ -757,7 +799,9 @@ def _top_section_candidates(
     return top
 
 
-def _llm_select_section(text: str, sections: List[Dict[str, str]]) -> Tuple[str, str, float] | None:
+def _llm_select_section(
+    text: str, sections: List[Dict[str, str]]
+) -> Tuple[str, str, float] | None:
     """Optional LLM-based selection constrained to known sections."""
     if not _metadata_generator or not getattr(_metadata_generator, "_client", None):
         return None
@@ -770,11 +814,7 @@ def _llm_select_section(text: str, sections: List[Dict[str, str]]) -> Tuple[str,
         '{"section_number":"<number>","section_title":"<title>","confidence":0.0} '
         "where confidence is 0.0-1.0. Use only the supplied section numbers."
     )
-    user_prompt = (
-        f"Options:\n{options}\n\n"
-        "PDF excerpt (trimmed):\n"
-        f"{text[:4000]}"
-    )
+    user_prompt = f"Options:\n{options}\n\n" "PDF excerpt (trimmed):\n" f"{text[:4000]}"
     try:
         response = client.responses.create(
             model=getattr(_metadata_generator, "model", "gpt-4o-mini"),  # type: ignore[attr-defined]
@@ -984,7 +1024,9 @@ def _process_pdf_and_store_analysis(
         import boto3  # type: ignore
         from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
     except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency
-        raise RuntimeError("boto3 is required for S3 operations. Install the 'infra' extras.") from exc
+        raise RuntimeError(
+            "boto3 is required for S3 operations. Install the 'infra' extras."
+        ) from exc
 
     s3_client = _boto3_client("s3", region_name=aws_region)
 
@@ -1084,7 +1126,9 @@ async def label_s3_pdf(payload: NCDLabelRequest) -> Dict[str, Any]:
             detail="bucket is required (pass in payload or set S3_BUCKET).",
         )
 
-    page_limit = payload.page_limit if payload.page_limit and payload.page_limit > 0 else 5
+    page_limit = (
+        payload.page_limit if payload.page_limit and payload.page_limit > 0 else 5
+    )
 
     def worker() -> Dict[str, Any]:
         s3_client = _boto3_client("s3", region_name=payload.aws_region)
@@ -1100,7 +1144,9 @@ async def label_s3_pdf(payload: NCDLabelRequest) -> Dict[str, Any]:
                 pass
             error_code = exc.response.get("Error", {}).get("Code")
             status = 404 if error_code in {"404", "NoSuchKey"} else 502
-            raise HTTPException(status_code=status, detail=f"Failed to fetch S3 object: {exc}") from exc
+            raise HTTPException(
+                status_code=status, detail=f"Failed to fetch S3 object: {exc}"
+            ) from exc
 
         try:
             sample_text, pages_sampled = _extract_sample_text(tmp_path, page_limit)
@@ -1127,7 +1173,9 @@ async def label_s3_pdf(payload: NCDLabelRequest) -> Dict[str, Any]:
             + _split_path_segments(target_folder)
         )
         if not key_parts:
-            raise HTTPException(status_code=400, detail="company/project must be provided for labeling.")
+            raise HTTPException(
+                status_code=400, detail="company/project must be provided for labeling."
+            )
 
         dest_key = "/".join(key_parts + [Path(payload.key).name])
         copy_source: Dict[str, Any] = {"Bucket": bucket, "Key": payload.key}
@@ -1140,7 +1188,9 @@ async def label_s3_pdf(payload: NCDLabelRequest) -> Dict[str, Any]:
                 MetadataDirective="COPY",
             )
         except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
-            raise HTTPException(status_code=502, detail=f"Failed to copy PDF to labeled folder: {exc}") from exc
+            raise HTTPException(
+                status_code=502, detail=f"Failed to copy PDF to labeled folder: {exc}"
+            ) from exc
 
         dest_version_id = copy_resp.get("VersionId")
         meta_fields: Dict[str, Any] = {
@@ -1220,7 +1270,9 @@ async def relabel_s3_pdf(payload: NCDRelabelRequest) -> Dict[str, Any]:
         + _split_path_segments(target_folder)
     )
     if not key_parts:
-        raise HTTPException(status_code=400, detail="company/project must be provided for relabeling.")
+        raise HTTPException(
+            status_code=400, detail="company/project must be provided for relabeling."
+        )
 
     dest_key = "/".join(key_parts + [Path(payload.key).name])
 
@@ -1235,13 +1287,17 @@ async def relabel_s3_pdf(payload: NCDRelabelRequest) -> Dict[str, Any]:
             MetadataDirective="COPY",
         )
     except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
-        raise HTTPException(status_code=502, detail=f"Failed to copy PDF to relabeled folder: {exc}") from exc
+        raise HTTPException(
+            status_code=502, detail=f"Failed to copy PDF to relabeled folder: {exc}"
+        ) from exc
 
     # Best-effort move: delete the original after successful copy
     try:
         s3_client.delete_object(Bucket=bucket, Key=payload.key)
     except Exception as exc:  # pragma: no cover - best effort
-        logger.warning("Failed to delete original after relabel (%s): %s", payload.key, exc)
+        logger.warning(
+            "Failed to delete original after relabel (%s): %s", payload.key, exc
+        )
 
     dest_version_id = copy_resp.get("VersionId")
     meta_fields: Dict[str, Any] = {
@@ -1309,7 +1365,9 @@ async def dev_label_local(
             filename=filename,
             use_llm=use_llm,
         )
-        candidates = _top_section_candidates(sample_text, _load_ind_template_sections(), limit=5)
+        candidates = _top_section_candidates(
+            sample_text, _load_ind_template_sections(), limit=5
+        )
     finally:
         try:
             tmp_path.unlink()
@@ -1325,7 +1383,11 @@ async def dev_label_local(
 
     if not candidates and section_number:
         candidates = [
-            {"section_number": section_number, "section_title": section_title or section_number, "score": confidence}
+            {
+                "section_number": section_number,
+                "section_title": section_title or section_number,
+                "score": confidence,
+            }
         ]
 
     return {
@@ -1365,13 +1427,17 @@ async def upsert_template_override(payload: TemplateOverrideRequest) -> Dict[str
         )
         return record
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to upsert template override: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Failed to upsert template override: {exc}"
+        ) from exc
     finally:
         db.close()
 
 
 @ncd_router.get("/template")
-async def get_template_sections(section: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+async def get_template_sections(
+    section: str, user_id: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Return template entries for a given section or subsection from ind_24_26_template.json.
     - If you pass a subsection (e.g., 2.4.1-A), returns the matching entry.
@@ -1412,16 +1478,24 @@ async def get_template_sections(section: str, user_id: Optional[str] = None) -> 
 
         if overrides:
             override_map = {
-                ((o.get("section") or "").lower(), (o.get("subsection") or None)): o["payload"]
+                ((o.get("section") or "").lower(), (o.get("subsection") or None)): o[
+                    "payload"
+                ]
                 for o in overrides
             }
             merged: List[Dict[str, Any]] = []
             seen_keys = set()
             for entry in matches:
-                key = ((entry.get("section") or "").lower(), (entry.get("subsection") or None))
+                key = (
+                    (entry.get("section") or "").lower(),
+                    (entry.get("subsection") or None),
+                )
                 if key in override_map:
                     merged_entry = dict(entry)
-                    merged_entry["raw"] = {**(entry.get("raw") or {}), **(override_map[key] or {})}
+                    merged_entry["raw"] = {
+                        **(entry.get("raw") or {}),
+                        **(override_map[key] or {}),
+                    }
                     merged.append(merged_entry)
                     seen_keys.add(key)
                 else:
@@ -1496,7 +1570,11 @@ async def list_template_downloads(
                 "s3_uri": f"s3://{target_bucket}/{key}",
                 "download_url": download_url,
                 "size_bytes": obj.get("Size"),
-                "last_modified": last_modified.isoformat() if isinstance(last_modified, datetime) else None,
+                "last_modified": (
+                    last_modified.isoformat()
+                    if isinstance(last_modified, datetime)
+                    else None
+                ),
             }
         )
 
@@ -1524,7 +1602,9 @@ async def get_ctd_element_reference(
     if not normalized.startswith("2.4."):
         raise HTTPException(status_code=400, detail="element must start with 2.4.")
     if not tenant_id or not project_id or not bucket:
-        raise HTTPException(status_code=400, detail="tenant_id, project_id, and bucket are required")
+        raise HTTPException(
+            status_code=400, detail="tenant_id, project_id, and bucket are required"
+        )
 
     db = SessionLocal()
     repo = NCDRepository(session=db)
@@ -1571,7 +1651,9 @@ async def get_ctd_element_reference(
                     payload=payload,
                 )
             )
-        except Exception as exc:  # pragma: no cover - cache failure should not block response
+        except (
+            Exception
+        ) as exc:  # pragma: no cover - cache failure should not block response
             logger.warning("Failed to cache CTD element reference: %s", exc)
         payload["cache"] = {"cached": False, "updated_at": None}
         return payload
@@ -1597,7 +1679,9 @@ async def get_ctd_section_materials(
     if not target.startswith("2.6."):
         raise HTTPException(status_code=400, detail="section must start with 2.6.")
     if not tenant_id or not project_id or not bucket:
-        raise HTTPException(status_code=400, detail="tenant_id, project_id, and bucket are required")
+        raise HTTPException(
+            status_code=400, detail="tenant_id, project_id, and bucket are required"
+        )
 
     db = SessionLocal()
     try:
@@ -1673,7 +1757,9 @@ async def get_ctd_section_materials(
                 if include_tables:
                     tables_html = extract_markdown_tables(slice_text)
                 if include_images:
-                    images = extract_markdown_images(slice_text, row["s3_bucket"], row["s3_key"])
+                    images = extract_markdown_images(
+                        slice_text, row["s3_bucket"], row["s3_key"]
+                    )
 
         response_sources.append(
             {
@@ -1782,9 +1868,7 @@ def _trim_section_summary_context(context: Dict[str, Any]) -> Dict[str, Any]:
             if not isinstance(row, dict):
                 continue
             slim = dict(row)
-            slim["text"] = _truncate_text(
-                str(slim.get("text") or ""), max_text_chars
-            )
+            slim["text"] = _truncate_text(str(slim.get("text") or ""), max_text_chars)
             trimmed.append(slim)
         return trimmed
 
@@ -1868,6 +1952,7 @@ def _trim_section_summary_context(context: Dict[str, Any]) -> Dict[str, Any]:
     minimal["elements"] = []
     return minimal
 
+
 def _normalize_json_dict(value: Any) -> Dict[str, Any]:
     if isinstance(value, dict):
         return value
@@ -1930,7 +2015,8 @@ def _slim_sources(sources: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "keywords": row.get("keywords") or [],
                 "summary_type": row.get("summary_type"),
                 "summary_purpose": row.get("summary_purpose"),
-                "document_section_id": row.get("document_section_id") or row.get("section_id"),
+                "document_section_id": row.get("document_section_id")
+                or row.get("section_id"),
                 "document_version_id": row.get("document_version_id"),
                 "document_id": row.get("document_id"),
             }
@@ -1996,7 +2082,9 @@ def _build_section_summary_context(
     project_name = fetch_project_name(db, project_id)
     project_like = f"%/{project_name}/%" if project_name else "%"
 
-    module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(section)
+    module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(
+        section
+    )
     if section.startswith("2.6."):
         exact_sections = set()
         filtered_mappings: List[Dict[str, Any]] = []
@@ -2123,8 +2211,12 @@ def _build_section_summary_prompt(
         "Generate CTD Module 2.4/2.6 section summaries using only the provided data. "
         "Do not invent data. If key data is missing, state what is missing."
     )
-    instructions = user_prompt.strip() if user_prompt else (
-        "Use the template guidance and data to produce a concise section summary."
+    instructions = (
+        user_prompt.strip()
+        if user_prompt
+        else (
+            "Use the template guidance and data to produce a concise section summary."
+        )
     )
     parts = [
         f"CTD Section: {section}",
@@ -2174,9 +2266,7 @@ def _trim_tabulated_context(context: Dict[str, Any]) -> Dict[str, Any]:
         for row in (asset.get("preview_rows") or [])[:max_preview_rows]:
             if not isinstance(row, dict):
                 continue
-            preview_rows.append(
-                {k: _truncate_preview_value(v) for k, v in row.items()}
-            )
+            preview_rows.append({k: _truncate_preview_value(v) for k, v in row.items()})
         trimmed_assets.append(
             {
                 "id": asset.get("id"),
@@ -2204,9 +2294,7 @@ _STUDY_ID_RE = re.compile(
     r"\b(?=[A-Z0-9.-]*[A-Z])(?=[A-Z0-9.-]*\d)[A-Z0-9]{2,}(?:[-.][A-Z0-9]+)+\b",
     re.IGNORECASE,
 )
-_STUDY_ID_EXT_RE = re.compile(
-    r"\.(?:pdf|xml|docx|txt|csv|json|md)$", re.IGNORECASE
-)
+_STUDY_ID_EXT_RE = re.compile(r"\.(?:pdf|xml|docx|txt|csv|json|md)$", re.IGNORECASE)
 _STUDY_ID_PREFIX_RE = re.compile(r"^(?:stf-|study-)", re.IGNORECASE)
 _STUDY_ID_TRAILERS = {
     "pdf",
@@ -2222,7 +2310,9 @@ _STUDY_ID_TRAILERS = {
     "images",
     "tables",
 }
-_STUDY_ID_SKIP_RE = re.compile(r"^(?:input\.(?:p\\d+)?\\.t\\d+|p\\d+\\.t\\d+)$", re.IGNORECASE)
+_STUDY_ID_SKIP_RE = re.compile(
+    r"^(?:input\.(?:p\\d+)?\\.t\\d+|p\\d+\\.t\\d+)$", re.IGNORECASE
+)
 
 
 def _extract_study_ids(text: str) -> List[str]:
@@ -2401,14 +2491,20 @@ def _normalize_tabulated_study_ids(
             if not isinstance(row, dict):
                 continue
             current = str(row.get(study_col) or "").strip()
-            if current and current.lower() in {"none", "none conducted", "not conducted"}:
+            if current and current.lower() in {
+                "none",
+                "none conducted",
+                "not conducted",
+            }:
                 continue
             if current and _extract_study_ids(current):
                 normalized = _select_study_id_from_text(current, candidates)
                 if normalized:
                     row[study_col] = normalized
                 continue
-            location_value = str(row.get(location_col) or "").strip() if location_col else ""
+            location_value = (
+                str(row.get(location_col) or "").strip() if location_col else ""
+            )
             normalized = _select_study_id_from_text(location_value, candidates)
             if not normalized:
                 row_text = " ".join(
@@ -2478,7 +2574,9 @@ def _tokenize_text(value: str) -> set[str]:
     return set(re.findall(r"[a-z0-9]+", value.lower()))
 
 
-def _infer_project_prefix(project_name: Optional[str], seeds: Sequence[str]) -> Optional[str]:
+def _infer_project_prefix(
+    project_name: Optional[str], seeds: Sequence[str]
+) -> Optional[str]:
     if not project_name or not seeds:
         return None
     needle = f"/{project_name.lower()}/"
@@ -2609,8 +2707,12 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
                         "test system",
                         "species strain or test system",
                     ),
-                    "method_of_admin": _pick_first_value(row, key_map, "method of administration"),
-                    "doses": str(row.get(doses_key or "") or "").strip() if doses_key else "",
+                    "method_of_admin": _pick_first_value(
+                        row, key_map, "method of administration"
+                    ),
+                    "doses": (
+                        str(row.get(doses_key or "") or "").strip() if doses_key else ""
+                    ),
                     "gender_group": _pick_first_value(
                         row, key_map, "gender and no per group", "gender", "sex"
                     ),
@@ -2665,7 +2767,9 @@ def _repair_primary_pharmacodynamics_table(
     ]
 
 
-def _extract_safety_pharmacology_candidates(context: Dict[str, Any]) -> List[Dict[str, str]]:
+def _extract_safety_pharmacology_candidates(
+    context: Dict[str, Any]
+) -> List[Dict[str, str]]:
     candidates: List[Dict[str, str]] = []
     seen: set[str] = set()
     for asset in context.get("table_assets", []) or []:
@@ -2674,7 +2778,10 @@ def _extract_safety_pharmacology_candidates(context: Dict[str, Any]) -> List[Dic
             if not isinstance(row, dict):
                 continue
             key_map = {_normalize_header_token(str(key)): key for key in row.keys()}
-            if "organ systems evaluated" not in key_map or "glp compliance" not in key_map:
+            if (
+                "organ systems evaluated" not in key_map
+                or "glp compliance" not in key_map
+            ):
                 continue
             study_number = _pick_first_value(row, key_map, "study number")
             if not study_number or study_number in seen:
@@ -2682,10 +2789,16 @@ def _extract_safety_pharmacology_candidates(context: Dict[str, Any]) -> List[Dic
             doses_key = key_map.get("doses")
             candidates.append(
                 {
-                    "organ_systems": _pick_first_value(row, key_map, "organ systems evaluated"),
+                    "organ_systems": _pick_first_value(
+                        row, key_map, "organ systems evaluated"
+                    ),
                     "species_strain": _pick_first_value(row, key_map, "species strain"),
-                    "method_of_admin": _pick_first_value(row, key_map, "method of administration"),
-                    "doses": str(row.get(doses_key or "") or "").strip() if doses_key else "",
+                    "method_of_admin": _pick_first_value(
+                        row, key_map, "method of administration"
+                    ),
+                    "doses": (
+                        str(row.get(doses_key or "") or "").strip() if doses_key else ""
+                    ),
                     "gender_group": _pick_first_value(
                         row, key_map, "gender and no per group", "gender", "sex"
                     ),
@@ -2771,14 +2884,18 @@ def _extract_overview_candidates(context: Dict[str, Any]) -> List[Dict[str, str]
                 continue
             candidates.append(
                 {
-                    "type_of_study": str(row.get(type_key) or "").strip() if type_key else "",
+                    "type_of_study": (
+                        str(row.get(type_key) or "").strip() if type_key else ""
+                    ),
                     "test_system": _pick_first_value(
                         row, key_map, "test system", "species strain"
                     ),
                     "method_of_administration": str(
                         row.get(key_map.get("method of administration") or "") or ""
                     ).strip(),
-                    "testing_facility": str(row.get(key_map.get("testing facility") or "") or "").strip(),
+                    "testing_facility": str(
+                        row.get(key_map.get("testing facility") or "") or ""
+                    ).strip(),
                     "study_number": study_id,
                 }
             )
@@ -2799,7 +2916,9 @@ def _repair_overview_table(
     columns = [str(col) for col in (target.get("columns") or [])]
     if not columns:
         return
-    study_col = next((col for col in columns if _normalize_header_token(col) == "study number"), None)
+    study_col = next(
+        (col for col in columns if _normalize_header_token(col) == "study number"), None
+    )
     if not study_col:
         return
 
@@ -2819,7 +2938,8 @@ def _repair_overview_table(
 
     candidate_tokens = [(_tokenize_text(candidate_text(c)), c) for c in candidates]
     candidate_index_by_study = {
-        candidate.get("study_number", ""): idx for idx, candidate in enumerate(candidates)
+        candidate.get("study_number", ""): idx
+        for idx, candidate in enumerate(candidates)
     }
 
     matched_indices: set[int] = set()
@@ -3013,13 +3133,9 @@ def _build_tabulated_context(
     project_name = fetch_project_name(db, project_id)
     project_like = f"%/{project_name}/%" if project_name else "%"
 
-    module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(section)
-    fallback_section = None
-    if not module4_sections and section == "2.6.3.1":
-        fallback_section = "2.6.3"
-        module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(
-            fallback_section
-        )
+    module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(
+        section
+    )
     mapping_filter = "prefix"
     if section.startswith("2.6."):
         exact_sections = set()
@@ -3146,14 +3262,20 @@ def _build_tabulated_context(
             }
         )
 
-    preview_row_total = sum(len(asset.get("preview_rows") or []) for asset in table_assets)
-    table_assets_with_preview = sum(1 for asset in table_assets if asset.get("preview_rows"))
+    preview_row_total = sum(
+        len(asset.get("preview_rows") or []) for asset in table_assets
+    )
+    table_assets_with_preview = sum(
+        1 for asset in table_assets if asset.get("preview_rows")
+    )
     table_assets_with_json = sum(1 for asset in table_assets if asset.get("json_key"))
     warnings: List[str] = []
     if not project_name:
         warnings.append("Project name not found; project_like fallback '%' used.")
     if not module4_sections:
-        warnings.append("No Module 4 sections matched the CTD target; check mapping or use a subsection.")
+        warnings.append(
+            "No Module 4 sections matched the CTD target; check mapping or use a subsection."
+        )
     if not mapping_entries:
         warnings.append("No CTD mapping entries matched the request.")
     if not sources:
@@ -3228,7 +3350,9 @@ def _merge_tabulated_tables(
         return normalized
 
     tables_by_subsection = {
-        str(table.get("subsection") or ""): table for table in tables if isinstance(table, dict)
+        str(table.get("subsection") or ""): table
+        for table in tables
+        if isinstance(table, dict)
     }
     merged: List[Dict[str, Any]] = []
     for spec in table_specs:
@@ -3259,9 +3383,7 @@ def _normalize_tabulated_columns(value: Any) -> List[str]:
         return [_normalize_header_token(part.strip()) for part in parts if part.strip()]
     if isinstance(value, (list, tuple)):
         return [
-            _normalize_header_token(str(item))
-            for item in value
-            if str(item).strip()
+            _normalize_header_token(str(item)) for item in value if str(item).strip()
         ]
     return []
 
@@ -3314,7 +3436,11 @@ def _realign_tabulated_tables_by_columns(
             current_set = set(spec_columns[current_subsection])
             current_score = len(cols_set & current_set) / max(len(current_set), 1)
 
-        if best_subsection and best_score >= 0.6 and best_score >= max(current_score + 0.15, 0.75):
+        if (
+            best_subsection
+            and best_score >= 0.6
+            and best_score >= max(current_score + 0.15, 0.75)
+        ):
             table["subsection"] = best_subsection
 
 
@@ -3332,9 +3458,13 @@ def _build_tabulated_prompt(
         "Generate CTD Module 2.6 tabulated summaries using only the provided data. "
         "Return JSON only."
     )
-    instructions = user_prompt.strip() if user_prompt else (
-        "Use the table specs to populate rows from the available table assets and summaries. "
-        "If data is missing, leave rows empty and add notes."
+    instructions = (
+        user_prompt.strip()
+        if user_prompt
+        else (
+            "Use the table specs to populate rows from the available table assets and summaries. "
+            "If data is missing, leave rows empty and add notes."
+        )
     )
     parts = [
         f"CTD Section: {section}",
@@ -3347,7 +3477,9 @@ def _build_tabulated_prompt(
     ]
     if user_comment:
         if previous_tables:
-            parts.append(f"Previous tables JSON:\n{json.dumps(previous_tables, ensure_ascii=True, indent=2)}")
+            parts.append(
+                f"Previous tables JSON:\n{json.dumps(previous_tables, ensure_ascii=True, indent=2)}"
+            )
         embedding_text = _format_embedding_for_prompt(previous_embedding)
         if embedding_text:
             parts.append(f"Previous tables embedding: {embedding_text}")
@@ -3374,16 +3506,22 @@ async def _get_assets_by_type(
     if not target:
         raise HTTPException(status_code=400, detail="section is required")
     if not (target.startswith("2.4") or target.startswith("2.6")):
-        raise HTTPException(status_code=400, detail="section must start with 2.4 or 2.6")
+        raise HTTPException(
+            status_code=400, detail="section must start with 2.4 or 2.6"
+        )
     if not tenant_id or not project_id or not bucket:
-        raise HTTPException(status_code=400, detail="tenant_id, project_id, and bucket are required")
+        raise HTTPException(
+            status_code=400, detail="tenant_id, project_id, and bucket are required"
+        )
 
     db = SessionLocal()
     try:
         project_name = fetch_project_name(db, project_id)
         project_like = f"%/{project_name}/%" if project_name else "%"
 
-        module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(target)
+        module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(
+            target
+        )
         if target.startswith("2.6."):
             exact_sections = set()
             filtered_mappings: List[Dict[str, Any]] = []
@@ -3424,7 +3562,9 @@ async def _get_assets_by_type(
                 "caption": row.get("caption"),
                 "description": row.get("description"),
                 "keywords": row.get("keywords") or [],
-                "extra_attributes": _normalize_extra_attributes(row.get("extra_attributes")),
+                "extra_attributes": _normalize_extra_attributes(
+                    row.get("extra_attributes")
+                ),
                 "document_version_id": row.get("document_version_id"),
                 "document_s3_key": row.get("document_s3_key"),
             }
@@ -3488,18 +3628,26 @@ async def get_assets_contents(
     if not target:
         raise HTTPException(status_code=400, detail="section is required")
     if not (target.startswith("2.4") or target.startswith("2.6")):
-        raise HTTPException(status_code=400, detail="section must start with 2.4 or 2.6")
+        raise HTTPException(
+            status_code=400, detail="section must start with 2.4 or 2.6"
+        )
     if content_type and content_type not in {"summary", "conclusion"}:
-        raise HTTPException(status_code=400, detail="content_type must be summary or conclusion")
+        raise HTTPException(
+            status_code=400, detail="content_type must be summary or conclusion"
+        )
     if not tenant_id or not project_id or not bucket:
-        raise HTTPException(status_code=400, detail="tenant_id, project_id, and bucket are required")
+        raise HTTPException(
+            status_code=400, detail="tenant_id, project_id, and bucket are required"
+        )
 
     db = SessionLocal()
     try:
         project_name = fetch_project_name(db, project_id)
         project_like = f"%/{project_name}/%" if project_name else "%"
 
-        module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(target)
+        module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(
+            target
+        )
         if target.startswith("2.6."):
             exact_sections = set()
             filtered_mappings: List[Dict[str, Any]] = []
@@ -3599,7 +3747,9 @@ async def create_ctd_section_summary(
     if not section:
         raise HTTPException(status_code=400, detail="section is required")
     if not (section.startswith("2.4") or section.startswith("2.6")):
-        raise HTTPException(status_code=400, detail="section must start with 2.4 or 2.6")
+        raise HTTPException(
+            status_code=400, detail="section must start with 2.4 or 2.6"
+        )
     _require_uuid(payload.tenant_id, "tenant_id")
     _require_uuid(payload.project_id, "project_id")
     if not payload.bucket:
@@ -3624,7 +3774,9 @@ async def create_ctd_section_summary(
             or context.get("template_entries")
         )
         if not has_context:
-            raise HTTPException(status_code=404, detail="No data found for the requested section")
+            raise HTTPException(
+                status_code=404, detail="No data found for the requested section"
+            )
 
         previous_summary_id = _normalize_optional_uuid(
             payload.previous_summary_id,
@@ -3634,7 +3786,9 @@ async def create_ctd_section_summary(
         previous_embedding: Any = None
         if payload.user_comment:
             if previous_summary_id:
-                previous = repo.fetch_ctd_section_summary(summary_id=previous_summary_id)
+                previous = repo.fetch_ctd_section_summary(
+                    summary_id=previous_summary_id
+                )
             else:
                 previous = repo.fetch_latest_ctd_section_summary(
                     tenant_id=payload.tenant_id,
@@ -3652,9 +3806,13 @@ async def create_ctd_section_summary(
                 or str(previous.get("project_id")) != payload.project_id
                 or str(previous.get("bucket")) != payload.bucket
             ):
-                raise HTTPException(status_code=404, detail="Previous summary not found")
+                raise HTTPException(
+                    status_code=404, detail="Previous summary not found"
+                )
             previous_summary_id = str(previous.get("id"))
-            previous_summary = previous.get("final_text") or previous.get("summary_text")
+            previous_summary = previous.get("final_text") or previous.get(
+                "summary_text"
+            )
             previous_embedding = previous.get("embedding")
 
         system_prompt, user_prompt = _build_section_summary_prompt(
@@ -3674,7 +3832,9 @@ async def create_ctd_section_summary(
                 detail=f"Failed to generate summary: {exc}",
             ) from exc
         if not summary_text:
-            raise HTTPException(status_code=500, detail="Summary generation returned empty output")
+            raise HTTPException(
+                status_code=500, detail="Summary generation returned empty output"
+            )
 
         embedding = _generate_embedding(summary_text)
         try:
@@ -3802,7 +3962,9 @@ async def create_ctd_tabulated_summary(
         )
         table_specs = context.get("table_specs") or []
         if not table_specs:
-            raise HTTPException(status_code=404, detail="No tabulated template entries found")
+            raise HTTPException(
+                status_code=404, detail="No tabulated template entries found"
+            )
 
         previous_tabulated_id = _normalize_optional_uuid(
             payload.previous_tabulated_id,
@@ -3812,7 +3974,9 @@ async def create_ctd_tabulated_summary(
         previous_embedding: Any = None
         if payload.user_comment or previous_tabulated_id:
             if previous_tabulated_id:
-                previous = repo.fetch_ctd_tabulated_summary(summary_id=previous_tabulated_id)
+                previous = repo.fetch_ctd_tabulated_summary(
+                    summary_id=previous_tabulated_id
+                )
             else:
                 previous = repo.fetch_latest_ctd_tabulated_summary(
                     tenant_id=payload.tenant_id,
@@ -3832,7 +3996,9 @@ async def create_ctd_tabulated_summary(
                 or str(previous.get("project_id")) != payload.project_id
                 or str(previous.get("bucket")) != payload.bucket
             ):
-                raise HTTPException(status_code=404, detail="Previous tabulated summary not found")
+                raise HTTPException(
+                    status_code=404, detail="Previous tabulated summary not found"
+                )
             previous_tabulated_id = str(previous.get("id"))
             previous_tables = _normalize_json_dict(previous.get("table_payload"))
             previous_embedding = previous.get("embedding")
@@ -3841,7 +4007,11 @@ async def create_ctd_tabulated_summary(
         if not use_llm:
             tables = []
             if previous_tables:
-                tables = previous_tables.get("tables") if isinstance(previous_tables, dict) else []
+                tables = (
+                    previous_tables.get("tables")
+                    if isinstance(previous_tables, dict)
+                    else []
+                )
             if not isinstance(tables, list):
                 tables = []
             _realign_tabulated_tables_by_columns(table_specs, tables)
@@ -3861,7 +4031,9 @@ async def create_ctd_tabulated_summary(
                 if payload.user_comment:
                     notes.append(f"User comment: {payload.user_comment}")
                 if notes:
-                    table["notes"] = " ".join(note.strip() for note in notes if note.strip())
+                    table["notes"] = " ".join(
+                        note.strip() for note in notes if note.strip()
+                    )
             llm_model_name = "template-only"
             _normalize_tabulated_study_ids(merged_tables, context)
             _repair_overview_table(merged_tables, context)
@@ -4072,7 +4244,9 @@ async def _analyze_s3_payload(payload: S3AnalyzeRequest) -> Dict[str, Any]:
             tmp_path = Path(tmp.name)
             try:
                 if extra_args:
-                    s3_client.download_fileobj(payload.bucket, payload.key, tmp, ExtraArgs=extra_args)
+                    s3_client.download_fileobj(
+                        payload.bucket, payload.key, tmp, ExtraArgs=extra_args
+                    )
                 else:
                     s3_client.download_fileobj(payload.bucket, payload.key, tmp)
                 tmp.flush()
@@ -4163,7 +4337,9 @@ async def _analyze_s3_payload(payload: S3AnalyzeRequest) -> Dict[str, Any]:
     except HTTPException:
         raise
     except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
-        raise HTTPException(status_code=502, detail=f"Failed to download S3 object: {exc}") from exc
+        raise HTTPException(
+            status_code=502, detail=f"Failed to download S3 object: {exc}"
+        ) from exc
 
 
 @upload_router.post("/analyze")
@@ -4182,11 +4358,17 @@ async def analyze_pdf(request: Request) -> Dict[str, Any]:
             )
         return await _analyze_uploaded_pdf(cast(UploadFile, upload))
 
-    if not content_type or "application/json" in content_type or "text/json" in content_type:
+    if (
+        not content_type
+        or "application/json" in content_type
+        or "text/json" in content_type
+    ):
         try:
             data = await request.json()
         except Exception as exc:
-            raise HTTPException(status_code=400, detail="Invalid JSON payload.") from exc
+            raise HTTPException(
+                status_code=400, detail="Invalid JSON payload."
+            ) from exc
         try:
             payload = S3AnalyzeRequest.model_validate(data)
         except ValidationError as exc:
@@ -4203,8 +4385,12 @@ async def analyze_pdf(request: Request) -> Dict[str, Any]:
 async def upload_and_analyze_to_s3(
     file: UploadFile = File(...),
     bucket: str = Form(..., description="Destination S3 bucket for the uploaded PDF."),
-    company: str = Form(..., description="Top-level path segment (e.g. company domain)."),
-    project: str = Form(..., description="Project identifier used when building the S3 key."),
+    company: str = Form(
+        ..., description="Top-level path segment (e.g. company domain)."
+    ),
+    project: str = Form(
+        ..., description="Project identifier used when building the S3 key."
+    ),
     folder: str = Form(
         "",
         description="Optional nested folder (e.g. Module 1/Study Docs).",
@@ -4252,7 +4438,9 @@ async def upload_and_analyze_to_s3(
         ) from exc
 
     if engine not in {"pdfplumber", "camelot", "tabula"}:
-        raise HTTPException(status_code=400, detail="Unsupported table extraction engine.")
+        raise HTTPException(
+            status_code=400, detail="Unsupported table extraction engine."
+        )
 
     filename = file.filename or "uploaded.pdf"
     if not filename.lower().endswith(".pdf"):
@@ -4305,7 +4493,9 @@ async def upload_and_analyze_to_s3(
             tmp_path.unlink()
         except Exception:
             pass
-        raise HTTPException(status_code=502, detail=f"Failed to upload to S3: {exc}") from exc
+        raise HTTPException(
+            status_code=502, detail=f"Failed to upload to S3: {exc}"
+        ) from exc
 
     version_id = put_response.get("VersionId")
 
@@ -4334,13 +4524,17 @@ async def upload_and_analyze_to_s3(
             tmp_path.unlink()
         except Exception:
             pass
-        raise HTTPException(status_code=500, detail=f"Failed to schedule analysis: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Failed to schedule analysis: {exc}"
+        ) from exc
 
     def _log_async_failure(fut: asyncio.Future[Any]) -> None:
         try:
             fut.result()
         except asyncio.CancelledError:
-            logger.warning("Analysis task for s3://%s/%s was cancelled", bucket, object_key)
+            logger.warning(
+                "Analysis task for s3://%s/%s was cancelled", bucket, object_key
+            )
         except Exception as exc:  # pragma: no cover - defensive
             logger.error(
                 "Background analysis failed for s3://%s/%s: %s",
@@ -4372,7 +4566,9 @@ async def upload_and_analyze_to_s3(
         except asyncio.TimeoutError:
             pass
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}") from exc
+            raise HTTPException(
+                status_code=500, detail=f"Analysis failed: {exc}"
+            ) from exc
 
     pending_payload = {
         "status": "pending",
@@ -4441,9 +4637,7 @@ def _run_pipeline_with_runner(
 
     metrics_payload = {
         "total_pages": len(pages),
-        "pages_with_text": sum(
-            1 for page in pages if (page.get("text") or "").strip()
-        ),
+        "pages_with_text": sum(1 for page in pages if (page.get("text") or "").strip()),
         "tables_total": len(tables),
         "table_pages": len(
             {table["page_number"] for table in tables if table.get("page_number")}
@@ -4459,8 +4653,8 @@ def _run_pipeline_with_runner(
     total_pages = metrics_payload["total_pages"]
     if total_pages:
         metrics_payload["text_coverage"] = round(
-            float(cast(float, metrics_payload["pages_with_text"])) /
-            float(cast(float, total_pages)),
+            float(cast(float, metrics_payload["pages_with_text"]))
+            / float(cast(float, total_pages)),
             3,
         )
 
@@ -4494,7 +4688,9 @@ def _extract_sample_text(pdf_path: Path, page_limit: int) -> Tuple[str, int]:
         pages_sampled = len(pages)
         sample_text = "\n".join((p.get("text") or "") for p in pages)
         if not sample_text.strip():
-            pages = extract_pages_text(pdf_path, ocr_fallback=True, max_pages=page_limit)
+            pages = extract_pages_text(
+                pdf_path, ocr_fallback=True, max_pages=page_limit
+            )
             pages_sampled = len(pages)
             sample_text = "\n".join((p.get("text") or "") for p in pages)
     except Exception as exc:  # pragma: no cover - defensive
@@ -4506,6 +4702,7 @@ def _extract_sample_text(pdf_path: Path, page_limit: int) -> Tuple[str, int]:
     # PyMuPDF fallback
     try:
         import fitz  # type: ignore
+
         doc = fitz.open(pdf_path)
         texts: List[str] = []
         for page in doc[:page_limit]:
@@ -4521,6 +4718,7 @@ def _extract_sample_text(pdf_path: Path, page_limit: int) -> Tuple[str, int]:
     # pdfplumber fallback (best effort)
     try:
         import pdfplumber  # type: ignore
+
         with pdfplumber.open(pdf_path) as pdfdoc:
             texts = []
             for page in pdfdoc.pages[:page_limit]:
@@ -4554,7 +4752,9 @@ async def fetch_s3_markdown(payload: S3MarkdownRequest) -> Dict[str, Any]:
             tmp_path = Path(tmp.name)
             try:
                 if extra_args:
-                    s3_client.download_fileobj(payload.bucket, payload.key, tmp, ExtraArgs=extra_args)
+                    s3_client.download_fileobj(
+                        payload.bucket, payload.key, tmp, ExtraArgs=extra_args
+                    )
                 else:
                     s3_client.download_fileobj(payload.bucket, payload.key, tmp)
                 tmp.flush()
@@ -4577,7 +4777,9 @@ async def fetch_s3_markdown(payload: S3MarkdownRequest) -> Dict[str, Any]:
             try:
                 metadata_fields = _metadata_generator(result.markdown) or {}
             except Exception as exc:  # pragma: no cover - best effort
-                logger.warning("Metadata generation failed for %s: %s", payload.key, exc)
+                logger.warning(
+                    "Metadata generation failed for %s: %s", payload.key, exc
+                )
                 metadata_fields = {}
         metadata_fields.setdefault("analyzed", True)
 
@@ -4589,8 +4791,12 @@ async def fetch_s3_markdown(payload: S3MarkdownRequest) -> Dict[str, Any]:
             "metadata": metadata_fields,
         }
 
-        _update_object_metadata(s3_client, payload.bucket, payload.key, payload.version_id, metadata_fields)
-        _upload_metadata_json_to_s3(s3_client, payload.bucket, payload.key, meta_payload)
+        _update_object_metadata(
+            s3_client, payload.bucket, payload.key, payload.version_id, metadata_fields
+        )
+        _upload_metadata_json_to_s3(
+            s3_client, payload.bucket, payload.key, meta_payload
+        )
 
         return {
             "markdown": result.markdown,
@@ -4606,7 +4812,9 @@ async def fetch_s3_markdown(payload: S3MarkdownRequest) -> Dict[str, Any]:
     try:
         return await asyncio.to_thread(worker)
     except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
-        raise HTTPException(status_code=502, detail=f"Failed to download S3 object: {exc}") from exc
+        raise HTTPException(
+            status_code=502, detail=f"Failed to download S3 object: {exc}"
+        ) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -4637,7 +4845,9 @@ async def fetch_s3_markdown_with_summary(payload: S3MarkdownRequest) -> Dict[str
             tmp_path = Path(tmp.name)
             try:
                 if extra_args:
-                    s3_client.download_fileobj(payload.bucket, payload.key, tmp, ExtraArgs=extra_args)
+                    s3_client.download_fileobj(
+                        payload.bucket, payload.key, tmp, ExtraArgs=extra_args
+                    )
                 else:
                     s3_client.download_fileobj(payload.bucket, payload.key, tmp)
                 tmp.flush()
@@ -4660,7 +4870,9 @@ async def fetch_s3_markdown_with_summary(payload: S3MarkdownRequest) -> Dict[str
             raise RuntimeError("Summary generation failed for the specified object")
 
         summary_text = format_summary_text(summary_result)
-        markdown_with_topics = embed_topics_into_markdown(result.markdown, summary_result.topics)
+        markdown_with_topics = embed_topics_into_markdown(
+            result.markdown, summary_result.topics
+        )
         topics_payload = [
             {
                 "title": topic.title,
@@ -4685,7 +4897,9 @@ async def fetch_s3_markdown_with_summary(payload: S3MarkdownRequest) -> Dict[str
     try:
         return await asyncio.to_thread(worker)
     except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
-        raise HTTPException(status_code=502, detail=f"Failed to download S3 object: {exc}") from exc
+        raise HTTPException(
+            status_code=502, detail=f"Failed to download S3 object: {exc}"
+        ) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -4763,7 +4977,9 @@ async def save_s3_markdown(payload: S3MarkdownUploadRequest) -> Dict[str, Any]:
     try:
         return await asyncio.to_thread(worker)
     except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
-        raise HTTPException(status_code=502, detail=f"Failed to upload markdown: {exc}") from exc
+        raise HTTPException(
+            status_code=502, detail=f"Failed to upload markdown: {exc}"
+        ) from exc
 
 
 @upload_router.get("/s3/analysis/status")
@@ -4813,7 +5029,9 @@ async def get_s3_analysis_status(
     try:
         return await asyncio.to_thread(worker)
     except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
-        raise HTTPException(status_code=502, detail=f"Failed to check analysis status: {exc}") from exc
+        raise HTTPException(
+            status_code=502, detail=f"Failed to check analysis status: {exc}"
+        ) from exc
 
 
 @upload_router.get("/s3/analysis/result")
@@ -4841,7 +5059,9 @@ async def get_s3_analysis_result(
         except ClientError as exc:
             error_code = exc.response.get("Error", {}).get("Code")
             if error_code in {"404", "NoSuchKey"}:
-                raise HTTPException(status_code=404, detail="Analysis result not found.")
+                raise HTTPException(
+                    status_code=404, detail="Analysis result not found."
+                )
             raise
         body_stream = response["Body"]
         try:
@@ -4852,7 +5072,8 @@ async def get_s3_analysis_result(
             return json.loads(payload.decode("utf-8"))
         except json.JSONDecodeError as exc:
             raise HTTPException(
-                status_code=500, detail=f"Stored analysis payload is invalid JSON: {exc}"
+                status_code=500,
+                detail=f"Stored analysis payload is invalid JSON: {exc}",
             ) from exc
 
     try:
@@ -4860,7 +5081,9 @@ async def get_s3_analysis_result(
     except HTTPException:
         raise
     except (BotoCoreError, ClientError) as exc:  # pragma: no cover - boto specific
-        raise HTTPException(status_code=502, detail=f"Failed to download analysis result: {exc}") from exc
+        raise HTTPException(
+            status_code=502, detail=f"Failed to download analysis result: {exc}"
+        ) from exc
 
 
 app.include_router(upload_router)

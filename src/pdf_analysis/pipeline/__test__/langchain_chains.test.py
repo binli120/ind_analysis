@@ -32,7 +32,9 @@ def test_load_chat_model_missing_dependency(monkeypatch: pytest.MonkeyPatch) -> 
         langchain_chains._load_chat_model()
 
 
-def test_build_study_segmentation_chain_missing_langchain(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_build_study_segmentation_chain_missing_langchain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     original_import = builtins.__import__
 
     def fake_import(name, *args, **kwargs):  # type: ignore[override]

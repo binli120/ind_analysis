@@ -67,9 +67,7 @@ def build_ctd_element_reference(
         raise ValueError("element not found in template")
 
     normalized = normalize_element_number(element_number)
-    section_number = (
-        str(entry.get("Subsection") or entry.get("Section") or "").strip()
-    )
+    section_number = str(entry.get("Subsection") or entry.get("Section") or "").strip()
     module4_sections = _extract_module4_sections(entry)
     mapping_entries: List[Dict[str, Any]] = []
     targets: List[str] = []
@@ -244,7 +242,9 @@ def _filter_assets(
             row.get("description"),
             " ".join(row.get("keywords") or []),
         )
-        matched_keywords, matched_regex = _match_terms(combined, keywords, regex_patterns)
+        matched_keywords, matched_regex = _match_terms(
+            combined, keywords, regex_patterns
+        )
         if has_filters and not (matched_keywords or matched_regex):
             continue
         payload.append(
@@ -284,7 +284,9 @@ def _filter_key_sections(
             row.get("text"),
             " ".join(asset_ids),
         )
-        matched_keywords, matched_regex = _match_terms(combined, keywords, regex_patterns)
+        matched_keywords, matched_regex = _match_terms(
+            combined, keywords, regex_patterns
+        )
         if has_filters and not (matched_keywords or matched_regex):
             continue
         payload.append(
@@ -320,7 +322,9 @@ def _build_s3_payload(row: Dict[str, Any]) -> Dict[str, Any]:
         "key": key,
         "version_id": row.get("s3_version_id"),
         "pdf_s3_uri": f"s3://{bucket}/{key}" if bucket and key else None,
-        "markdown_s3_uri": f"s3://{bucket}/{markdown_key}" if bucket and markdown_key else None,
+        "markdown_s3_uri": (
+            f"s3://{bucket}/{markdown_key}" if bucket and markdown_key else None
+        ),
     }
 
 

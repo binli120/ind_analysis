@@ -56,7 +56,9 @@ def _resolve_env(name: str, default: Optional[str] = None) -> str:
     """Read an environment variable, raising when missing and no default is set."""
     value = os.getenv(name, default)
     if value is None or not value.strip():
-        raise RuntimeError(f"Environment variable {name} is required for the {MODULE_NAME} module")
+        raise RuntimeError(
+            f"Environment variable {name} is required for the {MODULE_NAME} module"
+        )
     return value
 
 
@@ -79,12 +81,16 @@ def _load_analysis_document(analysis_s3_uri: str) -> Tuple[Dict[str, Any], str, 
     try:
         response = _get_s3_client().get_object(Bucket=bucket, Key=key)
     except ClientError as exc:
-        raise RuntimeError(f"Failed to download analysis document {analysis_s3_uri}: {exc}") from exc
+        raise RuntimeError(
+            f"Failed to download analysis document {analysis_s3_uri}: {exc}"
+        ) from exc
     body = response["Body"].read()
     try:
         document = json.loads(body.decode("utf-8"))
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Analysis document {analysis_s3_uri} is not valid JSON") from exc
+        raise RuntimeError(
+            f"Analysis document {analysis_s3_uri} is not valid JSON"
+        ) from exc
     return document, bucket, key
 
 
@@ -99,7 +105,9 @@ def _store_metadata(bucket: str, object_key: str, document: Dict[str, Any]) -> s
             ContentType="application/json",
         )
     except ClientError as exc:
-        raise RuntimeError(f"Failed to upload classification to s3://{bucket}/{metadata_key}: {exc}") from exc
+        raise RuntimeError(
+            f"Failed to upload classification to s3://{bucket}/{metadata_key}: {exc}"
+        ) from exc
     return metadata_key
 
 
@@ -121,7 +129,9 @@ def _iter_next_topic_arns() -> List[str]:
     return unique
 
 
-def _publish_next_events(request_payload: Dict[str, Any], result_payload: Dict[str, Any]) -> None:
+def _publish_next_events(
+    request_payload: Dict[str, Any], result_payload: Dict[str, Any]
+) -> None:
     """Send completion events to all configured downstream topics."""
     topics = _iter_next_topic_arns()
     if not topics:
@@ -141,7 +151,12 @@ def _publish_next_events(request_payload: Dict[str, Any], result_payload: Dict[s
             _get_sns_client().publish(TopicArn=topic, Message=message)
             logger.info("[%s] published downstream event to %s", MODULE_NAME, topic)
         except ClientError as exc:  # pragma: no cover - network failure
-            logger.warning("[%s] failed to publish downstream event to %s: %s", MODULE_NAME, topic, exc)
+            logger.warning(
+                "[%s] failed to publish downstream event to %s: %s",
+                MODULE_NAME,
+                topic,
+                exc,
+            )
 
 
 def zeroshot_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -152,7 +167,9 @@ def zeroshot_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     analysis_s3_uri = payload.get("analysis_s3_uri")
     if analysis_s3_uri:
-        analysis_document, analysis_bucket, analysis_key = _load_analysis_document(str(analysis_s3_uri))
+        analysis_document, analysis_bucket, analysis_key = _load_analysis_document(
+            str(analysis_s3_uri)
+        )
 
     company = (payload.get("company") or analysis_document.get("company") or "").strip()
     project = (payload.get("project") or analysis_document.get("project") or "").strip()
@@ -169,7 +186,9 @@ def zeroshot_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
     source_bucket = source_info.get("bucket") or analysis_bucket
     source_key = source_info.get("key") or analysis_key
     if not source_bucket or not source_key:
-        raise ValueError("Unable to determine source S3 object for classification results")
+        raise ValueError(
+            "Unable to determine source S3 object for classification results"
+        )
 
     markdown = payload.get("markdown") or analysis_document.get("markdown")
     if not markdown:

@@ -46,7 +46,9 @@ class OpenAIDocumentSummarizer:
     Generates a natural-language summary plus topic anchors for a document body.
     """
 
-    def __init__(self, model: str = "gpt-4o-mini", max_chars: int = 12000, max_topics: int = 8) -> None:
+    def __init__(
+        self, model: str = "gpt-4o-mini", max_chars: int = 12000, max_topics: int = 8
+    ) -> None:
         self.model = model
         self.max_chars = max_chars
         self.max_topics = max_topics
@@ -120,7 +122,9 @@ class OpenAIDocumentSummarizer:
             if not isinstance(entry, dict):
                 continue
             title = str(entry.get("title") or entry.get("name") or "").strip()
-            description = str(entry.get("description") or entry.get("summary") or "").strip()
+            description = str(
+                entry.get("description") or entry.get("summary") or ""
+            ).strip()
             if not title:
                 continue
             anchor = _slugify(title)
@@ -132,7 +136,9 @@ class OpenAIDocumentSummarizer:
                 candidate = f"{anchor}-{counter}"
                 counter += 1
             seen.add(candidate)
-            topics.append(TopicSection(title=title, description=description, anchor=candidate))
+            topics.append(
+                TopicSection(title=title, description=description, anchor=candidate)
+            )
             if len(topics) >= self.max_topics:
                 break
 

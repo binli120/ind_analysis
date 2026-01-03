@@ -53,6 +53,7 @@ def create_structure(
         if isinstance(subfolders, dict) and subfolders:
             create_structure(s3_client, bucket, prefix, subfolders)
 
+
 # @author: Bin Lee
 # @email: blee@filynai.com
 

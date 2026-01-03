@@ -86,7 +86,9 @@ class PipelineConfig:
 
     text: TextExtractionConfig = field(default_factory=TextExtractionConfig)
     ocr: OCRConfig = field(default_factory=OCRConfig)
-    structured: StructuredExtractionConfig = field(default_factory=StructuredExtractionConfig)
+    structured: StructuredExtractionConfig = field(
+        default_factory=StructuredExtractionConfig
+    )
     llm: LangChainConfig = field(default_factory=LangChainConfig)
     redis: RedisStreamingConfig = field(default_factory=RedisStreamingConfig)
     raise_on_missing_dependencies: bool = False

@@ -50,9 +50,19 @@ s3 = boto3.client("s3")
 
 ENABLE_LANGCHAIN = os.getenv("ENABLE_LANGCHAIN", "true").lower() == "true"
 ENABLE_CONTEXT_PIPELINE = os.getenv("ENABLE_CONTEXT_PIPELINE", "true").lower() == "true"
-CONTEXT_DISABLE_IMAGES = os.getenv("CONTEXT_DISABLE_IMAGES", "").lower() in {"1", "true", "yes"}
-CONTEXT_DISABLE_ASSET_LLM = os.getenv("CONTEXT_DISABLE_ASSET_LLM", "").lower() in {"1", "true", "yes"}
-CONTEXT_DISABLE_KEY_SECTIONS = os.getenv("CONTEXT_DISABLE_KEY_SECTIONS", "").lower() in {"1", "true", "yes"}
+CONTEXT_DISABLE_IMAGES = os.getenv("CONTEXT_DISABLE_IMAGES", "").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+CONTEXT_DISABLE_ASSET_LLM = os.getenv("CONTEXT_DISABLE_ASSET_LLM", "").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+CONTEXT_DISABLE_KEY_SECTIONS = os.getenv(
+    "CONTEXT_DISABLE_KEY_SECTIONS", ""
+).lower() in {"1", "true", "yes"}
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 DEFAULT_TENANT_ID = os.getenv("DEFAULT_TENANT_ID")
 DEFAULT_USER_ID = os.getenv("DEFAULT_USER_ID")
@@ -65,10 +75,16 @@ def handler(event: Dict[str, Any], _ctx=None) -> Dict[str, Any]:
             body = record.get("body") or "{}"
             payload = json.loads(body)
             resp = process_message(payload)
-            responses.append({"status": "ok", "message_id": record.get("messageId"), "result": resp})
+            responses.append(
+                {"status": "ok", "message_id": record.get("messageId"), "result": resp}
+            )
         except Exception as exc:  # pragma: no cover - lambda runtime logs
             responses.append(
-                {"status": "error", "message_id": record.get("messageId"), "error": str(exc)}
+                {
+                    "status": "error",
+                    "message_id": record.get("messageId"),
+                    "error": str(exc),
+                }
             )
     return {"status": "ok", "responses": responses}
 
@@ -88,7 +104,9 @@ def process_message(
     project_id = payload.get("project_id") or os.getenv("PROJECT_ID")
     created_by = payload.get("created_by") or DEFAULT_USER_ID
     if not tenant_id:
-        raise RuntimeError("tenant_id is required (set DEFAULT_TENANT_ID or include in payload)")
+        raise RuntimeError(
+            "tenant_id is required (set DEFAULT_TENANT_ID or include in payload)"
+        )
 
     content_hash: Optional[str] = None
     document_version_id: Optional[str] = None
@@ -108,7 +126,9 @@ def process_message(
             local_pdf = Path(tmpdir) / "input.pdf"
             download_kwargs = {"Bucket": bucket, "Key": key}
             extra_args = {"VersionId": version_id} if version_id else None
-            s3.download_file(**download_kwargs, Filename=str(local_pdf), ExtraArgs=extra_args)
+            s3.download_file(
+                **download_kwargs, Filename=str(local_pdf), ExtraArgs=extra_args
+            )
 
             content_hash = sha256_file(local_pdf)
 
@@ -129,7 +149,12 @@ def process_message(
                 document_version_id = str(core_status_row.get("document_version_id"))
 
             core_skip = False
-            if run_core and not force and core_status_row and core_status_row.get("status") == "completed":
+            if (
+                run_core
+                and not force
+                and core_status_row
+                and core_status_row.get("status") == "completed"
+            ):
                 core_skip = True
 
             if run_core and not core_skip:
@@ -216,7 +241,9 @@ def process_message(
                     s3_bucket=bucket, s3_key=key, content_hash=content_hash
                 )
                 if existing_status and existing_status.get("document_version_id"):
-                    document_version_id = str(existing_status.get("document_version_id"))
+                    document_version_id = str(
+                        existing_status.get("document_version_id")
+                    )
             if document_version_id and not document_id:
                 document_id = repo.fetch_document_id_for_version(document_version_id)
 
@@ -241,7 +268,9 @@ def process_message(
                         context_skip = True
                     if not context_skip:
                         if not document_version_id:
-                            raise RuntimeError("document_version_id is required for context pipeline")
+                            raise RuntimeError(
+                                "document_version_id is required for context pipeline"
+                            )
                         started = datetime.now(timezone.utc)
                         repo.upsert_pipeline_status(
                             s3_bucket=bucket,
@@ -275,7 +304,9 @@ def process_message(
                         )
                         asset_rows = repo.upsert_document_assets(
                             [
-                                DocumentAssetRecord(document_version_id=document_version_id, **asset)
+                                DocumentAssetRecord(
+                                    document_version_id=document_version_id, **asset
+                                )
                                 for asset in assets
                             ]
                         )
@@ -284,7 +315,9 @@ def process_message(
                             page_no = row.get("page_number")
                             if page_no is None:
                                 continue
-                            assets_by_page.setdefault(int(page_no), []).append(str(row.get("id")))
+                            assets_by_page.setdefault(int(page_no), []).append(
+                                str(row.get("id"))
+                            )
 
                         if not CONTEXT_DISABLE_KEY_SECTIONS:
                             llm_client = LLMClient()
@@ -297,8 +330,12 @@ def process_message(
                                 page_end = section.get("page_end")
                                 asset_ids: List[str] = []
                                 if page_start and page_end:
-                                    for page_no in range(int(page_start), int(page_end) + 1):
-                                        asset_ids.extend(assets_by_page.get(page_no, []))
+                                    for page_no in range(
+                                        int(page_start), int(page_end) + 1
+                                    ):
+                                        asset_ids.extend(
+                                            assets_by_page.get(page_no, [])
+                                        )
                                 section_records.append(
                                     DocumentKeySectionRecord(
                                         document_version_id=document_version_id,
@@ -315,7 +352,9 @@ def process_message(
                                 )
                             repo.replace_document_key_sections(section_records)
                         context_status = "completed"
-                        context_duration = (datetime.now(timezone.utc) - started).total_seconds()
+                        context_duration = (
+                            datetime.now(timezone.utc) - started
+                        ).total_seconds()
                         repo.upsert_pipeline_status(
                             s3_bucket=bucket,
                             s3_key=key,
@@ -360,9 +399,13 @@ def process_message(
                         )
                     else:
                         if not document_version_id:
-                            raise RuntimeError("document_version_id is required for langchain pipeline")
+                            raise RuntimeError(
+                                "document_version_id is required for langchain pipeline"
+                            )
                         if not document_id:
-                            raise RuntimeError("document_id is required for langchain pipeline")
+                            raise RuntimeError(
+                                "document_id is required for langchain pipeline"
+                            )
                         started = datetime.now(timezone.utc)
                         repo.upsert_pipeline_status(
                             s3_bucket=bucket,
@@ -414,7 +457,9 @@ def process_message(
                             document_version_id=document_version_id,
                         )
                         langchain_status = "completed"
-                        langchain_duration = (datetime.now(timezone.utc) - started).total_seconds()
+                        langchain_duration = (
+                            datetime.now(timezone.utc) - started
+                        ).total_seconds()
                 except Exception as exc:
                     langchain_error = _format_error(exc)
                     langchain_status = "failed"
@@ -511,7 +556,9 @@ def _infer_file_type(key: str) -> str:
 
 def _require_openai_api_key() -> None:
     if not os.getenv("OPENAI_API_KEY"):
-        raise RuntimeError("OPENAI_API_KEY is required when ENABLE_LANGCHAIN or ENABLE_CONTEXT_PIPELINE is true")
+        raise RuntimeError(
+            "OPENAI_API_KEY is required when ENABLE_LANGCHAIN or ENABLE_CONTEXT_PIPELINE is true"
+        )
 
 
 def _format_error(exc: Exception, limit: int = 2000) -> str:
@@ -545,8 +592,7 @@ def _build_document_assets(
         if tables:
             manifest = save_tables(pdf_path, tables, tables_dir)
             table_map = {
-                (t.get("page_number"), t.get("index_on_page")): t
-                for t in tables
+                (t.get("page_number"), t.get("index_on_page")): t for t in tables
             }
             for entry in manifest:
                 page_number = entry.get("page_number")
@@ -559,7 +605,12 @@ def _build_document_assets(
                 json_path = tables_dir / json_name
                 csv_key = f"{key}.tables/{csv_name}"
                 json_key = f"{key}.tables/{json_name}"
-                s3.upload_file(str(csv_path), bucket, csv_key, ExtraArgs={"ContentType": "text/csv"})
+                s3.upload_file(
+                    str(csv_path),
+                    bucket,
+                    csv_key,
+                    ExtraArgs={"ContentType": "text/csv"},
+                )
                 s3.upload_file(
                     str(json_path),
                     bucket,
@@ -596,7 +647,11 @@ def _build_document_assets(
                     section_prefixes=("2.4", "2.6"),
                     extra_texts=[
                         caption,
-                        " ".join(list(preview_df.columns)) if preview_df is not None else "",
+                        (
+                            " ".join(list(preview_df.columns))
+                            if preview_df is not None
+                            else ""
+                        ),
                     ],
                 )
                 assets.append(
@@ -612,8 +667,16 @@ def _build_document_assets(
                         "extra_attributes": {
                             "json_key": json_key,
                             "engine": table.get("engine") if table else None,
-                            "columns": list(preview_df.columns) if preview_df is not None else [],
-                            "row_count": int(preview_df.shape[0]) if preview_df is not None else 0,
+                            "columns": (
+                                list(preview_df.columns)
+                                if preview_df is not None
+                                else []
+                            ),
+                            "row_count": (
+                                int(preview_df.shape[0])
+                                if preview_df is not None
+                                else 0
+                            ),
                             "fast_extract": fast_matches,
                         },
                     }
@@ -694,7 +757,9 @@ def _delete_s3_prefix(bucket: str, prefix: str) -> None:
         s3.delete_objects(Bucket=bucket, Delete={"Objects": batch})
 
 
-def _purge_table_assets(repo: NCDRepository, document_version_id: str, key_prefix: str) -> None:
+def _purge_table_assets(
+    repo: NCDRepository, document_version_id: str, key_prefix: str
+) -> None:
     repo.session.execute(
         sqltext(
             """
@@ -722,7 +787,11 @@ def _build_pipeline() -> PDFProcessingPipeline:
         engines = tuple(e.strip() for e in text_engines.split(",") if e.strip())
         if engines:
             config.text.engines = engines
-    disable_tables = os.getenv("PDF_PIPELINE_DISABLE_TABLES", "").lower() in {"1", "true", "yes"}
+    disable_tables = os.getenv("PDF_PIPELINE_DISABLE_TABLES", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
     if disable_tables:
         config.structured.table_engines = ()
         return PDFProcessingPipeline(config=config)

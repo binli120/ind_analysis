@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from ncd.config.config import settings
 
+
 def _create_engine(database_url: str):
     try:
         return create_engine(database_url, future=True)

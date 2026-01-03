@@ -39,7 +39,7 @@ def ensure_unique_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def save_tables(
-        pdf_path: Path, tables: List[Dict[str, Any]], outdir: Path
+    pdf_path: Path, tables: List[Dict[str, Any]], outdir: Path
 ) -> List[Dict[str, Any]]:
     """
     Saves each table as CSV and JSON, returns manifest with preview rows for

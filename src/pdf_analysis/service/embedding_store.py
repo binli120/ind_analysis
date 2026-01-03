@@ -73,23 +73,31 @@ class SupabaseEmbeddingStore:
         )
 
         if OpenAI is None:
-            logger.warning("OpenAI client unavailable; install the 'infra' extras to enable embeddings.")
+            logger.warning(
+                "OpenAI client unavailable; install the 'infra' extras to enable embeddings."
+            )
             self._openai_client: Optional[OpenAI] = None
         elif not self.api_key:
-            logger.warning("OPENAI_API_KEY is not configured; skipping embedding generation.")
+            logger.warning(
+                "OPENAI_API_KEY is not configured; skipping embedding generation."
+            )
             self._openai_client = None
         else:
             self._openai_client = OpenAIMetadataClientWrapper(api_key=self.api_key)
 
-        env_on_conflict = on_conflict if on_conflict is not None else os.getenv("SUPABASE_ON_CONFLICT")
+        env_on_conflict = (
+            on_conflict
+            if on_conflict is not None
+            else os.getenv("SUPABASE_ON_CONFLICT")
+        )
         if isinstance(env_on_conflict, str):
             env_on_conflict = env_on_conflict.strip()
-        self.on_conflict = (
-            env_on_conflict if env_on_conflict else "document_hash"
-        )
+        self.on_conflict = env_on_conflict if env_on_conflict else "document_hash"
 
         if httpx is None:
-            logger.warning("httpx is not installed; Supabase embedding storage is disabled.")
+            logger.warning(
+                "httpx is not installed; Supabase embedding storage is disabled."
+            )
             self._http_client: Optional[httpx.Client] = None  # type: ignore[attr-defined]
         elif not self.supabase_url or not self.supabase_key:
             logger.warning(
@@ -114,7 +122,9 @@ class SupabaseEmbeddingStore:
             or os.getenv("SUPABASE_CONNECTION_STRING")
         )
         if self.db_dsn and psycopg is None:  # pragma: no cover - optional dependency
-            logger.warning("psycopg is not installed; similarity search will be unavailable.")
+            logger.warning(
+                "psycopg is not installed; similarity search will be unavailable."
+            )
             self.db_dsn = None
 
     @staticmethod
@@ -189,7 +199,7 @@ class SupabaseEmbeddingStore:
                 version_id=version_id,
                 content=text,
             ),
-            )
+        )
         return self._upsert(row)
 
     # ------------------------------------------------------------------
@@ -213,7 +223,9 @@ class SupabaseEmbeddingStore:
         top_k: int = 5,
     ) -> List[Dict[str, Any]]:
         if not self.db_dsn:
-            logger.warning("Supabase DB connection not configured; skipping similarity search.")
+            logger.warning(
+                "Supabase DB connection not configured; skipping similarity search."
+            )
             return []
         if psycopg is None or sql is None:  # pragma: no cover - optional dependency
             return []
@@ -271,7 +283,9 @@ class SupabaseEmbeddingStore:
         if not self._openai_client:
             return None
         try:
-            result = self._openai_client.embeddings(model=self.embedding_model, input=text)
+            result = self._openai_client.embeddings(
+                model=self.embedding_model, input=text
+            )
         except Exception as exc:  # pragma: no cover - network/API failure
             logger.warning("Failed to generate embedding: %s", exc)
             return None
@@ -292,7 +306,9 @@ class SupabaseEmbeddingStore:
                 content=json.dumps([row]),
             )
         except Exception as exc:  # pragma: no cover - network failure
-            logger.warning("Failed to upsert embedding for %s: %s", row.get("filename"), exc)
+            logger.warning(
+                "Failed to upsert embedding for %s: %s", row.get("filename"), exc
+            )
             return False
 
         if response.status_code >= 400:
@@ -391,7 +407,9 @@ class SupabaseEmbeddingStore:
                 "language": language,
                 "ind_document_type": metadata.get("ind_document_type"),
                 "ind_section_title": metadata.get("ind_section_title"),
-                "ind_classification_confidence": metadata.get("ind_classification_confidence"),
+                "ind_classification_confidence": metadata.get(
+                    "ind_classification_confidence"
+                ),
             },
             "embedding_1536": [float(value) for value in embedding],
         }

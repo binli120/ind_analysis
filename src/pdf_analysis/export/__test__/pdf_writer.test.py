@@ -15,7 +15,9 @@ import pytest
 from pdf_analysis.export import pdf_writer
 
 
-def test_markdown_to_pdf_requires_reportlab(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_markdown_to_pdf_requires_reportlab(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     def fake_import(name: str, *args, **kwargs):  # type: ignore[override]
         if name.startswith("reportlab"):
             raise ImportError("reportlab missing")
@@ -28,7 +30,9 @@ def test_markdown_to_pdf_requires_reportlab(monkeypatch: pytest.MonkeyPatch, tmp
         pdf_writer.markdown_to_pdf("text", tmp_path / "out.pdf")
 
 
-def test_markdown_to_pdf_writes_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_markdown_to_pdf_writes_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     reportlab = types.ModuleType("reportlab")
     lib = types.ModuleType("reportlab.lib")
     pagesizes = types.ModuleType("reportlab.lib.pagesizes")

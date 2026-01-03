@@ -91,10 +91,10 @@ def extract_key_sections_from_pages(
     system_prompt = (
         "You are a nonclinical regulatory analyst. Identify any passages that are "
         "summaries or conclusions within the provided page text. Return JSON with "
-        "key \"matches\" as a list of objects: {\"type\": \"summary\"|\"conclusion\", "
-        "\"excerpt\": \"<exact substring from input>\", \"confidence\": 0-1}. "
+        'key "matches" as a list of objects: {"type": "summary"|"conclusion", '
+        '"excerpt": "<exact substring from input>", "confidence": 0-1}. '
         "Use exact quotes from the input text and do not paraphrase. "
-        "If no summary or conclusion text exists, return {\"matches\": []}."
+        'If no summary or conclusion text exists, return {"matches": []}.'
     )
 
     for page in pages:
@@ -103,7 +103,7 @@ def extract_key_sections_from_pages(
         if len(text) < KEY_SECTION_MIN_CHARS:
             continue
         snippet = _clip_text(text, KEY_SECTION_MAX_CHARS)
-        user_prompt = f"Page {page_number} text:\n\"\"\"\n{snippet}\n\"\"\""
+        user_prompt = f'Page {page_number} text:\n"""\n{snippet}\n"""'
         try:
             payload = llm.extract_json(system_prompt, user_prompt)
         except Exception:
@@ -147,7 +147,7 @@ def describe_table_asset(
     system_prompt = (
         "You are a nonclinical regulatory analyst. Summarize the table content in 1-2 sentences "
         "and provide 5-10 domain-specific keywords. Return JSON with keys "
-        "\"description\" (string) and \"keywords\" (array). Do not invent values."
+        '"description" (string) and "keywords" (array). Do not invent values.'
     )
     snippet = _clip_text(page_text.strip(), ASSET_CONTEXT_MAX_CHARS)
     context = {
@@ -179,7 +179,7 @@ def describe_image_asset(
     system_prompt = (
         "You are a nonclinical regulatory analyst. Using the caption and surrounding text, "
         "describe the image in 1-2 sentences and provide 5-10 domain-specific keywords. "
-        "Return JSON with keys \"description\" and \"keywords\". Do not infer details beyond the text."
+        'Return JSON with keys "description" and "keywords". Do not infer details beyond the text.'
     )
     snippet = _clip_text(page_text.strip(), ASSET_CONTEXT_MAX_CHARS)
     context = {

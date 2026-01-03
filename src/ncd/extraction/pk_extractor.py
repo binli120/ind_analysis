@@ -39,13 +39,15 @@ def extract_pk_for_study(
 ) -> PKStudySummarySchema | None:
     chunks = (
         db.execute(
-            sqltext("""
+            sqltext(
+                """
             SELECT tc.id, tc.raw_text
             FROM ncd_text_chunk tc
             JOIN ncd_study s ON s.main_source_document_id = tc.source_document_id
             WHERE s.id = :sid
             ORDER BY tc.page_from
-        """),
+        """
+            ),
             {"sid": study_id},
         )
         .mappings()
@@ -68,11 +70,13 @@ def extract_pk_for_study(
         if not em.parameter:
             continue
         db.execute(
-            sqltext("""
+            sqltext(
+                """
                 INSERT INTO ncd_exposure_metric (
                     study_id, species, parameter, value, unit, timepoint, clinical_multiple
                 ) VALUES (:sid, :species, :param, :val, :unit, :tp, :cm)
-            """),
+            """
+            ),
             {
                 "sid": study_id,
                 "species": summary.species,

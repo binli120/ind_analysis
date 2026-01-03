@@ -53,11 +53,13 @@ def ensure_topic_exists(db: Session, topic: str) -> str:
         return cast(str, row)
 
     new_id = db.execute(
-        sqltext("""
+        sqltext(
+            """
             INSERT INTO ncd_topic (name)
             VALUES (:t)
             RETURNING id;
-        """),
+        """
+        ),
         {"t": topic},
     ).scalar()
 
@@ -73,28 +75,34 @@ def chunk_text_by_pages(
 ) -> List[str]:
     # Cleanup existing data
     db.execute(
-        sqltext("""
+        sqltext(
+            """
             DELETE FROM ncd_text_chunk_embedding
             WHERE chunk_id IN (
                 SELECT id FROM ncd_text_chunk WHERE source_document_id = :sid
             );
-        """),
+        """
+        ),
         {"sid": source_document_id},
     )
     db.execute(
-        sqltext("""
+        sqltext(
+            """
             DELETE FROM ncd_topic_assignment
             WHERE chunk_id IN (
                 SELECT id FROM ncd_text_chunk WHERE source_document_id = :sid
             );
-        """),
+        """
+        ),
         {"sid": source_document_id},
     )
     db.execute(
-        sqltext("""
+        sqltext(
+            """
             DELETE FROM ncd_text_chunk
             WHERE source_document_id = :sid
-        """),
+        """
+        ),
         {"sid": source_document_id},
     )
     db.commit()
@@ -102,12 +110,14 @@ def chunk_text_by_pages(
     # Fetch pages
     pages = (
         db.execute(
-            sqltext("""
+            sqltext(
+                """
             SELECT page_number, text
             FROM ncd_document_page
             WHERE source_document_id = :sid
             ORDER BY page_number
-        """),
+        """
+            ),
             {"sid": source_document_id},
         )
         .mappings()
@@ -155,7 +165,8 @@ def chunk_text_by_pages(
         }
 
         cid = db.execute(
-            sqltext("""
+            sqltext(
+                """
                 INSERT INTO ncd_text_chunk (
                     source_document_id, page_from, page_to,
                     raw_text, section_label
@@ -163,7 +174,8 @@ def chunk_text_by_pages(
                     :sid, :pf, :pt, :txt, :sec
                 )
                 RETURNING id
-            """),
+            """
+            ),
             {
                 "sid": source_document_id,
                 "pf": pf,
@@ -180,10 +192,12 @@ def chunk_text_by_pages(
         for topic in topics:
             tid = ensure_topic_exists(db, topic)
             db.execute(
-                sqltext("""
+                sqltext(
+                    """
                     INSERT INTO ncd_topic_assignment (topic_id, chunk_id)
                     VALUES (:tid, :cid)
-                """),
+                """
+                ),
                 {"tid": tid, "cid": cid},
             )
 

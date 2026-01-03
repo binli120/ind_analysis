@@ -12,7 +12,11 @@ import pandas as pd
 
 import re
 
-from pdf_analysis.pipeline.pipeline import PDFProcessingPipeline, PipelineChunk, PipelineContext
+from pdf_analysis.pipeline.pipeline import (
+    PDFProcessingPipeline,
+    PipelineChunk,
+    PipelineContext,
+)
 
 
 def test_pipeline_chunk_to_serializable() -> None:
@@ -20,7 +24,14 @@ def test_pipeline_chunk_to_serializable() -> None:
     chunk = PipelineChunk(
         chunk_index=1,
         pages=[{"page_number": "1", "text": "hello"}],
-        tables=[{"page_number": 1, "index_on_page": 1, "engine": "pdfplumber", "dataframe": df}],
+        tables=[
+            {
+                "page_number": 1,
+                "index_on_page": 1,
+                "engine": "pdfplumber",
+                "dataframe": df,
+            }
+        ],
         ocr_pages=[1],
         text_engine="pdfplumber",
         ocr_strategy=None,

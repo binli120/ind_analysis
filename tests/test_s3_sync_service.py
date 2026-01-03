@@ -43,7 +43,11 @@ class FakePaginator:
     def paginate(self, **kwargs: object) -> Iterable[Dict[str, object]]:
         prefix = kwargs.get("Prefix", "")
         for page in self._pages:
-            versions = [v for v in page.get("Versions", []) if v.get("Key", "").startswith(prefix)]
+            versions = [
+                v
+                for v in page.get("Versions", [])
+                if v.get("Key", "").startswith(prefix)
+            ]
             if versions:
                 yield {"Versions": versions}
 
@@ -162,6 +166,7 @@ class S3RedisSyncServiceTests(unittest.TestCase):
                 pipeline_config=PipelineConfig(),
                 output_dir=output_path,
             )
+
             def metadata_stub(_: str) -> Dict[str, Any]:
                 return {
                     "labels": ["clinical", "efficacy"],
@@ -202,7 +207,9 @@ class S3RedisSyncServiceTests(unittest.TestCase):
             )
 
             fake_s3 = FakeS3Client()
-            with patch.object(S3RedisSyncService, "_build_s3_client", return_value=fake_s3):
+            with patch.object(
+                S3RedisSyncService, "_build_s3_client", return_value=fake_s3
+            ):
                 processed = service.run()
 
             self.assertEqual(processed, 1)
@@ -249,21 +256,49 @@ class S3RedisSyncServiceTests(unittest.TestCase):
             self.assertIn("# mock", markdown_contents)
             self.assertIn("## Key Topics", markdown_contents)
             meta_payload = json.loads(meta_path.read_text(encoding="utf-8"))
-            self.assertEqual(meta_payload["metadata"]["labels"], ["clinical", "efficacy"])
-            self.assertEqual(meta_payload["markdown_file"], "filynai.com/LT1009/Module 1.Quality/report.abc123.pdf.md")
-            self.assertEqual(meta_payload["markdown_key"], "filynai.com/LT1009/Module 1.Quality/report.pdf.md")
-            self.assertEqual(meta_payload["summary_file"], "filynai.com/LT1009/Module 1.Quality/report.abc123.pdf.summary.txt")
-            self.assertEqual(meta_payload["summary_key"], "filynai.com/LT1009/Module 1.Quality/report.pdf.summary.txt")
+            self.assertEqual(
+                meta_payload["metadata"]["labels"], ["clinical", "efficacy"]
+            )
+            self.assertEqual(
+                meta_payload["markdown_file"],
+                "filynai.com/LT1009/Module 1.Quality/report.abc123.pdf.md",
+            )
+            self.assertEqual(
+                meta_payload["markdown_key"],
+                "filynai.com/LT1009/Module 1.Quality/report.pdf.md",
+            )
+            self.assertEqual(
+                meta_payload["summary_file"],
+                "filynai.com/LT1009/Module 1.Quality/report.abc123.pdf.summary.txt",
+            )
+            self.assertEqual(
+                meta_payload["summary_key"],
+                "filynai.com/LT1009/Module 1.Quality/report.pdf.summary.txt",
+            )
             self.assertNotIn("markdown", meta_payload["redis"])
             self.assertIn("Key Topics", summary_path.read_text(encoding="utf-8"))
 
             self.assertEqual(len(fake_s3.copies), 1)
             self.assertIn("Metadata", fake_s3.copies[0])
-            self.assertEqual(fake_s3.copies[0]["Metadata"]["labels"], "clinical,efficacy")
+            self.assertEqual(
+                fake_s3.copies[0]["Metadata"]["labels"], "clinical,efficacy"
+            )
             self.assertEqual(len(fake_s3.puts), 3)
-            self.assertTrue(any(entry["Key"].endswith("report.pdf.md") for entry in fake_s3.puts))
-            self.assertTrue(any(entry["Key"].endswith("report.pdf.meta.json") for entry in fake_s3.puts))
-            self.assertTrue(any(entry["Key"].endswith("report.pdf.summary.txt") for entry in fake_s3.puts))
+            self.assertTrue(
+                any(entry["Key"].endswith("report.pdf.md") for entry in fake_s3.puts)
+            )
+            self.assertTrue(
+                any(
+                    entry["Key"].endswith("report.pdf.meta.json")
+                    for entry in fake_s3.puts
+                )
+            )
+            self.assertTrue(
+                any(
+                    entry["Key"].endswith("report.pdf.summary.txt")
+                    for entry in fake_s3.puts
+                )
+            )
             self.assertEqual(len(fake_embedding_store.calls), 1)
             self.assertEqual(
                 fake_embedding_store.calls[0]["s3_key"],
@@ -306,7 +341,9 @@ class S3RedisSyncServiceTests(unittest.TestCase):
             "metadata": {"analyzed": True},
             "markdown_key": md_key,
         }
-        fake_s3.put_object(Bucket="demo-bucket", Key=meta_key, Body=json.dumps(existing_meta))
+        fake_s3.put_object(
+            Bucket="demo-bucket", Key=meta_key, Body=json.dumps(existing_meta)
+        )
         fake_s3.put_object(Bucket="demo-bucket", Key=md_key, Body=b"# existing\n")
 
         with patch.object(S3RedisSyncService, "_build_s3_client", return_value=fake_s3):
@@ -353,7 +390,9 @@ class S3RedisSyncServiceTests(unittest.TestCase):
             "metadata": {"analyzed": True},
             "markdown_key": md_key,
         }
-        fake_s3.put_object(Bucket="demo-bucket", Key=meta_key, Body=json.dumps(existing_meta))
+        fake_s3.put_object(
+            Bucket="demo-bucket", Key=meta_key, Body=json.dumps(existing_meta)
+        )
         fake_s3.put_object(Bucket="demo-bucket", Key=md_key, Body=b"# existing\n")
 
         with patch.object(S3RedisSyncService, "_build_s3_client", return_value=fake_s3):
@@ -361,7 +400,9 @@ class S3RedisSyncServiceTests(unittest.TestCase):
 
         self.assertEqual(processed, 1)
         self.assertEqual(pipeline.calls, 1)
-        self.assertIn("filynai.com:lt1009:module-1-quality:report.pdf", fake_redis.store)
+        self.assertIn(
+            "filynai.com:lt1009:module-1-quality:report.pdf", fake_redis.store
+        )
         self.assertGreater(len(fake_s3.puts), 2)  # new uploads appended
 
 

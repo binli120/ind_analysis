@@ -197,7 +197,10 @@ def generate_quality_report(
 
         total_pages_extracted = len(pages)
         if declared_pages is not None:
-            if extraction_limit is not None and total_pages_extracted >= extraction_limit:
+            if (
+                extraction_limit is not None
+                and total_pages_extracted >= extraction_limit
+            ):
                 issues.append(
                     QualityIssue(
                         severity="info",
