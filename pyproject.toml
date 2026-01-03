@@ -35,6 +35,7 @@ packages = [
     { include = "ind_pipeline", from = "src" },
     { include = "summary", from = "src" },
     { include = "ncd", from = "src" },
+    { include = "database", from = "src" },
 ]
 
 
