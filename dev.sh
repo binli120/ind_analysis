@@ -1,0 +1,9 @@
+export DATABASE_URL="postgresql+psycopg://<user>:<pass>@<host>:5432/<db>"
+export OPENAI_API_KEY="<key>"
+export AWS_REGION="us-east-1"
+export ENABLE_LANGCHAIN=true
+export ENABLE_CONTEXT_PIPELINE=true
+export PROJECT_NAME="Lpathomab"
+export PROJECT_UUID=""
+export TENANT_UUID="c38daae8-07a8-4da4-9a68-9a9955b09f70"
+export USER_UUID="a5655137-b72b-4a24-a270-5cfe63cf5ea0"

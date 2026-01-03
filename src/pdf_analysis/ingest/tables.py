@@ -148,6 +148,21 @@ def _row_is_metadata_like(cells: List[str]) -> bool:
     return False
 
 
+def _header_needs_recovery(cells: List[str]) -> bool:
+    if not cells:
+        return True
+    non_empty = [cell for cell in cells if cell]
+    if not non_empty:
+        return True
+    if _row_is_mostly_numeric(non_empty):
+        return True
+    if _row_alpha_count(non_empty) < 2 and not _row_has_keywords(non_empty):
+        return True
+    if _non_empty_ratio(non_empty) <= 0.4:
+        return True
+    return False
+
+
 def _is_unit_row(cells: List[str]) -> bool:
     non_empty = [cell for cell in cells if cell]
     if not non_empty:
@@ -195,6 +210,20 @@ def _apply_label_row(label_row: List[str], header_row: List[str]) -> List[str]:
         else:
             merged.append("")
     return merged
+
+
+def _header_quality(columns: Sequence[str]) -> float:
+    cells = [str(col).strip() for col in columns]
+    if not cells:
+        return 0.0
+    score = _row_header_score(cells)
+    if any(cell.lower().startswith("col_") for cell in cells if cell):
+        score -= 2.5
+    if _row_is_mostly_numeric(cells):
+        score -= 2.0
+    if _non_empty_ratio(cells) <= 0.4:
+        score -= 1.0
+    return score
 
 
 def _is_metadata_table(header: List[str], data_rows: List[List[str]]) -> bool:
@@ -354,6 +383,106 @@ def _recover_header_and_data(
     return header, data_rows
 
 
+def _group_words_by_line(words: List[Dict[str, Any]], y_tol: float = 3.0) -> List[List[Dict[str, Any]]]:
+    if not words:
+        return []
+    ordered = sorted(words, key=lambda w: (w.get("top", 0.0), w.get("x0", 0.0)))
+    lines: List[List[Dict[str, Any]]] = []
+    current: List[Dict[str, Any]] = []
+    current_top: Optional[float] = None
+    for word in ordered:
+        top = float(word.get("top", 0.0))
+        if current_top is None or abs(top - current_top) <= y_tol:
+            current.append(word)
+            if current_top is None:
+                current_top = top
+        else:
+            lines.append(current)
+            current = [word]
+            current_top = top
+    if current:
+        lines.append(current)
+    return lines
+
+
+def _line_to_columns(
+    words: List[Dict[str, Any]],
+    column_count: int,
+    table_x0: float,
+    table_x1: float,
+) -> List[str]:
+    if column_count <= 0:
+        return []
+    width = max(table_x1 - table_x0, 1.0)
+    bin_width = width / column_count
+    buckets: List[List[str]] = [[] for _ in range(column_count)]
+    for word in sorted(words, key=lambda w: w.get("x0", 0.0)):
+        text = _clean_cell(word.get("text", ""))
+        if not text:
+            continue
+        x0 = float(word.get("x0", 0.0))
+        x1 = float(word.get("x1", x0))
+        center = (x0 + x1) / 2.0 - table_x0
+        idx = int(center // bin_width) if bin_width else 0
+        idx = max(0, min(column_count - 1, idx))
+        buckets[idx].append(text)
+    return [" ".join(bucket).strip() for bucket in buckets]
+
+
+def _extract_header_override(
+    page: Any,
+    table_bbox: Sequence[float],
+    column_count: int,
+) -> List[str]:
+    if column_count <= 0:
+        return []
+    x0, top, x1, bottom = table_bbox
+    height = max(bottom - top, 1.0)
+    band_height = max(12.0, height * 0.15)
+    page_height = getattr(page, "height", bottom)
+    candidates: List[List[Dict[str, Any]]] = []
+
+    def _collect_words(bbox: Sequence[float]) -> List[Dict[str, Any]]:
+        try:
+            cropped = page.crop(bbox)
+            return cropped.extract_words(x_tolerance=2, y_tolerance=2, keep_blank_chars=False)
+        except Exception:
+            return []
+
+    above_bbox = (x0, max(0.0, top - band_height), x1, top)
+    above_words = _collect_words(above_bbox)
+    if above_words:
+        candidates.extend(_group_words_by_line(above_words))
+
+    if not candidates:
+        inside_bbox = (x0, top, x1, min(page_height, top + band_height))
+        inside_words = _collect_words(inside_bbox)
+        if inside_words:
+            candidates.extend(_group_words_by_line(inside_words))
+
+    best_idx = -1
+    best_score = -1.0
+    for idx, line in enumerate(candidates):
+        cells = [_clean_cell(word.get("text", "")) for word in line if word.get("text")]
+        if not cells:
+            continue
+        if _is_title_row(cells) or _row_is_metadata_like(cells):
+            continue
+        score = _row_header_score(cells) + (2.0 * _row_alpha_ratio(cells))
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+    if best_idx < 0:
+        return []
+    header = _line_to_columns(candidates[best_idx], column_count, x0, x1)
+    next_idx = best_idx + 1
+    if next_idx < len(candidates):
+        unit_candidate = _line_to_columns(candidates[next_idx], column_count, x0, x1)
+        if _is_unit_row(unit_candidate):
+            header = _merge_header_rows(header, unit_candidate)
+    return header
+
+
 def _plumber_tables_on_page(page) -> List[pd.DataFrame]:
     """Try multiple pdfplumber strategies to maximize table recall."""
     dfs: List[pd.DataFrame] = []
@@ -386,15 +515,35 @@ def _plumber_tables_on_page(page) -> List[pd.DataFrame]:
     tables = _safe_extract_tables(page, None)
     dfs += _tables_to_dfs(tables)
 
+    # Strategy D: use table bbox to recover headers from a header band
+    try:
+        for table in page.find_tables(
+            {
+                "vertical_strategy": "lines",
+                "horizontal_strategy": "lines",
+                "intersection_tolerance": 5,
+            }
+        ):
+            rows = table.extract()
+            if not rows:
+                continue
+            column_count = max((len(row) for row in rows if row), default=0)
+            header_override = _extract_header_override(page, table.bbox, column_count)
+            df = _build_dataframe_from_rows(rows, header_override=header_override)
+            if df is not None:
+                dfs.append(df)
+    except Exception:
+        pass
+
     # De-dup roughly by shape + first row hash
-    uniq = []
-    seen = set()
+    best_by_key: Dict[Any, tuple[float, pd.DataFrame]] = {}
     for df in dfs:
         key = (df.shape, tuple(df.iloc[0].astype(str)) if not df.empty else ("",))
-        if key not in seen:
-            seen.add(key)
-            uniq.append(df)
-    return uniq
+        score = _header_quality(df.columns)
+        existing = best_by_key.get(key)
+        if existing is None or score > existing[0]:
+            best_by_key[key] = (score, df)
+    return [entry[1] for entry in best_by_key.values()]
 
 
 def _tables_to_dfs(tables: List[List[List[str]]]) -> List[pd.DataFrame]:
@@ -406,13 +555,18 @@ def _tables_to_dfs(tables: List[List[List[str]]]) -> List[pd.DataFrame]:
     return out
 
 
-def _build_dataframe_from_rows(table: List[List[str]]) -> Optional[pd.DataFrame]:
+def _build_dataframe_from_rows(
+    table: List[List[str]],
+    header_override: Optional[List[str]] = None,
+) -> Optional[pd.DataFrame]:
     if not table or len(table) < 2:
         return None
     cleaned = [[_clean_cell(cell) for cell in row] for row in table if row]
     if _looks_like_text_block(cleaned) or _looks_like_fragmented_text(cleaned):
         return None
     header, data = _recover_header_and_data(cleaned)
+    if header_override and _header_needs_recovery(header) and not _row_is_metadata_like(header_override):
+        header = [_clean_cell(cell) for cell in header_override]
     if not data:
         return None
     if _row_is_metadata_like(header):
