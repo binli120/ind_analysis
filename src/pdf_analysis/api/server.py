@@ -82,7 +82,11 @@ from ncd.types.ctd_materials import (
     module4_sections_for_ctd_targets,
     section_number_matches,
 )
-from ncd.config.ctd_template import load_template_entries, normalize_element_number
+from ncd.config.ctd_template import (
+    load_template_entries,
+    normalize_element_number,
+    resolve_template_path,
+)
 from ncd.database.db import SessionLocal
 from ncd.config.config import settings
 from database.db_interface import (
@@ -1436,17 +1440,28 @@ async def upsert_template_override(payload: TemplateOverrideRequest) -> Dict[str
 
 @ncd_router.get("/template")
 async def get_template_sections(
-    section: str, user_id: Optional[str] = None
+    section: Optional[str] = None, user_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Return template entries for a given section or subsection from ind_24_26_template.json.
+    - If section is omitted, returns the full template JSON payload.
     - If you pass a subsection (e.g., 2.4.1-A), returns the matching entry.
     - If you pass a parent section (e.g., 2.4.1), returns all subsection entries under it.
     - If user_id is provided and overrides exist, they are merged (override wins).
     """
+    if not section or not section.strip():
+        template_path = resolve_template_path()
+        if not template_path:
+            raise HTTPException(status_code=404, detail="Template file not found")
+        try:
+            payload = json.loads(template_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise HTTPException(
+                status_code=500, detail=f"Template file is invalid JSON: {exc}"
+            ) from exc
+        return {"template": payload}
+
     target = section.strip()
-    if not target:
-        raise HTTPException(status_code=400, detail="section is required")
 
     entries = _load_ind_template_entries()
     matches: List[Dict[str, Any]] = []

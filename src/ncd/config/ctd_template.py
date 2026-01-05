@@ -33,6 +33,14 @@ def _template_paths() -> List[Path]:
     ]
 
 
+def resolve_template_path() -> Path | None:
+    """Return the first available IND 2.4/2.6 template path."""
+    for path in _template_paths():
+        if path.exists():
+            return path
+    return None
+
+
 def load_template_entries() -> List[Dict[str, Any]]:
     for path in _template_paths():
         if not path.exists():

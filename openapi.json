@@ -507,13 +507,13 @@
           "ncd"
         ],
         "summary": "Get Template Sections",
-        "description": "Return template entries for a given section or subsection from ind_24_26_template.json.\n- If you pass a subsection (e.g., 2.4.1-A), returns the matching entry.\n- If you pass a parent section (e.g., 2.4.1), returns all subsection entries under it.\n- If user_id is provided and overrides exist, they are merged (override wins).",
+        "description": "Return template entries for a given section or subsection from ind_24_26_template.json.\n- If section is omitted, returns the full template JSON payload.\n- If you pass a subsection (e.g., 2.4.1-A), returns the matching entry.\n- If you pass a parent section (e.g., 2.4.1), returns all subsection entries under it.\n- If user_id is provided and overrides exist, they are merged (override wins).",
         "operationId": "get_template_sections_ncd_template_get",
         "parameters": [
           {
             "name": "section",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string",
               "title": "Section"

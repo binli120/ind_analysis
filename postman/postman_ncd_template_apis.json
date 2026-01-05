@@ -38,6 +38,26 @@
           ]
         },
         "description": "Fetch template entries for section/subsection from the default template."
+      },
+      "description": "Fetch template entries for section/subsection from the default template. If section is omitted, returns the full template JSON payload."
+    },
+    {
+      "name": "Get Full Template JSON",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/ncd/template",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ncd",
+            "template"
+          ],
+          "query": []
+        },
+        "description": "Return the full ind_24_26_template.json payload as JSON (prefers the summary template)."
       }
     },
     {
