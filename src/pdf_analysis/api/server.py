@@ -529,6 +529,46 @@ def _list_template_objects(
     return [objects[key] for key in sorted(objects.keys())]
 
 
+def _normalize_s3_prefix(prefix: str) -> str:
+    cleaned = prefix.strip().lstrip("/")
+    if cleaned and not cleaned.endswith("/"):
+        cleaned = f"{cleaned}/"
+    return cleaned
+
+
+def _s3_prefix_exists(s3_client: Any, bucket: str, prefix: str) -> bool:
+    response = s3_client.list_objects_v2(Bucket=bucket, Prefix=prefix, MaxKeys=1)
+    return bool(response.get("Contents"))
+
+
+def _list_docx_objects(
+    s3_client: Any,
+    bucket: str,
+    prefix: str,
+    *,
+    direct_only: bool = False,
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    paginator = s3_client.get_paginator("list_objects_v2")
+    params: Dict[str, Any] = {"Bucket": bucket, "Prefix": prefix}
+    if direct_only:
+        params["Delimiter"] = "/"
+    objects: List[Dict[str, Any]] = []
+    seen_keys: set[str] = set()
+    for page in paginator.paginate(**params):
+        for obj in page.get("Contents", []):
+            key = obj.get("Key")
+            if not key or not key.lower().endswith(".docx"):
+                continue
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            objects.append(obj)
+            if limit and len(objects) >= limit:
+                return objects
+    return objects
+
+
 # ---------------------------------------------------------------------------
 # Section labeling helpers (Module 2.4 / 2.6 template-driven)
 # ---------------------------------------------------------------------------
@@ -1597,6 +1637,112 @@ async def list_template_downloads(
         "user_id": user_id,
         "bucket": target_bucket,
         "prefixes": prefix_list,
+        "expires_in": expires_in,
+        "count": len(templates),
+        "templates": templates,
+    }
+
+
+@ncd_router.get("/template/docx")
+async def get_template_docx(
+    section: str,
+    bucket: Optional[str] = None,
+    expires_in: int = 3600,
+    aws_region: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Return DOCX template download links for a given IND section.
+    """
+    cleaned = section.strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="section is required")
+    if "/" in cleaned:
+        raise HTTPException(status_code=400, detail="section must not include '/'")
+    match = re.match(r"^(\d+\.\d+)", cleaned)
+    if not match:
+        raise HTTPException(
+            status_code=400, detail="section must start with an X.Y pattern"
+        )
+
+    target_bucket = bucket or _DEFAULT_TEMPLATE_BUCKET
+    if not target_bucket:
+        raise HTTPException(status_code=400, detail="bucket is required")
+
+    if expires_in <= 0:
+        raise HTTPException(status_code=400, detail="expires_in must be positive")
+
+    base_section = match.group(1)
+    base_prefix = _normalize_s3_prefix(base_section)
+
+    s3_client = _boto3_client("s3", region_name=aws_region)
+    try:
+        base_exists = _s3_prefix_exists(s3_client, target_bucket, base_prefix)
+    except Exception as exc:  # pragma: no cover - network/auth errors
+        raise HTTPException(
+            status_code=500, detail=f"Failed to check template folder: {exc}"
+        ) from exc
+    if not base_exists:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Template folder not found for section {base_section}",
+        )
+
+    prefixes = [base_prefix]
+    if cleaned != base_section:
+        sub_prefix = _normalize_s3_prefix(f"{base_section}/{cleaned}")
+        prefixes = [sub_prefix, base_prefix]
+
+    prefixes_checked: List[str] = []
+    docx_objects: List[Dict[str, Any]] = []
+    for prefix in prefixes:
+        prefixes_checked.append(prefix)
+        try:
+            docx_objects = _list_docx_objects(
+                s3_client, target_bucket, prefix, direct_only=True
+            )
+        except Exception as exc:  # pragma: no cover - network/auth errors
+            raise HTTPException(
+                status_code=500, detail=f"Failed to list templates: {exc}"
+            ) from exc
+        if docx_objects:
+            break
+
+    templates: List[Dict[str, Any]] = []
+    for obj in sorted(docx_objects, key=lambda item: item.get("Key") or ""):
+        key = obj.get("Key")
+        if not key:
+            continue
+        try:
+            download_url = s3_client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": target_bucket, "Key": key},
+                ExpiresIn=expires_in,
+            )
+        except Exception as exc:  # pragma: no cover - network or auth errors
+            logger.warning("Failed to presign s3://%s/%s: %s", target_bucket, key, exc)
+            download_url = None
+        last_modified = obj.get("LastModified")
+        templates.append(
+            {
+                "name": Path(key).name,
+                "s3_bucket": target_bucket,
+                "s3_key": key,
+                "s3_uri": f"s3://{target_bucket}/{key}",
+                "download_url": download_url,
+                "size_bytes": obj.get("Size"),
+                "last_modified": (
+                    last_modified.isoformat()
+                    if isinstance(last_modified, datetime)
+                    else None
+                ),
+            }
+        )
+
+    return {
+        "section": cleaned,
+        "base_section": base_section,
+        "bucket": target_bucket,
+        "prefixes_checked": prefixes_checked,
         "expires_in": expires_in,
         "count": len(templates),
         "templates": templates,

@@ -113,6 +113,36 @@
       }
     },
     {
+      "name": "Get Template DOCX",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/ncd/template/docx?section=2.3.1&expires_in=3600",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "ncd",
+            "template",
+            "docx"
+          ],
+          "query": [
+            {
+              "key": "section",
+              "value": "2.3.1"
+            },
+            {
+              "key": "expires_in",
+              "value": "3600"
+            }
+          ]
+        },
+        "description": "Fetch DOCX template links for a section. Falls back to the parent section folder if subsection templates are missing."
+      },
+      "response": []
+    },
+    {
       "name": "Upsert Template Override",
       "request": {
         "method": "POST",
