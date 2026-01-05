@@ -20,6 +20,7 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       APIGW_API_ID: ${{ secrets.APIGW_API_ID }}
       APIGW_STAGE: ${{ secrets.APIGW_STAGE }}
+      APIGW_CORS_ORIGINS: ${{ secrets.APIGW_CORS_ORIGINS }}
       APIGW_VPC_LINK_ID: ${{ secrets.APIGW_VPC_LINK_ID }}
       APIGW_INTEGRATION_URI: ${{ secrets.APIGW_INTEGRATION_URI }}
       APIGW_INTEGRATION_TIMEOUT_MS: ${{ secrets.APIGW_INTEGRATION_TIMEOUT_MS }}
@@ -143,6 +144,32 @@ jobs:
               --route-id "$route_id" \
               --target "integrations/${INTEGRATION_ID}" >/dev/null
           done
+
+      - name: Configure CORS
+        run: |
+          set -euo pipefail
+          CORS_CONFIG=$(python - <<'PY'
+          import json
+          import os
+
+          raw_origins = os.environ.get(
+              "APIGW_CORS_ORIGINS",
+              "https://ind-manager-v2.vercel.app,http://localhost:3000,http://127.0.0.1:3000",
+          )
+          origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+          payload = {
+              "AllowOrigins": origins,
+              "AllowMethods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+              "AllowHeaders": ["*"],
+              "AllowCredentials": True,
+              "MaxAge": 600,
+          }
+          print(json.dumps(payload))
+          PY
+          )
+          aws apigatewayv2 update-api \
+            --api-id "$API_ID" \
+            --cors-configuration "$CORS_CONFIG"
 
       - name: Create or update stage
         run: |
