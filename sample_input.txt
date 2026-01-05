@@ -1,0 +1,7 @@
+tenant_id: c38daae8-07a8-4da4-9a68-9a9955b09f70
+project_id: 2b44ecab-45c8-4105-b4ae-e9b7080bb4d6
+user_id: a5655137-b72b-4a24-a270-5cfe63cf5ea0
+project: Lpathomab
+bucket: doc-repository-dev
+section: 2.6.3, 2.6.3.2 ect
+company: filynai.com

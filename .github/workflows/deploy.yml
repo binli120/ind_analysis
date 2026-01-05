@@ -111,9 +111,14 @@ jobs:
           set -euo pipefail
           IMAGE_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
           jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)' task-definition.json > task-definition-stripped.json
-          jq --arg IMAGE "$IMAGE_URI" --arg NAME "$ECS_CONTAINER_NAME" '
+          jq --arg IMAGE "$IMAGE_URI" --arg NAME "$ECS_CONTAINER_NAME" --arg PORT "8080" '
             .containerDefinitions = (.containerDefinitions | map(
-              if .name == $NAME then (.image = $IMAGE) else . end
+              if .name == $NAME then
+                (.image = $IMAGE)
+                | (.environment = ((.environment // []) | map(select(.name != "PORT")) + [{"name":"PORT","value":$PORT}]))
+              else
+                .
+              end
             ))
           ' task-definition-stripped.json > task-definition-updated.json
 
