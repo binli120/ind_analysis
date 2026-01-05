@@ -17,6 +17,12 @@
                     "containerPort": 8080,
                     "protocol": "tcp"
                 }
+            ],
+            "environment": [
+                {
+                    "name": "PORT",
+                    "value": "8080"
+                }
             ]
         }
     ]
