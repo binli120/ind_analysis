@@ -507,15 +507,22 @@
           "ncd"
         ],
         "summary": "Get Template Sections",
-        "description": "Return template entries for a given section or subsection from ind_24_26_template.json.\n- If you pass a subsection (e.g., 2.4.1-A), returns the matching entry.\n- If you pass a parent section (e.g., 2.4.1), returns all subsection entries under it.\n- If user_id is provided and overrides exist, they are merged (override wins).",
+        "description": "Return template entries for a given section or subsection from ind_24_26_template.json.\n- If section is omitted, returns the full template JSON payload.\n- If you pass a subsection (e.g., 2.4.1-A), returns the matching entry.\n- If you pass a parent section (e.g., 2.4.1), returns all subsection entries under it.\n- If user_id is provided and overrides exist, they are merged (override wins).",
         "operationId": "get_template_sections_ncd_template_get",
         "parameters": [
           {
             "name": "section",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": "string",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "title": "Section"
             }
           },
@@ -648,6 +655,93 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response List Template Downloads Ncd Templates Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ncd/template/docx": {
+      "get": {
+        "tags": [
+          "ncd"
+        ],
+        "summary": "Get Template Docx",
+        "description": "Return DOCX template download links for a given IND section.",
+        "operationId": "get_template_docx_ncd_template_docx_get",
+        "parameters": [
+          {
+            "name": "section",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Section"
+            }
+          },
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bucket"
+            }
+          },
+          {
+            "name": "expires_in",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 3600,
+              "title": "Expires In"
+            }
+          },
+          {
+            "name": "aws_region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Aws Region"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Template Docx Ncd Template Docx Get"
                 }
               }
             }
