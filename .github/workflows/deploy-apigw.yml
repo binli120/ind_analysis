@@ -20,10 +20,28 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       APIGW_API_ID: ${{ secrets.APIGW_API_ID }}
       APIGW_STAGE: ${{ secrets.APIGW_STAGE }}
-      APIGW_INTEGRATION_BASE_URL: ${{ secrets.APIGW_INTEGRATION_BASE_URL }}
+      APIGW_VPC_LINK_ID: ${{ secrets.APIGW_VPC_LINK_ID }}
+      APIGW_INTEGRATION_URI: ${{ secrets.APIGW_INTEGRATION_URI }}
+      APIGW_INTEGRATION_TIMEOUT_MS: ${{ secrets.APIGW_INTEGRATION_TIMEOUT_MS }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "poetry==2.2.1"
+
+      - name: Install dependencies
+        run: poetry install --only main
+
+      - name: Generate OpenAPI JSON
+        run: poetry run python scripts/generate_openapi.py --output openapi.json
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -45,9 +63,16 @@ jobs:
               raise SystemExit("openapi.json not found. Generate it before deploying.")
 
           spec = json.loads(spec_path.read_text())
-          base_url = os.environ.get("APIGW_INTEGRATION_BASE_URL", "").rstrip("/")
-          if not base_url:
-              raise SystemExit("APIGW_INTEGRATION_BASE_URL is required.")
+          vpc_link_id = os.environ.get("APIGW_VPC_LINK_ID", "")
+          if not vpc_link_id:
+              raise SystemExit("APIGW_VPC_LINK_ID is required.")
+
+          integration_uri = os.environ.get("APIGW_INTEGRATION_URI", "")
+          if not integration_uri:
+              raise SystemExit("APIGW_INTEGRATION_URI is required.")
+
+          timeout_ms = os.environ.get("APIGW_INTEGRATION_TIMEOUT_MS")
+          timeout_value = int(timeout_ms) if timeout_ms else 29000
 
           spec["openapi"] = "3.0.1"
 
@@ -59,8 +84,10 @@ jobs:
                       "type": "http_proxy",
                       "httpMethod": "ANY",
                       "payloadFormatVersion": "1.0",
-                      "connectionType": "INTERNET",
-                      "uri": f"{base_url}{path}",
+                      "connectionType": "VPC_LINK",
+                      "connectionId": vpc_link_id,
+                      "uri": integration_uri,
+                      "timeoutInMillis": timeout_value,
                   }
 
           output_path = Path("build/apigw-openapi.json")
