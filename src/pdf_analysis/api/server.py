@@ -32,6 +32,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
     ClientError = Exception  # type: ignore[assignment]
 import pandas as pd
 from fastapi import APIRouter, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 from rapidfuzz import fuzz
@@ -101,6 +102,14 @@ app = FastAPI(
     title="PDF Analysis API",
     description="Upload a PDF study report and receive extracted content, structured tables, and quality analysis.",
     version="0.1.0",
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://ind-manager-v2.vercel.app"],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

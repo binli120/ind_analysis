@@ -113,6 +113,37 @@ jobs:
           fi
           echo "API_ID=${API_ID}" >> "$GITHUB_ENV"
 
+      - name: Attach VPC link integration to routes
+        run: |
+          set -euo pipefail
+          TIMEOUT_MS="${APIGW_INTEGRATION_TIMEOUT_MS:-29000}"
+          INTEGRATION_ID=$(aws apigatewayv2 create-integration \
+            --api-id "$API_ID" \
+            --integration-type HTTP_PROXY \
+            --integration-method ANY \
+            --connection-type VPC_LINK \
+            --connection-id "$APIGW_VPC_LINK_ID" \
+            --integration-uri "$APIGW_INTEGRATION_URI" \
+            --payload-format-version "1.0" \
+            --timeout-in-millis "$TIMEOUT_MS" \
+            --query 'IntegrationId' \
+            --output text)
+          echo "INTEGRATION_ID=${INTEGRATION_ID}" >> "$GITHUB_ENV"
+          ROUTE_IDS=$(aws apigatewayv2 get-routes \
+            --api-id "$API_ID" \
+            --query 'Items[].RouteId' \
+            --output text)
+          if [ -z "${ROUTE_IDS}" ]; then
+            echo "No routes found after import; cannot attach integration." >&2
+            exit 1
+          fi
+          for route_id in ${ROUTE_IDS}; do
+            aws apigatewayv2 update-route \
+              --api-id "$API_ID" \
+              --route-id "$route_id" \
+              --target "integrations/${INTEGRATION_ID}" >/dev/null
+          done
+
       - name: Create or update stage
         run: |
           set -euo pipefail
