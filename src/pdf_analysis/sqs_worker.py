@@ -3,7 +3,7 @@
 # Email: blee@filynai.com
 
 """
-SQS worker: downloads PDF from S3, writes documents/document_versions,
+SQS worker: downloads PDF/DOCX from S3, writes documents/document_versions,
 extracts content, persists to DB, uploads markdown/quality artifacts,
 and runs LangChain extraction (optional).
 """
@@ -23,7 +23,8 @@ from sqlalchemy import text as sqltext
 
 from pdf_analysis.export.persist import ensure_unique_columns, save_tables
 from pdf_analysis.ingest.images import extract_images
-from pdf_analysis.pipeline.pipeline import PDFProcessingPipeline, PipelineContext
+from pdf_analysis.pipeline import DocxProcessingPipeline, PDFProcessingPipeline
+from pdf_analysis.pipeline.pipeline import PipelineContext
 from pdf_analysis.pipeline.config import PipelineConfig
 from pdf_analysis.pipeline.langchain_extraction import (
     LangChainExtractionPipeline,
@@ -123,14 +124,17 @@ def process_message(
     repo = NCDRepository()
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            local_pdf = Path(tmpdir) / "input.pdf"
+            file_type = _infer_file_type(key)
+            is_docx = file_type == "docx"
+            suffix = ".docx" if is_docx else ".pdf"
+            local_path = Path(tmpdir) / f"input{suffix}"
             download_kwargs = {"Bucket": bucket, "Key": key}
             extra_args = {"VersionId": version_id} if version_id else None
             s3.download_file(
-                **download_kwargs, Filename=str(local_pdf), ExtraArgs=extra_args
+                **download_kwargs, Filename=str(local_path), ExtraArgs=extra_args
             )
 
-            content_hash = sha256_file(local_pdf)
+            content_hash = sha256_file(local_path)
 
             pipeline_result = None
             chunks = None
@@ -175,15 +179,15 @@ def process_message(
                     status="processing",
                 )
 
-                pdf_pipeline = _build_pipeline()
-                pipeline_result = pdf_pipeline.run(local_pdf)
+                pipeline = _build_pipeline_for_type(file_type)
+                pipeline_result = pipeline.run(local_path)
                 page_count = len(pipeline_result.pages)
                 ctx = PipelineContext(
-                    pdf_path=local_pdf,
+                    pdf_path=local_path,
                     pages=pipeline_result.pages,
                     tables=pipeline_result.tables,
                 )
-                chunks = pdf_pipeline._build_document_chunks(ctx)
+                chunks = pipeline._build_document_chunks(ctx)
 
                 document_id, document_version_id = repo.ensure_document_and_version(
                     tenant_id=tenant_id,
@@ -191,7 +195,7 @@ def process_message(
                     s3_bucket=bucket,
                     s3_key=key,
                     s3_version_id=version_id,
-                    file_type=_infer_file_type(key),
+                    file_type=file_type,
                     content_hash=content_hash,
                     page_count=page_count,
                     created_by=created_by,
@@ -283,8 +287,8 @@ def process_message(
                         )
                         _require_openai_api_key()
                         if pipeline_result is None:
-                            pdf_pipeline = _build_pipeline()
-                            pipeline_result = pdf_pipeline.run(local_pdf)
+                            pipeline = _build_pipeline_for_type(file_type)
+                            pipeline_result = pipeline.run(local_path)
 
                         if force:
                             _purge_table_assets(
@@ -295,12 +299,13 @@ def process_message(
                             _delete_s3_prefix(bucket, f"{key}.tables/")
 
                         assets = _build_document_assets(
-                            local_pdf,
+                            local_path,
                             pipeline_result.pages,
                             pipeline_result.tables,
                             bucket=bucket,
                             key=key,
                             llm=None if CONTEXT_DISABLE_ASSET_LLM else LLMClient(),
+                            include_images=not is_docx,
                         )
                         asset_rows = repo.upsert_document_assets(
                             [
@@ -418,14 +423,14 @@ def process_message(
                         )
                         _require_openai_api_key()
                         if chunks is None:
-                            pdf_pipeline = _build_pipeline()
-                            pipeline_result = pdf_pipeline.run(local_pdf)
+                            pipeline = _build_pipeline_for_type(file_type)
+                            pipeline_result = pipeline.run(local_path)
                             ctx = PipelineContext(
-                                pdf_path=local_pdf,
+                                pdf_path=local_path,
                                 pages=pipeline_result.pages,
                                 tables=pipeline_result.tables,
                             )
-                            chunks = pdf_pipeline._build_document_chunks(ctx)
+                            chunks = pipeline._build_document_chunks(ctx)
                             page_count = len(pipeline_result.pages)
 
                         seg_chain = build_study_segmentation_chain(model=LLM_MODEL)
@@ -576,6 +581,7 @@ def _build_document_assets(
     bucket: str,
     key: str,
     llm: LLMClient | None,
+    include_images: bool = True,
 ) -> List[Dict[str, Any]]:
     assets: List[Dict[str, Any]] = []
     page_text: Dict[int, str] = {}
@@ -682,7 +688,7 @@ def _build_document_assets(
                     }
                 )
 
-        if not CONTEXT_DISABLE_IMAGES:
+        if include_images and not CONTEXT_DISABLE_IMAGES:
             images_dir = Path(tmpdir) / "images"
             images = extract_images(pdf_path, images_dir)
             for image in images:
@@ -802,3 +808,21 @@ def _build_pipeline() -> PDFProcessingPipeline:
         if engines:
             config.structured.table_engines = engines
     return PDFProcessingPipeline(config=config)
+
+
+def _build_docx_pipeline() -> DocxProcessingPipeline:
+    config = PipelineConfig()
+    disable_tables = os.getenv("PDF_PIPELINE_DISABLE_TABLES", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    if disable_tables:
+        config.structured.table_engines = ()
+    return DocxProcessingPipeline(config=config)
+
+
+def _build_pipeline_for_type(file_type: str) -> PDFProcessingPipeline:
+    if file_type == "docx":
+        return _build_docx_pipeline()
+    return _build_pipeline()

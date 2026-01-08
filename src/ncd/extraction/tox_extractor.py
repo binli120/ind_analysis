@@ -51,6 +51,44 @@ ENABLE_TOX_FAST_EXTRACT = os.getenv("TOX_FAST_EXTRACT", "1").lower() not in {
 }
 
 
+def _coerce_text_field(value):
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple, set)):
+        items = [str(item).strip() for item in value if str(item).strip()]
+        if not items:
+            return None
+        return ", ".join(items)
+    if isinstance(value, dict):
+        fallback = value.get("value") or value.get("text")
+        if fallback is not None:
+            return str(fallback).strip() or None
+        return None
+    return str(value).strip() or None
+
+
+def _normalize_findings(value):
+    if not isinstance(value, list):
+        return []
+    normalized = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        finding_term = (
+            item.get("finding_term")
+            or item.get("finding")
+            or item.get("term")
+            or item.get("finding_name")
+        )
+        finding_term = _coerce_text_field(finding_term)
+        if not finding_term:
+            continue
+        cleaned = dict(item)
+        cleaned["finding_term"] = finding_term
+        normalized.append(cleaned)
+    return normalized
+
+
 def build_tox_extraction_user_prompt(study_text: str, study_id: str) -> str:
     return f"""
 Study ID: {study_id}
@@ -110,10 +148,12 @@ def extract_tox_for_study(
         **raw,
         "source_chunk_ids": chunk_ids,
     }
+    data["species"] = _coerce_text_field(data.get("species"))
+    data["route"] = _coerce_text_field(data.get("route"))
     # Ensure required list fields exist to avoid validation failures
     data.setdefault("dose_groups", [])
     data.setdefault("exposure_metrics", [])
-    data.setdefault("findings", [])
+    data["findings"] = _normalize_findings(data.get("findings"))
     # Fill optional scalars when missing
     for key in (
         "duration_days",

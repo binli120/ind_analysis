@@ -2,7 +2,7 @@
 # Author: Bin Lee
 # Email: blee@filynai.com
 
-"""Services for mirroring S3 PDF extracts into Redis (and optional metadata stores)."""
+"""Services for mirroring S3 PDF/DOCX extracts into Redis (and optional metadata stores)."""
 
 # author: Bin Lee
 # email: blee@filynai.com
@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Iterator, Optional, Sequence
 
-from pdf_analysis.pipeline import PDFProcessingPipeline, PipelineConfig
+from pdf_analysis.pipeline import DocxProcessingPipeline, PDFProcessingPipeline, PipelineConfig
 from pdf_analysis.service.document_summarizer import (
     OpenAIDocumentSummarizer,
     TopicSummaryResult,
@@ -76,7 +76,7 @@ class S3SyncConfig:
 
 class S3RedisSyncService:
     """
-    Periodically scans an S3 bucket for PDF documents and persists
+    Periodically scans an S3 bucket for PDF/DOCX documents and persists
     processed markdown into Redis keyed by folder structure.
     """
 
@@ -105,7 +105,8 @@ class S3RedisSyncService:
         """
         s3_client = self._build_s3_client()
         redis_client = self._resolve_redis_client()
-        pipeline = self._pipeline_factory(self.config.pipeline_config)
+        pdf_pipeline = self._pipeline_factory(self.config.pipeline_config)
+        docx_pipeline = DocxProcessingPipeline(config=self.config.pipeline_config)
         output_dir = Path(self.config.output_dir) if self.config.output_dir else None
         processed = 0
 
@@ -127,6 +128,11 @@ class S3RedisSyncService:
                 continue
 
             try:
+                pipeline = (
+                    docx_pipeline
+                    if document.filename.lower().endswith(".docx")
+                    else pdf_pipeline
+                )
                 markdown = self._process_document(pipeline, s3_client, document)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning(
@@ -366,7 +372,8 @@ class S3RedisSyncService:
     def _download_to_tempfile(
         self, s3_client: Any, document: S3Document
     ) -> Iterator[Path]:
-        tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        suffix = Path(document.key).suffix or ".pdf"
+        tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
         try:
             with tmp:
                 extra: Dict[str, Any] = (
@@ -394,7 +401,7 @@ class S3RedisSyncService:
                 if not version.get("IsLatest"):
                     continue
                 key: str = version["Key"]
-                if not key.lower().endswith(".pdf"):
+                if not (key.lower().endswith(".pdf") or key.lower().endswith(".docx")):
                     continue
                 try:
                     parsed = self._extract_document_metadata(key)

@@ -16,6 +16,22 @@ Return values such as Cmax, AUC, t1/2, CL, Vd, etc.
 """
 
 
+def _coerce_text_field(value):
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple, set)):
+        items = [str(item).strip() for item in value if str(item).strip()]
+        if not items:
+            return None
+        return ", ".join(items)
+    if isinstance(value, dict):
+        fallback = value.get("value") or value.get("text")
+        if fallback is not None:
+            return str(fallback).strip() or None
+        return None
+    return str(value).strip() or None
+
+
 def build_pk_prompt(text: str, study_id: str) -> str:
     return f"""
 Study ID: {study_id}
@@ -63,6 +79,8 @@ def extract_pk_for_study(
     user_prompt = build_pk_prompt(combined, study_id)
     raw = llm.extract_json(PK_EXTRACTION_SYSTEM_PROMPT, user_prompt)
     raw.setdefault("parameters", [])
+    raw["species"] = _coerce_text_field(raw.get("species"))
+    raw["route"] = _coerce_text_field(raw.get("route"))
     raw["source_chunk_ids"] = chunk_ids
     summary = PKStudySummarySchema(**raw)
 

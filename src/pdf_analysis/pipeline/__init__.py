@@ -21,6 +21,7 @@ from .pipeline import (
     PipelineMetrics,
     PipelineResult,
 )
+from .docx_pipeline import DocxProcessingPipeline
 from .executor import PipelineRunner, PipelineTaskResult
 
 __all__ = [
@@ -31,6 +32,7 @@ __all__ = [
     "StructuredExtractionConfig",
     "TextExtractionConfig",
     "PDFProcessingPipeline",
+    "DocxProcessingPipeline",
     "PipelineMetrics",
     "PipelineChunk",
     "PipelineResult",
