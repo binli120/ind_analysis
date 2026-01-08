@@ -33,6 +33,9 @@ class PageText:
 
 @dataclass
 class TextChunkRecord:
+    """
+    Represents a text chunk extracted from a document.
+    """
     raw_text: str
     source_document_id: str
     page_from: Optional[int] = None
@@ -46,6 +49,7 @@ class TextChunkRecord:
 
 @dataclass
 class DocumentAssetRecord:
+    """Represents a document asset such as an image or table."""
     asset_type: str
     s3_bucket: str
     s3_key: str
@@ -60,6 +64,7 @@ class DocumentAssetRecord:
 
 @dataclass
 class DocumentKeySectionRecord:
+    """Represents a key section extracted from a document."""
     document_version_id: str
     section_type: str
     text: str

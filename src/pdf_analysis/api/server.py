@@ -39,6 +39,29 @@ from rapidfuzz import fuzz
 from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session
 
+from pdf_analysis.api.constants import (
+    APP_DESCRIPTION,
+    APP_TITLE,
+    APP_VERSION,
+    CORS_ALLOW_CREDENTIALS,
+    CORS_ALLOW_HEADERS,
+    CORS_ALLOW_METHODS,
+    CORS_ALLOW_ORIGIN_REGEX,
+    CORS_ALLOW_ORIGINS,
+    DEFAULT_TEMPLATE_BUCKET,
+    DEFAULT_TEMPLATE_PREFIXES,
+    DEV_ROUTER_PREFIX,
+    DEV_ROUTER_TAGS,
+    NCD_ROUTER_PREFIX,
+    NCD_ROUTER_TAGS,
+    SECTION_PROMPT_MAX_CHARS,
+    STUDY_ID_EXT_RE,
+    STUDY_ID_PREFIX_RE,
+    STUDY_ID_RE,
+    STUDY_ID_SKIP_RE,
+    STUDY_ID_TRAILERS,
+    UPLOAD_ROUTER_TAGS,
+)
 from pdf_analysis.ingest.pdf_text import extract_pages_text
 from pdf_analysis.ingest.tables import extract_tables_all
 from pdf_analysis.pipeline import PDFProcessingPipeline
@@ -99,17 +122,17 @@ from database.db_interface import (
 from ncd.llm.llm_client import LLMClient
 
 app = FastAPI(
-    title="PDF Analysis API",
-    description="Upload a PDF study report and receive extracted content, structured tables, and quality analysis.",
-    version="0.1.0",
+    title=APP_TITLE,
+    description=APP_DESCRIPTION,
+    version=APP_VERSION,
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://ind-manager-v2.vercel.app"],
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=CORS_ALLOW_ORIGINS,
+    allow_origin_regex=CORS_ALLOW_ORIGIN_REGEX,
+    allow_credentials=CORS_ALLOW_CREDENTIALS,
+    allow_methods=CORS_ALLOW_METHODS,
+    allow_headers=CORS_ALLOW_HEADERS,
 )
 
 
@@ -118,14 +141,11 @@ def health_check() -> Dict[str, str]:
     return {"status": "ok"}
 
 
-upload_router = APIRouter(tags=["upload"])
-ncd_router = APIRouter(prefix="/ncd", tags=["ncd"])
-dev_router = APIRouter(prefix="/dev", tags=["dev"])
+upload_router = APIRouter(tags=UPLOAD_ROUTER_TAGS)
+ncd_router = APIRouter(prefix=NCD_ROUTER_PREFIX, tags=NCD_ROUTER_TAGS)
+dev_router = APIRouter(prefix=DEV_ROUTER_PREFIX, tags=DEV_ROUTER_TAGS)
 
 logger = logging.getLogger(__name__)
-
-_DEFAULT_TEMPLATE_BUCKET = os.getenv("IND_TEMPLATES_BUCKET", "indtemplates")
-_DEFAULT_TEMPLATE_PREFIXES = ("2.4/", "2.6/")
 
 
 def _table_to_payload(
@@ -509,7 +529,7 @@ def _require_valid_user_id(db: Session, user_id: str) -> str:
 
 def _normalize_prefix_list(prefixes: Optional[str]) -> List[str]:
     if not prefixes:
-        return list(_DEFAULT_TEMPLATE_PREFIXES)
+        return list(DEFAULT_TEMPLATE_PREFIXES)
     normalized: List[str] = []
     for raw in prefixes.split(","):
         cleaned = raw.strip().lstrip("/")
@@ -518,7 +538,7 @@ def _normalize_prefix_list(prefixes: Optional[str]) -> List[str]:
         if not cleaned.endswith("/"):
             cleaned = f"{cleaned}/"
         normalized.append(cleaned)
-    return normalized or list(_DEFAULT_TEMPLATE_PREFIXES)
+    return normalized or list(DEFAULT_TEMPLATE_PREFIXES)
 
 
 def _list_template_objects(
@@ -1600,7 +1620,7 @@ async def list_template_downloads(
     finally:
         db.close()
 
-    target_bucket = bucket or _DEFAULT_TEMPLATE_BUCKET
+    target_bucket = bucket or DEFAULT_TEMPLATE_BUCKET
     if not target_bucket:
         raise HTTPException(status_code=400, detail="bucket is required")
 
@@ -1673,7 +1693,7 @@ async def get_template_docx(
             status_code=400, detail="section must start with an X.Y pattern"
         )
 
-    target_bucket = bucket or _DEFAULT_TEMPLATE_BUCKET
+    target_bucket = bucket or DEFAULT_TEMPLATE_BUCKET
     if not target_bucket:
         raise HTTPException(status_code=400, detail="bucket is required")
 
@@ -2004,9 +2024,6 @@ def _summary_to_text(value: Any) -> str:
     return json.dumps(value, ensure_ascii=True)
 
 
-_SECTION_PROMPT_MAX_CHARS = 24000
-
-
 def _trim_section_summary_context(context: Dict[str, Any]) -> Dict[str, Any]:
     def _trim_sources(
         sources: Sequence[Dict[str, Any]],
@@ -2108,7 +2125,7 @@ def _trim_section_summary_context(context: Dict[str, Any]) -> Dict[str, Any]:
         )
         if (
             len(json.dumps(candidate, ensure_ascii=True, default=str))
-            <= _SECTION_PROMPT_MAX_CHARS
+            <= SECTION_PROMPT_MAX_CHARS
         ):
             return candidate
 
@@ -2460,59 +2477,34 @@ def _trim_tabulated_context(context: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-_STUDY_ID_RE = re.compile(
-    r"\b(?=[A-Z0-9.-]*[A-Z])(?=[A-Z0-9.-]*\d)[A-Z0-9]{2,}(?:[-.][A-Z0-9]+)+\b",
-    re.IGNORECASE,
-)
-_STUDY_ID_EXT_RE = re.compile(r"\.(?:pdf|xml|docx|txt|csv|json|md)$", re.IGNORECASE)
-_STUDY_ID_PREFIX_RE = re.compile(r"^(?:stf-|study-)", re.IGNORECASE)
-_STUDY_ID_TRAILERS = {
-    "pdf",
-    "xml",
-    "docx",
-    "txt",
-    "csv",
-    "json",
-    "md",
-    "extracted",
-    "quality",
-    "meta",
-    "images",
-    "tables",
-}
-_STUDY_ID_SKIP_RE = re.compile(
-    r"^(?:input\.(?:p\\d+)?\\.t\\d+|p\\d+\\.t\\d+)$", re.IGNORECASE
-)
-
-
 def _extract_study_ids(text: str) -> List[str]:
     if not text:
         return []
     found: List[str] = []
-    for match in _STUDY_ID_RE.findall(text):
+    for match in STUDY_ID_RE.findall(text):
         if not match:
             continue
-        cleaned = _STUDY_ID_EXT_RE.sub("", match)
-        cleaned = _STUDY_ID_PREFIX_RE.sub("", cleaned)
+        cleaned = STUDY_ID_EXT_RE.sub("", match)
+        cleaned = STUDY_ID_PREFIX_RE.sub("", cleaned)
         cleaned = cleaned.strip("._-")
         if not cleaned:
             continue
         while "." in cleaned:
             parts = cleaned.split(".")
-            if parts[-1].lower() not in _STUDY_ID_TRAILERS:
+            if parts[-1].lower() not in STUDY_ID_TRAILERS:
                 break
             cleaned = ".".join(parts[:-1]).strip("._-")
             if not cleaned:
                 break
         if not cleaned:
             continue
-        if _STUDY_ID_SKIP_RE.match(cleaned):
+        if STUDY_ID_SKIP_RE.match(cleaned):
             continue
         if len(cleaned) < 6:
             continue
         if sum(1 for ch in cleaned if ch.isdigit()) < 3:
             continue
-        if not _STUDY_ID_RE.fullmatch(cleaned):
+        if not STUDY_ID_RE.fullmatch(cleaned):
             continue
         found.append(cleaned)
     seen = set()
