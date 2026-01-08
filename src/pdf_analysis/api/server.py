@@ -4,8 +4,6 @@
 
 """FastAPI service that powers PDF analysis, uploads, and downstream tooling."""
 
-# @author: Bin Lee
-# @email: blee@filynai.com
 
 from __future__ import annotations
 
