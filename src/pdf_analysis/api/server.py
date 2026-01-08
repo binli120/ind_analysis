@@ -3307,6 +3307,7 @@ def _build_tabulated_context(
         section
     )
     mapping_filter = "prefix"
+    fallback_section: Optional[str] = None
     if section.startswith("2.6."):
         exact_sections = set()
         filtered_mappings: List[Dict[str, Any]] = []
@@ -3325,6 +3326,8 @@ def _build_tabulated_context(
             module4_sections = sorted(s for s in exact_sections if s)
             mapping_entries = filtered_mappings
             mapping_filter = "exact"
+        elif mapping_entries:
+            fallback_section = f"{section}.*"
 
     sources = fetch_section_sources(
         db,
