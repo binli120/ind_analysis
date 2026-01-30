@@ -3013,6 +3013,12 @@ def _repair_safety_pharmacology_table(
 def _extract_overview_candidates(context: Dict[str, Any]) -> List[Dict[str, str]]:
     candidates: List[Dict[str, str]] = []
     seen: set[str] = set()
+    logger.debug(
+        "overview: table_assets=%s preview_rows_total=%s section_sources=%s",
+        len(context.get("table_assets") or []),
+        sum(len(a.get("preview_rows") or []) for a in context.get("table_assets") or []),
+        len(context.get("section_sources") or []),
+    )
     for asset in context.get("table_assets", []) or []:
         preview_rows = asset.get("preview_rows") or []
         for row in preview_rows:
@@ -3056,6 +3062,27 @@ def _extract_overview_candidates(context: Dict[str, Any]) -> List[Dict[str, str]
                     "testing_facility": str(
                         row.get(key_map.get("testing facility") or "") or ""
                     ).strip(),
+                    "study_number": study_id,
+                }
+            )
+            seen.add(study_id)
+    if not candidates:
+        # Fallback: synthesize candidates from any study IDs we can find in the context
+        study_id_candidates = _build_study_id_candidates(context)
+        logger.debug(
+            "overview: no table-derived candidates; using study_id_candidates=%s",
+            list(study_id_candidates.keys()),
+        )
+        for entry in study_id_candidates.values():
+            study_id = entry.get("study_id")
+            if not study_id or study_id in seen:
+                continue
+            candidates.append(
+                {
+                    "type_of_study": "",
+                    "test_system": "",
+                    "method_of_administration": "",
+                    "testing_facility": "",
                     "study_number": study_id,
                 }
             )
@@ -3367,6 +3394,23 @@ def _build_tabulated_context(
                 bucket=row.get("s3_bucket") or bucket,
                 key=json_key,
                 max_rows=max_table_rows,
+            )
+        else:
+            logger.debug(
+                "tabulated ctx: asset %s missing json_key (section=%s, module4=%s, page=%s idx=%s)",
+                row.get("id"),
+                section,
+                row.get("section_number") if "section_number" in row else None,
+                row.get("page_number"),
+                row.get("index_on_page"),
+            )
+        if not preview_rows:
+            logger.debug(
+                "tabulated ctx: no preview_rows for asset %s (json_key=%s, columns=%s, row_count=%s)",
+                row.get("id"),
+                json_key,
+                extra.get("columns"),
+                extra.get("row_count"),
             )
         table_assets.append(
             {

@@ -11,6 +11,7 @@ from pathlib import Path
 import pandas as pd
 import pdfplumber
 from PIL import Image
+from utils.log import info
 
 
 # ==========================================
@@ -46,22 +47,22 @@ def needs_ocr(pdf_path, pages_to_check=3, min_text_len=50):
                 if len(txt.strip()) > min_text_len:
                     return False
         return True
-    except:
+    except :
         return True
 
 
 def ensure_ocr_pdf(pdf_path, output_dir):
     """Runs OCR if PDF has no extractable text."""
     if not needs_ocr(pdf_path):
-        print("[OCR] PDF already contains text → skipping OCR")
+        info("[OCR] PDF already contains text → skipping OCR")
         return pdf_path
 
     ocr_path = os.path.join(output_dir, "ocr_" + os.path.basename(pdf_path))
-    print("[OCR] Running OCRmyPDF… this may take a moment.")
+    info("[OCR] Running OCRmyPDF… this may take a moment.")
 
     cmd = ["ocrmypdf", "--skip-text", "--deskew", pdf_path, ocr_path]
     subprocess.run(cmd, check=True)
-    print("[OCR] OCR complete →", ocr_path)
+    info("[OCR] OCR complete →", ocr_path)
     return ocr_path
 
 
@@ -95,7 +96,7 @@ def extract_tables(pdf_path, table_dir):
                     }
                 )
 
-                print(f"[TABLE] Saved {csv_path}")
+                info(f"[TABLE] Saved {csv_path}")
 
     return table_refs
 
@@ -153,7 +154,7 @@ def extract_images(pdf_path, image_dir):
                     }
                 )
 
-                print(f"[IMAGE] Saved {img_path} (caption: {caption})")
+                info(f"[IMAGE] Saved {img_path} (caption: {caption})")
 
     return image_refs
 
@@ -191,7 +192,7 @@ def build_markdown(pdf_path, table_refs, image_refs, md_path):
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("".join(output))
 
-    print("[TEXT] Markdown saved →", md_path)
+    info("[TEXT] Markdown saved →", md_path)
 
 
 # ==========================================
@@ -200,7 +201,7 @@ def build_markdown(pdf_path, table_refs, image_refs, md_path):
 def pandoc_to_docx(md_path, docx_path):
     cmd = ["pandoc", md_path, "-o", docx_path]
     subprocess.run(cmd, check=True)
-    print("[DOCX] Generated:", docx_path)
+    info("[DOCX] Generated:", docx_path)
 
 
 # ==========================================
@@ -229,9 +230,9 @@ def run_pipeline(pdf_path, out_dir, output_basename=None):
     docx_path = os.path.join(out_dir, f"{base_name}.docx")
     pandoc_to_docx(md_path, docx_path)
 
-    print("\n=== PIPELINE COMPLETE ===")
-    print("Output folder:", out_dir)
-    print("DOCX file:", docx_path)
+    info("\n=== PIPELINE COMPLETE ===")
+    info("Output folder:", out_dir)
+    info("DOCX file:", docx_path)
 
 
 # ==========================================
@@ -239,8 +240,8 @@ def run_pipeline(pdf_path, out_dir, output_basename=None):
 # ==========================================
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("\nUsage:")
-        print("  python pipeline.py input.pdf output_folder\n")
+        info("\nUsage:")
+        info("  python pipeline.py input.pdf output_folder\n")
         sys.exit(1)
 
     input_pdf = sys.argv[1]

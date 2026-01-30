@@ -14,6 +14,7 @@ import pdfplumber
 import pytesseract
 from pdf2image import convert_from_path
 from PIL import Image, ImageOps
+from utils.log import info
 
 # OCR tuning (overridable via env vars)
 OCR_LANG = os.getenv("OCR_LANG", "eng")
@@ -77,7 +78,7 @@ def fallback_ocr_text(
     page_limit=None,
 ):
     """OCR each page to text with pytesseract/pdftoppm when ocrmypdf is unavailable or unwanted."""
-    print(f"[OCR] Using direct pytesseract fallback ({reason}).")
+    info(f"[OCR] Using direct pytesseract fallback ({reason}).")
     kwargs = {"dpi": dpi}
     if page_limit:
         kwargs["first_page"] = 1
@@ -95,7 +96,7 @@ def fallback_ocr_text(
             gray = gray.point(lambda p: 255 if p > threshold_val else 0)
 
         texts.append(pytesseract.image_to_string(gray, lang=lang, config=config))
-        print(f"[OCR] Fallback OCR page {idx}/{total}")
+        info(f"[OCR] Fallback OCR page {idx}/{total}")
     return texts
 
 
@@ -214,7 +215,7 @@ def ensure_ocr_pdf(
     strings per page when falling back to pytesseract.
     """
     if not needs_ocr(pdf_path, page_limit=page_limit):
-        print("[OCR] PDF already contains text → skipping OCR")
+        info("[OCR] PDF already contains text → skipping OCR")
         return pdf_path, None
 
     if prefer_direct:
@@ -229,11 +230,11 @@ def ensure_ocr_pdf(
         with open(text_dump, "w", encoding="utf-8") as f:
             for idx, t in enumerate(texts, start=1):
                 f.write(f"--- Page {idx} ---\n{t}\n\n")
-        print("[OCR] Fallback text saved →", text_dump)
+        info("[OCR] Fallback text saved →", text_dump)
         return pdf_path, texts
 
     ocr_path = os.path.join(output_dir, "ocr_" + os.path.basename(pdf_path))
-    print("[OCR] Running OCRmyPDF… this may take a moment.")
+    info("[OCR] Running OCRmyPDF… this may take a moment.")
 
     cmd = [
         "ocrmypdf",
@@ -249,10 +250,10 @@ def ensure_ocr_pdf(
     cmd.extend([pdf_path, ocr_path])
     try:
         subprocess.run(cmd, check=True)
-        print("[OCR] OCR complete →", ocr_path)
+        info("[OCR] OCR complete →", ocr_path)
         return ocr_path, None
     except subprocess.CalledProcessError as e:
-        print(
+        info(
             f"[OCR] ocrmypdf failed ({e}) → falling back to pytesseract text-only OCR"
         )
         texts = fallback_ocr_text(
@@ -266,7 +267,7 @@ def ensure_ocr_pdf(
         with open(text_dump, "w", encoding="utf-8") as f:
             for idx, t in enumerate(texts, start=1):
                 f.write(f"--- Page {idx} ---\n{t}\n\n")
-        print("[OCR] Fallback text saved →", text_dump)
+        info("[OCR] Fallback text saved →", text_dump)
         return pdf_path, texts
 
 
@@ -303,7 +304,7 @@ def extract_tables(pdf_path, table_dir, page_limit=None):
                     }
                 )
 
-                print(f"[TABLE] Saved {csv_path}")
+                info(f"[TABLE] Saved {csv_path}")
 
     return table_refs
 
@@ -364,7 +365,7 @@ def extract_images(pdf_path, image_dir, page_limit=None):
                     }
                 )
 
-                print(f"[IMAGE] Saved {img_path} (caption: {caption})")
+                info(f"[IMAGE] Saved {img_path} (caption: {caption})")
 
     return image_refs
 
@@ -412,7 +413,7 @@ def build_markdown(
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("".join(output))
 
-    print("[TEXT] Markdown saved →", md_path)
+    info("[TEXT] Markdown saved →", md_path)
 
 
 # ==========================================
@@ -422,7 +423,7 @@ def pandoc_to_docx(md_path, docx_path):
     """Convert a Markdown file to DOCX using pandoc."""
     cmd = ["pandoc", md_path, "-o", docx_path]
     subprocess.run(cmd, check=True)
-    print("[DOCX] Generated:", docx_path)
+    info("[DOCX] Generated:", docx_path)
 
 
 # ==========================================
@@ -453,7 +454,7 @@ def run_pipeline(pdf_path, out_dir, page_limit=None):
     meta_path = os.path.join(out_dir, "metadata.json")
     with open(meta_path, "w", encoding="utf-8") as mf:
         json.dump(metadata, mf, indent=2)
-    print("[META] Saved metadata →", meta_path)
+    info("[META] Saved metadata →", meta_path)
 
     # Step 1 – Tables
     table_dir = os.path.join(out_dir, "tables")
@@ -478,10 +479,10 @@ def run_pipeline(pdf_path, out_dir, page_limit=None):
     docx_path = os.path.join(out_dir, "document.docx")
     pandoc_to_docx(md_path, docx_path)
 
-    print("\n=== PIPELINE COMPLETE ===")
-    print("Output folder:", out_dir)
-    print("DOCX file:", docx_path)
-    print("Metadata file:", meta_path)
+    info("\n=== PIPELINE COMPLETE ===")
+    info("Output folder:", out_dir)
+    info("DOCX file:", docx_path)
+    info("Metadata file:", meta_path)
 
 
 # ==========================================
@@ -489,15 +490,15 @@ def run_pipeline(pdf_path, out_dir, page_limit=None):
 # ==========================================
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("\nUsage:")
-        print("  python pipeline.py input.pdf output_folder\n")
-        print("Env vars to tune OCR:")
-        print("  OCR_LANG (default: eng)")
-        print("  OCR_PSM (default: 6)")
-        print("  OCR_DPI (default: 300)")
-        print("  OCR_THRESHOLD (optional 0-255; apply binarization in fallback)")
-        print("  PREFER_DIRECT_OCR=1 (skip ocrmypdf, go straight to pytesseract)\n")
-        print("  PAGE_LIMIT (optional; process only the first N pages)\n")
+        info("\nUsage:")
+        info("  python pipeline.py input.pdf output_folder\n")
+        info("Env vars to tune OCR:")
+        info("  OCR_LANG (default: eng)")
+        info("  OCR_PSM (default: 6)")
+        info("  OCR_DPI (default: 300)")
+        info("  OCR_THRESHOLD (optional 0-255; apply binarization in fallback)")
+        info("  PREFER_DIRECT_OCR=1 (skip ocrmypdf, go straight to pytesseract)\n")
+        info("  PAGE_LIMIT (optional; process only the first N pages)\n")
         sys.exit(1)
 
     input_pdf = sys.argv[1]

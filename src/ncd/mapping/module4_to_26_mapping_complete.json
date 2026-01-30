@@ -13,6 +13,7 @@
       "priority": "P0",
       "target_sections": {
         "tabulated": [
+          "2.6.3.1",
           "2.6.3.2"
         ],
         "written": [
@@ -46,6 +47,7 @@
       "priority": "P1",
       "target_sections": {
         "tabulated": [
+          "2.6.3.1",
           "2.6.3.3"
         ],
         "written": [
@@ -68,6 +70,7 @@
       "priority": "P0",
       "target_sections": {
         "tabulated": [
+          "2.6.3.1",
           "2.6.3.4"
         ],
         "written": [
@@ -109,6 +112,7 @@
       "priority": "P1",
       "target_sections": {
         "tabulated": [
+          "2.6.3.1",
           "2.6.3.5"
         ],
         "written": [
