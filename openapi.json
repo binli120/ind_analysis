@@ -413,6 +413,50 @@
         }
       }
     },
+    "/ncd/label-upload": {
+      "post": {
+        "tags": [
+          "ncd"
+        ],
+        "summary": "Label Uploaded Document",
+        "description": "Label an uploaded document without using S3.\n\nAccepts PDF, DOCX (Word), or RTF uploads and returns the predicted IND section number/title with confidence and top candidates. No S3 side-effects.",
+        "operationId": "label_uploaded_document_ncd_label_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_label_uploaded_document_ncd_label_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Label Uploaded Document Ncd Label Upload Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ncd/relabel": {
       "post": {
         "tags": [
@@ -507,7 +551,7 @@
           "ncd"
         ],
         "summary": "Get Template Sections",
-        "description": "Return template entries for a given section or subsection from ind_24_26_template.json.\n- If section is omitted, returns the full template JSON payload.\n- If you pass a subsection (e.g., 2.4.1-A), returns the matching entry.\n- If you pass a parent section (e.g., 2.4.1), returns all subsection entries under it.\n- If user_id is provided and overrides exist, they are merged (override wins).",
+        "description": "Return template entries for a given section or subsection from ind_24_26_template.json.\n- If section is omitted, returns the full template JSON payload.\n- If you pass a subsection (e.g., 2.4.1-A), returns the matching entry.\n- If you pass a parent section (e.g., 2.4.1), returns all subsection entries under it.\n- The caller must provide a valid user-id header; overrides are merged when present for that user.",
         "operationId": "get_template_sections_ncd_template_get",
         "parameters": [
           {
@@ -527,20 +571,14 @@
             }
           },
           {
-            "name": "user_id",
-            "in": "query",
-            "required": false,
+            "name": "user-id",
+            "in": "header",
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
+              "type": "string",
               "title": "User Id"
-            }
+            },
+            "description": "User ID (UUID) required in header"
           }
         ],
         "responses": {
@@ -578,15 +616,6 @@
         "description": "Return downloadable DOCX template URLs for the configured templates bucket.",
         "operationId": "list_template_downloads_ncd_templates_get",
         "parameters": [
-          {
-            "name": "user_id",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "User Id"
-            }
-          },
           {
             "name": "bucket",
             "in": "query",
@@ -628,6 +657,16 @@
               "default": 3600,
               "title": "Expires In"
             }
+          },
+          {
+            "name": "user-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            },
+            "description": "User ID (UUID) required in header"
           },
           {
             "name": "aws_region",
@@ -1369,7 +1408,7 @@
           "dev"
         ],
         "summary": "Dev Label Local",
-        "description": "Dev-only: label a local PDF upload without S3 side-effects.\nReturns the predicted section, confidence, method, and top fuzzy candidates.",
+        "description": "Dev-only: label a local document (PDF/DOCX/RTF) upload without S3 side-effects.\nReturns the predicted section, confidence, method, and top fuzzy candidates.",
         "operationId": "dev_label_local_dev_label_local_post",
         "requestBody": {
           "content": {
@@ -1482,6 +1521,34 @@
           "file"
         ],
         "title": "Body_dev_label_local_dev_label_local_post"
+      },
+      "Body_label_uploaded_document_ncd_label_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File",
+            "description": "Upload a PDF, DOCX (Word), or RTF file."
+          },
+          "page_limit": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Page Limit",
+            "description": "Max pages to sample for labeling",
+            "default": 5
+          },
+          "use_llm": {
+            "type": "boolean",
+            "title": "Use Llm",
+            "description": "Enable optional LLM refinement",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_label_uploaded_document_ncd_label_upload_post"
       },
       "Body_upload_and_analyze_to_s3_s3_upload_analyze_post": {
         "properties": {

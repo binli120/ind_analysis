@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import shutil
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -29,7 +30,16 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
     ClientError = Exception  # type: ignore[assignment]
 import pandas as pd
-from fastapi import APIRouter, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
@@ -60,6 +70,7 @@ from pdf_analysis.api.constants import (
     STUDY_ID_TRAILERS,
     UPLOAD_ROUTER_TAGS,
 )
+from pdf_analysis.ingest.docx_text import extract_docx_pages
 from pdf_analysis.ingest.pdf_text import extract_pages_text
 from pdf_analysis.ingest.tables import extract_tables_all
 from pdf_analysis.pipeline import PDFProcessingPipeline
@@ -1312,6 +1323,80 @@ async def label_s3_pdf(payload: NCDLabelRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Labeling failed: {exc}") from exc
 
 
+@ncd_router.post("/label-upload")
+async def label_uploaded_document(
+    file: UploadFile = File(..., description="PDF, RTF, or Word (DOCX) file to label"),
+    page_limit: int = Form(5, ge=1, description="Max pages to sample for labeling"),
+    use_llm: bool = Form(False, description="Enable optional LLM refinement"),
+) -> Dict[str, Any]:
+    """
+    Label an uploaded document without using S3.
+
+    Accepts PDF, DOCX (Word), or RTF uploads and returns the predicted IND section
+    number/title with confidence and top candidates. No S3 side-effects.
+    """
+    filename = file.filename or "uploaded.pdf"
+    suffix = Path(filename).suffix.lower()
+    if suffix not in {".pdf", ".docx", ".rtf"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF, DOCX (Word), or RTF files are supported for labeling.",
+        )
+
+    # Preserve a meaningful suffix for downstream parsers.
+    tmp_suffix = suffix if suffix in {".pdf", ".docx"} else ".rtf"
+    with NamedTemporaryFile(delete=False, suffix=tmp_suffix) as tmp:
+        tmp_path = Path(tmp.name)
+        try:
+            shutil.copyfileobj(file.file, tmp)
+            tmp.flush()
+        finally:
+            file.file.close()
+
+    try:
+        sample_text, pages_sampled = _extract_sample_text_generic(
+            tmp_path, page_limit=page_limit, original_suffix=suffix
+        )
+        classification = _classify_section_from_text(
+            sample_text, filename=filename, use_llm=use_llm
+        )
+        candidates = _top_section_candidates(
+            sample_text, _load_ind_template_sections(), limit=5
+        )
+    finally:
+        try:
+            tmp_path.unlink()
+        except Exception:
+            pass
+
+    if classification:
+        section_number, section_title, confidence, method = classification
+    else:
+        section_number = section_title = None
+        confidence = 0.0
+        method = "none"
+
+    if not candidates and section_number:
+        candidates = [
+            {
+                "section_number": section_number,
+                "section_title": section_title or section_number,
+                "score": confidence,
+            }
+        ]
+
+    return {
+        "filename": filename,
+        "file_type": suffix.lstrip("."),
+        "section_number": section_number,
+        "section_title": section_title,
+        "confidence": confidence,
+        "method": method,
+        "pages_sampled": pages_sampled,
+        "candidates": candidates,
+    }
+
+
 @ncd_router.post("/relabel")
 async def relabel_s3_pdf(payload: NCDRelabelRequest) -> Dict[str, Any]:
     """
@@ -1414,14 +1499,19 @@ async def dev_label_local(
     use_llm: bool = Form(False, description="Enable optional LLM refinement"),
 ) -> Dict[str, Any]:
     """
-    Dev-only: label a local PDF upload without S3 side-effects.
+    Dev-only: label a local document (PDF/DOCX/RTF) upload without S3 side-effects.
     Returns the predicted section, confidence, method, and top fuzzy candidates.
     """
     filename = file.filename or "uploaded.pdf"
-    if not filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    suffix = Path(filename).suffix.lower()
+    if suffix not in {".pdf", ".docx", ".rtf"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF, DOCX (Word), or RTF files are supported.",
+        )
 
-    with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+    tmp_suffix = suffix if suffix in {".pdf", ".docx"} else ".rtf"
+    with NamedTemporaryFile(delete=False, suffix=tmp_suffix) as tmp:
         tmp_path = Path(tmp.name)
         try:
             shutil.copyfileobj(file.file, tmp)
@@ -1430,7 +1520,9 @@ async def dev_label_local(
             file.file.close()
 
     try:
-        sample_text, pages_sampled = _extract_sample_text(tmp_path, page_limit)
+        sample_text, pages_sampled = _extract_sample_text_generic(
+            tmp_path, page_limit=page_limit, original_suffix=suffix
+        )
         classification = _classify_section_from_text(
             sample_text,
             filename=filename,
@@ -1507,7 +1599,13 @@ async def upsert_template_override(payload: TemplateOverrideRequest) -> Dict[str
 
 @ncd_router.get("/template")
 async def get_template_sections(
-    section: Optional[str] = None, user_id: Optional[str] = None
+    section: Optional[str] = None,
+    user_id: str = Header(
+        ...,
+        alias="user-id",
+        convert_underscores=False,
+        description="Authenticated user ID (UUID) required in header",
+    ),
 ) -> Dict[str, Any]:
     """
     Return template entries for a given section or subsection from ind_24_26_template.json.
@@ -1516,17 +1614,23 @@ async def get_template_sections(
     - If you pass a parent section (e.g., 2.4.1), returns all subsection entries under it.
     - If user_id is provided and overrides exist, they are merged (override wins).
     """
-    if not section or not section.strip():
-        template_path = resolve_template_path()
-        if not template_path:
-            raise HTTPException(status_code=404, detail="Template file not found")
-        try:
-            payload = json.loads(template_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise HTTPException(
-                status_code=500, detail=f"Template file is invalid JSON: {exc}"
-            ) from exc
-        return {"template": payload}
+    db = SessionLocal()
+    try:
+        normalized_user_id = _require_valid_user_id(db, user_id)
+
+        if not section or not section.strip():
+            template_path = resolve_template_path()
+            if not template_path:
+                raise HTTPException(status_code=404, detail="Template file not found")
+            try:
+                payload = json.loads(template_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                raise HTTPException(
+                    status_code=500, detail=f"Template file is invalid JSON: {exc}"
+                ) from exc
+            return {"template": payload, "user_id": normalized_user_id}
+    finally:
+        db.close()
 
     target = section.strip()
 
@@ -1551,59 +1655,63 @@ async def get_template_sections(
         raise HTTPException(status_code=404, detail="Section not found in template")
 
     # Apply overrides if user_id provided
-    if user_id:
-        db = SessionLocal()
-        try:
-            overrides = _fetch_template_overrides(db, user_id, target)
-        finally:
-            db.close()
+    db = SessionLocal()
+    try:
+        overrides = _fetch_template_overrides(db, normalized_user_id, target)
+    finally:
+        db.close()
 
-        if overrides:
-            override_map = {
-                ((o.get("section") or "").lower(), (o.get("subsection") or None)): o[
-                    "payload"
-                ]
-                for o in overrides
-            }
-            merged: List[Dict[str, Any]] = []
-            seen_keys = set()
-            for entry in matches:
-                key = (
-                    (entry.get("section") or "").lower(),
-                    (entry.get("subsection") or None),
-                )
-                if key in override_map:
-                    merged_entry = dict(entry)
-                    merged_entry["raw"] = {
-                        **(entry.get("raw") or {}),
-                        **(override_map[key] or {}),
+    if overrides:
+        override_map = {
+            ((o.get("section") or "").lower(), (o.get("subsection") or None)): o[
+                "payload"
+            ]
+            for o in overrides
+        }
+        merged: List[Dict[str, Any]] = []
+        seen_keys = set()
+        for entry in matches:
+            key = (
+                (entry.get("section") or "").lower(),
+                (entry.get("subsection") or None),
+            )
+            if key in override_map:
+                merged_entry = dict(entry)
+                merged_entry["raw"] = {
+                    **(entry.get("raw") or {}),
+                    **(override_map[key] or {}),
+                }
+                merged.append(merged_entry)
+                seen_keys.add(key)
+            else:
+                merged.append(entry)
+                seen_keys.add(key)
+        # Add overrides not present in defaults
+        for key, payload in override_map.items():
+            if key not in seen_keys:
+                merged.append(
+                    {
+                        "section": key[0],
+                        "subsection": key[1],
+                        "section_header": payload.get("Section Header"),
+                        "subsection_header": payload.get("Subsection Header"),
+                        "content": payload.get("Content"),
+                        "raw": payload,
                     }
-                    merged.append(merged_entry)
-                    seen_keys.add(key)
-                else:
-                    merged.append(entry)
-                    seen_keys.add(key)
-            # Add overrides not present in defaults
-            for key, payload in override_map.items():
-                if key not in seen_keys:
-                    merged.append(
-                        {
-                            "section": key[0],
-                            "subsection": key[1],
-                            "section_header": payload.get("Section Header"),
-                            "subsection_header": payload.get("Subsection Header"),
-                            "content": payload.get("Content"),
-                            "raw": payload,
-                        }
-                    )
-            matches = merged
+                )
+        matches = merged
 
-    return {"section": target, "entries": matches}
+    return {"section": target, "entries": matches, "user_id": normalized_user_id}
 
 
 @ncd_router.get("/templates")
 async def list_template_downloads(
-    user_id: str,
+    user_id: str = Header(
+        ...,
+        alias="user-id",
+        convert_underscores=False,
+        description="Authenticated user ID (UUID) required in header",
+    ),
     bucket: Optional[str] = None,
     prefixes: Optional[str] = None,
     expires_in: int = 3600,
@@ -4936,6 +5044,56 @@ def _extract_sample_text(pdf_path: Path, page_limit: int) -> Tuple[str, int]:
         logger.warning("pdfplumber text extraction failed: %s", exc)
 
     return sample_text, pages_sampled
+
+
+def _extract_rtf_text(rtf_path: Path) -> str:
+    """Convert RTF to plain text using pandoc CLI; fall back to naive stripping."""
+    try:
+        result = subprocess.run(
+            ["pandoc", str(rtf_path), "-t", "plain"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        text = result.stdout
+        if text.strip():
+            return text
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning("pandoc rtf->text failed: %s", exc)
+
+    # Naive fallback: strip common RTF control words/braces.
+    try:
+        raw = rtf_path.read_text(errors="ignore")
+    except Exception:
+        return ""
+    text = re.sub(r"\\[a-zA-Z]+-?\d* ?", " ", raw)
+    text = text.replace("{", " ").replace("}", " ")
+    return text
+
+
+def _extract_sample_text_generic(
+    path: Path, *, page_limit: int, original_suffix: str
+) -> Tuple[str, int]:
+    """
+    Extension-aware text sampler for PDF, DOCX, and RTF uploads.
+    Returns (text, pages_sampled).
+    """
+    suffix = original_suffix.lower()
+    if suffix == ".docx":
+        try:
+            pages = extract_docx_pages(path, max_pages=page_limit)
+            text = "\n".join((p.get("text") or "") for p in pages)
+            return text, len(pages)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("DOCX text extraction failed: %s", exc)
+
+    if suffix == ".rtf":
+        text = _extract_rtf_text(path)
+        # Treat as a single logical page; keep parity with PDF behavior.
+        return text, 1 if text else 0
+
+    # Default / PDF path
+    return _extract_sample_text(path, page_limit)
 
 
 @upload_router.post("/s3/markdown")
