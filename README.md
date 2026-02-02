@@ -53,7 +53,12 @@ This project provides an end‑to‑end workflow for turning complex PDF study r
       - `GET /s3/analysis/status?bucket=...&key=...` → reports `pending` or `completed`.
       - `GET /s3/analysis/result?bucket=...&key=...` → returns the stored analysis JSON once ready (404 while pending).
     - Front-ends can poll the status endpoint, watch for S3 events (SNS/SQS), or subscribe to your own notification channel triggered off the `.analysis.json` upload.
-  - `POST /s3/markdown` downloads the PDF from S3, re-runs extraction, and returns the markdown together with the S3 key metadata so clients always see where the content originated.
+- `POST /s3/markdown` downloads the PDF from S3, re-runs extraction, and returns the markdown together with the S3 key metadata so clients always see where the content originated.
+
+### OpenAPI & Postman collections
+- Regenerate the OpenAPI spec: `PYTHONPATH=src poetry run python scripts/generate_openapi.py --output dist/openapi.json`.
+- Build the Postman collection from the spec (requires `openapi-to-postmanv2` or `npx`): `PYTHONPATH=src ./scripts/generate_openapi_and_postman.sh`.
+- Updated Postman file lives at `postman/postman_openapi_collection.json` (includes `/ncd/sectionList`).
 
 ## Next Steps
 

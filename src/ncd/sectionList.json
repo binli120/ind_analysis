@@ -1,0 +1,391 @@
+[
+    {
+        "id": "m1",
+        "value": "1",
+        "text": "Module 1 — Administrative information",
+        "depth": 0,
+        "type": "folder",
+        "desc": "Region-specific (example: US FDA)"
+    },
+    {
+        "id": "usfda",
+        "value": "us",
+        "text": "us",
+        "depth": 1,
+        "type": "folder",
+        "desc": "US FDA-specific content"
+    },
+    {
+        "id": "m1.1",
+        "value": "1.1",
+        "text": "  1.1 — Forms",
+        "depth": 1,
+        "type": "folder",
+        "desc": "Application forms and declarations"
+    },
+    {
+        "id": "m1.1.1",
+        "value": "1.1.1",
+        "text": "    1.1.1 — Application form (e.g., FDA 356h)"
+    },
+    {
+        "id": "m1.1.1",
+        "value": "1.1.1",
+        "text": "    1.1.1 — Application form (e.g., FDA 356h)",
+        "depth": 2,
+        "type": "file",
+        "desc": "Primary submission form PDF"
+    },
+    {
+        "id": "m1.2",
+        "value": "1.2",
+        "text": "  1.2 — Cover letters",
+        "depth": 1,
+        "type": "folder",
+        "desc": "Submission cover correspondence"
+    },
+    {
+        "id": "m1.2.1",
+        "value": "1.2.1",
+        "text": "    1.2.1 — Cover letter",
+        "depth": 2,
+        "type": "file",
+        "desc": "Cover letter PDF"
+    },
+    {
+        "id": "m1.3",
+        "value": "1.3",
+        "text": "  1.3 — Administrative information",
+        "depth": 1,
+        "type": "folder",
+        "desc": "Contacts, agent letters, etc."
+    },
+    {
+        "id": "m1.3.1",
+        "value": "1.3.1",
+        "text": "    1.3.1 — Contact information",
+        "depth": 2,
+        "type": "file",
+        "desc": "Sponsor/applicant contact PDF"
+    },
+    {
+        "id": "m1.6",
+        "value": "1.6",
+        "text": "  1.6 — Labeling",
+        "depth": 1,
+        "type": "folder",
+        "desc": "PI, carton/container labels"
+    },
+    {
+        "id": "m1.6.1",
+        "value": "1.6.1",
+        "text": "    1.6.1 — Prescribing information",
+        "depth": 2,
+        "type": "file",
+        "desc": "PI/USPI document"
+    },
+    {
+        "id": "m1.6.2",
+        "value": "1.6.2",
+        "text": "    1.6.2 — Carton & container labels",
+        "depth": 2,
+        "type": "file",
+        "desc": "Label artwork PDFs"
+    },
+    {
+        "id": "m2",
+        "value": "2",
+        "text": "Module 2 Summaries",
+        "depth": 0,
+        "type": "folder",
+        "desc": "High-level summaries across quality/nonclinical/clinical"
+    },
+    {
+        "id": "m2.1",
+        "value": "2.1",
+        "text": "  2.1 — CTD table of contents",
+        "depth": 1,
+        "type": "file",
+        "desc": "Top-level TOC document"
+    },
+    {
+        "id": "m2.2",
+        "value": "2.2",
+        "text": "  2.2 — Introduction to summary",
+        "depth": 1,
+        "type": "file",
+        "desc": "Context for Modules 2–5"
+    },
+    {
+        "id": "m2.3",
+        "value": "2.3",
+        "text": "  2.3 — Quality overall summary",
+        "depth": 1,
+        "type": "folder",
+        "desc": "Quality summary package"
+    },
+    {
+        "id": "m2.3.S",
+        "value": "2.3.S",
+        "text": "    2.3.S — Drug substance summary",
+        "depth": 2,
+        "type": "file",
+        "desc": "DS summary narrative"
+    },
+    {
+        "id": "m2.3.P",
+        "value": "2.3.P",
+        "text": "    2.3.P — Drug product summary",
+        "depth": 2,
+        "type": "file",
+        "desc": "DP summary narrative"
+    },
+    {
+        "id": "m2.4",
+        "value": "2.4",
+        "text": "  2.4 — Nonclinical overview",
+        "depth": 1,
+        "type": "folder",
+        "desc": "Nonclinical overview narrative"
+    },
+    {
+        "id": "m2.4.1",
+        "value": "2.4.1",
+        "text": "    2.4.1 — Pharmacology",
+        "depth": 2,
+        "type": "folder",
+        "desc": "Pharmacology narrative summary"
+    },
+    {
+        "id": "m2.4.1 -a",
+        "value": "2.4.1 -a",
+        "text": "    2.4.1 -a — Overview of the Nonclinical Testing Strategy",
+        "depth": 3,
+        "type": "file",
+        "desc": "Pharmacokinetics narrative summary"
+    },
+    {
+        "id": "m2.4.1 -b",
+        "value": "2.4.1 -b",
+        "text": "    2.4.1 -b — Overview of the Nonclinical Testing Strategy",
+        "depth": 3,
+        "type": "file",
+        "desc": "Pharmacokinetics narrative summary"
+    },
+    {
+        "id": "m2.4.1 -c",
+        "value": "2.4.1 -c",
+        "text": "    2.4.1 -c — Overview of the Nonclinical Testing Strategy",
+        "depth": 3,
+        "type": "file",
+        "desc": "Pharmacokinetics narrative summary"
+    },
+    {
+        "id": "m2.4.1 -d",
+        "value": "2.4.1 -d",
+        "text": "    2.4.1 -d — Overview of the Nonclinical Testing Strategy",
+        "depth": 3,
+        "type": "file",
+        "desc": "Pharmacokinetics narrative summary"
+    },
+    {
+        "id": "m2.4.1 -e",
+        "value": "2.4.1 -e",
+        "text": "    2.4.1 -e — Overview of the Nonclinical Testing Strategy",
+        "depth": 3,
+        "type": "file",
+        "desc": "Pharmacokinetics narrative summary"
+    },
+    {
+        "id": "m2.4.3",
+        "value": "2.4.3",
+        "text": "    2.4.3 — Pharmacodynamics",
+        "depth": 2,
+        "type": "file",
+        "desc": "Introduce the investigational product"
+    },
+    {
+        "id": "m2.5",
+        "value": "2.5",
+        "text": "  2.5 — Clinical overview",
+        "depth": 1,
+        "type": "file",
+        "desc": "Clinical overview narrative"
+    },
+    {
+        "id": "m2.6",
+        "value": "2.6",
+        "text": "  2.6 — Nonclinical written/tabulated summaries",
+        "depth": 1,
+        "type": "folder",
+        "desc": "Summaries by discipline"
+    },
+    {
+        "id": "m2.6.6",
+        "value": "2.6.6",
+        "text": "    2.6.6 — Toxicology written summary",
+        "depth": 2,
+        "type": "file",
+        "desc": "Nonclinical tox narrative"
+    },
+    {
+        "id": "m2.7",
+        "value": "2.7",
+        "text": "  2.7 — Clinical summary",
+        "depth": 1,
+        "type": "folder",
+        "desc": "Clinical summaries by topic"
+    },
+    {
+        "id": "m2.7.3",
+        "value": "2.7.3",
+        "text": "    2.7.3 — Clinical efficacy summary",
+        "depth": 2,
+        "type": "file",
+        "desc": "Efficacy narrative summary"
+    },
+    {
+        "id": "m3",
+        "value": "m3",
+        "text": "Module 3 — Quality",
+        "depth": 0,
+        "type": "folder",
+        "desc": "CMC data for drug substance and drug product"
+    },
+    {
+        "id": "m3.2",
+        "value": "3.2",
+        "text": "  3.2 — Body of data",
+        "depth": 1,
+        "type": "folder",
+        "desc": "Primary CMC content container"
+    },
+    {
+        "id": "m3.2.S",
+        "value": "3.2.S",
+        "text": "    3.2.S — Drug substance",
+        "depth": 2,
+        "type": "folder",
+        "desc": "DS manufacture, controls, specs"
+    },
+    {
+        "id": "m3.2.S.1",
+        "value": "3.2.S.1",
+        "text": "      3.2.S.1 — General information",
+        "depth": 3,
+        "type": "file",
+        "desc": "Nomenclature, structure, general DS info"
+    },
+    {
+        "id": "m3.2.S.2",
+        "value": "3.2.S.2",
+        "text": "      3.2.S.2 — Manufacture",
+        "depth": 3,
+        "type": "file",
+        "desc": "Manufacturer, process, controls"
+    },
+    {
+        "id": "m3.2.P",
+        "value": "3.2.P",
+        "text": "    3.2.P — Drug product",
+        "depth": 2,
+        "type": "folder",
+        "desc": "DP composition, process, controls"
+    },
+    {
+        "id": "m3.2.P.3",
+        "value": "3.2.P.3",
+        "text": "      3.2.P.3 — Manufacture",
+        "depth": 3,
+        "type": "file",
+        "desc": "DP manufacturing process & controls"
+    },
+    {
+        "id": "m4",
+        "value": "m4",
+        "text": "Module 4 — Nonclinical study reports",
+        "depth": 0,
+        "type": "folder",
+        "desc": "Full nonclinical reports (PK/PD, tox)"
+    },
+    {
+        "id": "m4.1",
+        "value": "4.1",
+        "text": "  4.1 — Table of contents",
+        "depth": 1,
+        "type": "file",
+        "desc": "Nonclinical TOC document"
+    },
+    {
+        "id": "m4.2",
+        "value": "4.2",
+        "text": "  4.2 — Study reports",
+        "depth": 1,
+        "type": "folder",
+        "desc": "All nonclinical reports grouped by type"
+    },
+    {
+        "id": "m4.2.3",
+        "value": "4.2.3",
+        "text": "    4.2.3 — Toxicology",
+        "depth": 2,
+        "type": "folder",
+        "desc": "Toxicology report set"
+    },
+    {
+        "id": "m4.2.3.1",
+        "value": "4.2.3.1",
+        "text": "      4.2.3.1 — Single-dose toxicity",
+        "depth": 3,
+        "type": "file",
+        "desc": "Acute tox study report(s)"
+    },
+    {
+        "id": "m5",
+        "value": "m5",
+        "text": "Module 5 — Clinical study reports",
+        "depth": 0,
+        "type": "folder",
+        "desc": "Clinical reports, listings, and CRFs"
+    },
+    {
+        "id": "m5.1",
+        "value": "5.1",
+        "text": "  5.1 — Table of contents",
+        "depth": 1,
+        "type": "file",
+        "desc": "Clinical TOC document"
+    },
+    {
+        "id": "m5.2",
+        "value": "5.2",
+        "text": "  5.2 — Tabular listing of studies",
+        "depth": 1,
+        "type": "file",
+        "desc": "Study index/listing"
+    },
+    {
+        "id": "m5.3",
+        "value": "5.3",
+        "text": "  5.3 — Clinical study reports",
+        "depth": 1,
+        "type": "folder",
+        "desc": "CSR groupings by study type"
+    },
+    {
+        "id": "m5.3.1",
+        "value": "5.3.1",
+        "text": "    5.3.1 — Biopharmaceutic studies",
+        "depth": 2,
+        "type": "folder",
+        "desc": "BA/BE and related reports"
+    },
+    {
+        "id": "m5.3.1.1",
+        "value": "5.3.1.1",
+        "text": "      5.3.1.1 — BA/BE study reports",
+        "depth": 3,
+        "type": "file",
+        "desc": "BA/BE CSR PDF(s)"
+    }
+]

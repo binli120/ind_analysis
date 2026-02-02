@@ -612,12 +612,36 @@ def _list_docx_objects(
 # ---------------------------------------------------------------------------
 _IND_TEMPLATE_SECTIONS: List[Dict[str, str]] | None = None
 _IND_TEMPLATE_ENTRIES: List[Dict[str, Any]] | None = None
+_SECTION_LIST: List[Dict[str, Any]] | None = None
+
+
+def _section_list_path() -> Path:
+    return Path(__file__).resolve().parents[2] / "ncd" / "sectionList.json"
+
+
+def _load_section_list() -> List[Dict[str, Any]]:
+    """Load the hierarchical section list from src/ncd/sectionList.json."""
+    global _SECTION_LIST
+    if _SECTION_LIST is not None:
+        return _SECTION_LIST
+
+    path = _section_list_path()
+    if not path.exists():
+        raise FileNotFoundError(path)
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        raise ValueError("sectionList.json must contain a JSON array")
+
+    _SECTION_LIST = payload
+    return _SECTION_LIST
 
 
 def _reset_ind_template_cache() -> None:
-    global _IND_TEMPLATE_SECTIONS, _IND_TEMPLATE_ENTRIES
+    global _IND_TEMPLATE_SECTIONS, _IND_TEMPLATE_ENTRIES, _SECTION_LIST
     _IND_TEMPLATE_SECTIONS = None
     _IND_TEMPLATE_ENTRIES = None
+    _SECTION_LIST = None
 
 
 def _load_ind_template_sections() -> List[Dict[str, str]]:
@@ -1572,6 +1596,21 @@ async def dev_list_sections(limit: int = 0) -> Dict[str, Any]:
     sections = _load_ind_template_sections()
     payload = sections if limit <= 0 else sections[:limit]
     return {"count": len(sections), "sections": payload}
+
+
+@ncd_router.get("/sectionList")
+async def ncd_section_list() -> Dict[str, Any]:
+    """
+    Return the hierarchical CTD/IND section list from sectionList.json.
+    """
+    try:
+        sections = _load_section_list()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="sectionList.json not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return {"count": len(sections), "sections": sections}
 
 
 @ncd_router.post("/template/override")
