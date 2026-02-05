@@ -119,8 +119,7 @@ jobs:
           set -euo pipefail
           aws apigatewayv2 update-api \
             --api-id "$API_ID" \
-            --disable-execute-api-endpoint false \
-            --policy ""
+            --no-disable-execute-api-endpoint
 
       - name: Attach VPC link integration to routes
         run: |
