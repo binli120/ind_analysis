@@ -89,6 +89,9 @@ jobs:
                       "type": "http_proxy",
                       "httpMethod": "ANY",
                       "payloadFormatVersion": "1.0",
+                      "requestParameters": {
+                          "overwrite:path": "$request.path"
+                      },
                       "uri": integration_uri,
                       "timeoutInMillis": timeout_value,
                   }
