@@ -9,7 +9,7 @@
     },
     {
         "id": "usfda",
-        "value": "us",
+        "value": "1",
         "text": "us",
         "depth": 1,
         "type": "folder",
@@ -157,44 +157,60 @@
         "desc": "Pharmacology narrative summary"
     },
     {
-        "id": "m2.4.1 -a",
-        "value": "2.4.1 -a",
-        "text": "    2.4.1 -a — Overview of the Nonclinical Testing Strategy",
+        "id": "m2.4.1.1",
+        "value": "2.4.1.1",
+        "text": "    2.4.1.1 — High-level Overview of the Nonclinical Testing Strategy",
         "depth": 3,
+        "type": "folder",
+        "desc": "Pharmacology narrative summary"
+    },
+    {
+        "id": "m2.4.11-a",
+        "value": "2.4.1.1-a",
+        "text": "    2.4.1.1-a — Overview of the Nonclinical Testing Strategy",
+        "depth": 4,
         "type": "file",
         "desc": "Pharmacokinetics narrative summary"
     },
     {
         "id": "m2.4.1 -b",
-        "value": "2.4.1 -b",
-        "text": "    2.4.1 -b — Overview of the Nonclinical Testing Strategy",
-        "depth": 3,
+        "value": "2.4.1.1-b",
+        "text": " 2.4.1.1-b — Overview of the Nonclinical Testing Strategy",
+        "depth": 4,
         "type": "file",
         "desc": "Pharmacokinetics narrative summary"
     },
     {
-        "id": "m2.4.1 -c",
-        "value": "2.4.1 -c",
-        "text": "    2.4.1 -c — Overview of the Nonclinical Testing Strategy",
-        "depth": 3,
+        "id": "m2.4.1.1-c",
+        "value": "2.4.1.1-c",
+        "text": "2.4.11-c — Overview of the Nonclinical Testing Strategy",
+        "depth": 4,
         "type": "file",
         "desc": "Pharmacokinetics narrative summary"
     },
     {
-        "id": "m2.4.1 -d",
-        "value": "2.4.1 -d",
-        "text": "    2.4.1 -d — Overview of the Nonclinical Testing Strategy",
-        "depth": 3,
+        "id": "m2.4.1.1-d",
+        "value": "2.4.11.-d",
+        "text": "2.4.1.1-d — Overview of the Nonclinical Testing Strategy",
+        "depth": 4,
         "type": "file",
         "desc": "Pharmacokinetics narrative summary"
     },
     {
-        "id": "m2.4.1 -e",
-        "value": "2.4.1 -e",
-        "text": "    2.4.1 -e — Overview of the Nonclinical Testing Strategy",
-        "depth": 3,
+        "id": "m2.4.11-e",
+        "value": "2.4.1.1-e",
+        "text": " 2.4.1.1-e — Overview of the Nonclinical Testing Strategy",
+        "depth": 4,
         "type": "file",
         "desc": "Pharmacokinetics narrative summary"
+    },
+    {
+        "id": "m2.4.2",
+        "value": "2.4.2",
+        "text": "2.4.2 — Pharmacodynamics toxicology",
+        "depth": 2,
+        "type": "file",
+        "desc": "PD tox narrative summary"
     },
     {
         "id": "m2.4.3",
@@ -203,6 +219,14 @@
         "depth": 2,
         "type": "file",
         "desc": "Introduce the investigational product"
+    },
+    {
+        "id": "m2.4.4",
+        "value": "2.4.4",
+        "text": "    2.4.4 — Pharmacokinetics and ADME",
+        "depth": 2,
+        "type": "file",
+        "desc": "PK/ADME narrative summary"
     },
     {
         "id": "m2.5",

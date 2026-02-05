@@ -114,6 +114,14 @@ jobs:
           fi
           echo "API_ID=${API_ID}" >> "$GITHUB_ENV"
 
+      - name: Ensure API is public for dev testing
+        run: |
+          set -euo pipefail
+          aws apigatewayv2 update-api \
+            --api-id "$API_ID" \
+            --disable-execute-api-endpoint false \
+            --policy ""
+
       - name: Attach VPC link integration to routes
         run: |
           set -euo pipefail

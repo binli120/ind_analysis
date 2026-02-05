@@ -11,7 +11,12 @@ from ncd.config.config import settings
 
 def _create_engine(database_url: str):
     try:
-        return create_engine(database_url, future=True)
+        return create_engine(
+            database_url,
+            future=True,
+            pool_pre_ping=True,
+            pool_recycle=300,  # refresh stale Supabase / PgBouncer connections
+        )
     except (ModuleNotFoundError, NoSuchModuleError) as exc:
         message = str(exc)
         if "psycopg" not in message:
@@ -21,7 +26,12 @@ def _create_engine(database_url: str):
         )
         if fallback_url == database_url:
             raise
-        return create_engine(fallback_url, future=True)
+        return create_engine(
+            fallback_url,
+            future=True,
+            pool_pre_ping=True,
+            pool_recycle=300,
+        )
 
 
 engine = _create_engine(settings.database_url)

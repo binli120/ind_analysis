@@ -25,6 +25,13 @@ lint:
 test:
 	$(POETRY) run pytest
 
+.PHONY: dev-watch
+dev-watch:
+	@if ! command -v entr >/dev/null 2>&1; then \
+		echo "entr is required (brew install entr or apt-get install entr)"; exit 1; \
+	fi
+	./scripts/dev_watch.sh
+
 .PHONY: package-lambdas
 package-lambdas: $(S3_TO_SQS_ZIP) $(SQS_WORKER_ZIP)
 	@echo "Built lambda packages in $(BUILD_DIR)"

@@ -10,10 +10,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import html
 import os
 import re
 import shutil
 import subprocess
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -155,6 +157,18 @@ ncd_router = APIRouter(prefix=NCD_ROUTER_PREFIX, tags=NCD_ROUTER_TAGS)
 dev_router = APIRouter(prefix=DEV_ROUTER_PREFIX, tags=DEV_ROUTER_TAGS)
 
 logger = logging.getLogger(__name__)
+
+
+@app.middleware("http")
+async def log_unhandled_exceptions(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except HTTPException:
+        # Let FastAPI handle expected HTTP errors
+        raise
+    except Exception:
+        logger.exception("Unhandled error for %s %s", request.method, request.url.path)
+        raise
 
 
 def _table_to_payload(
@@ -3930,6 +3944,278 @@ async def _get_assets_by_type(
         "module4_sections": module4_sections,
         "mapping": mapping_entries,
         "assets": payload,
+    }
+
+
+def _build_topic_title(text: str, max_words: int = 12) -> str:
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return "Topic"
+    words = cleaned.split()
+    if len(words) <= max_words:
+        return " ".join(words)
+    return " ".join(words[:max_words]) + " ..."
+
+
+def _attach_assets_to_topic(
+    *,
+    assets: Sequence[Dict[str, Any]],
+    document_version_id: str,
+    page_start: Optional[int],
+    page_end: Optional[int],
+) -> Dict[str, List[Dict[str, Any]]]:
+    images: List[Dict[str, Any]] = []
+    tables: List[Dict[str, Any]] = []
+    window_start = page_start
+    window_end = page_end
+    for asset in assets:
+        if str(asset.get("document_version_id")) != str(document_version_id):
+            continue
+        page_number = asset.get("page_number")
+        if window_start is not None and page_number is not None:
+            if window_end is None:
+                window_end = window_start
+            # keep assets on the same page or adjacent pages
+            if page_number < window_start - 1 or page_number > window_end + 1:
+                continue
+        target = tables if asset.get("asset_type") == "table" else images
+        target.append(asset)
+    return {"images": images, "tables": tables}
+
+
+def _render_table_html(
+    columns: Sequence[str],
+    rows: Sequence[Dict[str, Any]],
+    caption: Optional[str] = None,
+    max_rows: int = 20,
+) -> str:
+    cols = [str(c) for c in columns] if columns else []
+    body_rows = rows[:max_rows] if rows else []
+    if not cols and body_rows:
+        # derive order from first row
+        cols = list(body_rows[0].keys())
+    thead = "".join(f"<th>{html.escape(c)}</th>" for c in cols)
+    tbody_parts: List[str] = []
+    for row in body_rows:
+        cells = "".join(
+            f"<td>{html.escape(str(row.get(col, '')))}</td>" for col in cols
+        )
+        tbody_parts.append(f"<tr>{cells}</tr>")
+    caption_html = f"<caption>{html.escape(caption)}</caption>" if caption else ""
+    return f"<table>{caption_html}<thead><tr>{thead}</tr></thead><tbody>{''.join(tbody_parts)}</tbody></table>"
+
+
+@ncd_router.get("/assets/section")
+async def get_assets_section(
+    section: str,
+    tenant_id: str,
+    project_id: str,
+    bucket: str,
+    content_type: Optional[str] = None,
+    include_assets: bool = True,
+    limit_topics_per_doc: int = 0,
+    expires_in: int = 3600,
+    aws_region: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Unified context for a CTD 2.4/2.6 section:
+    - Groups text, images, and tables by document, then by topic (key section).
+    - Each topic carries a short title, description (text), and supporting assets.
+    """
+    target = section.strip()
+    if not target:
+        raise HTTPException(status_code=400, detail="section is required")
+    if not (target.startswith("2.4") or target.startswith("2.6")):
+        raise HTTPException(
+            status_code=400, detail="section must start with 2.4 or 2.6"
+        )
+    if content_type and content_type not in {"summary", "conclusion"}:
+        raise HTTPException(
+            status_code=400, detail="content_type must be summary or conclusion"
+        )
+    if not tenant_id or not project_id or not bucket:
+        raise HTTPException(
+            status_code=400, detail="tenant_id, project_id, and bucket are required"
+        )
+    if expires_in <= 0:
+        raise HTTPException(status_code=400, detail="expires_in must be positive")
+
+    db = SessionLocal()
+    try:
+        project_name = fetch_project_name(db, project_id)
+        project_like = f"%/{project_name}/%" if project_name else "%"
+
+        module4_sections, mapping_entries, targets = module4_sections_for_ctd_targets(
+            target
+        )
+        if target.startswith("2.6."):
+            exact_sections = set()
+            filtered_mappings: List[Dict[str, Any]] = []
+            for entry in mapping_entries:
+                matched_targets = [
+                    t for t in entry.get("targets", []) if t.get("section") == target
+                ]
+                if matched_targets:
+                    filtered = dict(entry)
+                    filtered["matched_targets"] = matched_targets
+                    filtered_mappings.append(filtered)
+                    exact_sections.add(entry.get("module4_section"))
+            if filtered_mappings:
+                module4_sections = sorted(s for s in exact_sections if s)
+                mapping_entries = filtered_mappings
+
+        key_sections = fetch_key_sections_for_sections(
+            db,
+            tenant_id=tenant_id,
+            bucket=bucket,
+            project_like=project_like,
+            module4_sections=module4_sections,
+            section_type=content_type,
+        )
+        assets: List[Dict[str, Any]] = []
+        if include_assets:
+            assets = fetch_assets_for_sections(
+                db,
+                tenant_id=tenant_id,
+                bucket=bucket,
+                project_like=project_like,
+                module4_sections=module4_sections,
+                asset_type=None,
+            )
+            # Best-effort presign for UI download
+            if boto3:
+                try:
+                    s3_client = _boto3_client("s3", region_name=aws_region)
+                    # enrich table assets with previews/columns if available
+                    for asset in assets:
+                        if asset.get("asset_type") != "table":
+                            continue
+                        extra = _normalize_extra_attributes(asset.get("extra_attributes"))
+                        json_key = extra.get("json_key")
+                        if json_key:
+                            preview_rows = _read_table_json_preview(
+                                s3_client,
+                                bucket=asset.get("s3_bucket") or bucket,
+                                key=json_key,
+                                max_rows=20,
+                            )
+                            if preview_rows:
+                                asset["preview_rows"] = preview_rows
+                        asset["columns"] = extra.get("columns") or asset.get("columns") or []
+                        asset["json_key"] = json_key
+                        asset["row_count"] = extra.get("row_count")
+                    for asset in assets:
+                        key = asset.get("s3_key")
+                        bkt = asset.get("s3_bucket") or bucket
+                        if not key or not bkt:
+                            continue
+                        try:
+                            asset["download_url"] = s3_client.generate_presigned_url(
+                                "get_object",
+                                Params={"Bucket": bkt, "Key": key},
+                                ExpiresIn=expires_in,
+                            )
+                        except Exception:
+                            asset["download_url"] = None
+                except Exception:
+                    # leave download_url absent on presign failure
+                    pass
+    finally:
+        db.close()
+
+    # group by document_version_id
+    documents: Dict[str, Dict[str, Any]] = {}
+    for ks in key_sections:
+        doc_vid = str(ks.get("document_version_id"))
+        if not doc_vid:
+            continue
+        doc = documents.setdefault(
+            doc_vid,
+            {
+                "document_version_id": doc_vid,
+                "document_s3_key": ks.get("document_s3_key"),
+                "document_name": Path(ks.get("document_s3_key") or "").name
+                if ks.get("document_s3_key")
+                else None,
+                "s3_bucket": ks.get("s3_bucket"),
+                "topics": [],
+            },
+        )
+        if limit_topics_per_doc and len(doc["topics"]) >= limit_topics_per_doc:
+            continue
+        topic_id = str(ks.get("id"))
+        topic_assets = (
+            _attach_assets_to_topic(
+                assets=assets,
+                document_version_id=doc_vid,
+                page_start=ks.get("page_start"),
+                page_end=ks.get("page_end"),
+            )
+            if include_assets
+            else {"images": [], "tables": []}
+        )
+        # render HTML for tables so UI can drop into editors easily
+        for tbl in topic_assets["tables"]:
+            if "html" not in tbl:
+                tbl["html"] = _render_table_html(
+                    tbl.get("columns") or [],
+                    tbl.get("preview_rows") or [],
+                    caption=tbl.get("caption"),
+                )
+        doc["topics"].append(
+            {
+                "topic_id": topic_id,
+                "title": _build_topic_title(ks.get("text") or ""),
+                "description": _truncate_text(ks.get("text"), 800),
+                "section_type": ks.get("section_type"),
+                "page_start": ks.get("page_start"),
+                "page_end": ks.get("page_end"),
+                "char_start": ks.get("char_start"),
+                "char_end": ks.get("char_end"),
+                "assets": {
+                    "images": topic_assets["images"],
+                    "tables": topic_assets["tables"],
+                },
+            }
+        )
+
+    # If no key sections but assets exist, still surface them per document.
+    if include_assets and assets and not documents:
+        by_doc = defaultdict(list)
+        for asset in assets:
+            vid = str(asset.get("document_version_id"))
+            by_doc[vid].append(asset)
+        for vid, items in by_doc.items():
+            documents[vid] = {
+                "document_version_id": vid,
+                "document_s3_key": items[0].get("document_s3_key"),
+                "s3_bucket": items[0].get("s3_bucket"),
+                "topics": [
+                    {
+                        "topic_id": f"{vid}-assets",
+                        "title": "Assets",
+                        "description": "",
+                        "section_type": None,
+                        "page_start": None,
+                        "page_end": None,
+                        "char_start": None,
+                        "char_end": None,
+                        "assets": {
+                            "images": [
+                                a for a in items if a.get("asset_type") != "table"
+                            ],
+                            "tables": [a for a in items if a.get("asset_type") == "table"],
+                        },
+                    }
+                ],
+            }
+
+    return {
+        "ctd_section": target,
+        "ctd_targets": targets,
+        "module4_sections": module4_sections,
+        "mapping": mapping_entries,
+        "documents": list(documents.values()),
     }
 
 
