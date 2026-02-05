@@ -21,6 +21,7 @@ jobs:
       APIGW_API_ID: ${{ secrets.APIGW_API_ID }}
       APIGW_STAGE: ${{ secrets.APIGW_STAGE }}
       APIGW_CORS_ORIGINS: ${{ secrets.APIGW_CORS_ORIGINS }}
+      APIGW_CONNECTION_TYPE: ${{ secrets.APIGW_CONNECTION_TYPE }}
       APIGW_VPC_LINK_ID: ${{ secrets.APIGW_VPC_LINK_ID }}
       APIGW_INTEGRATION_URI: ${{ secrets.APIGW_INTEGRATION_URI }}
       APIGW_INTEGRATION_TIMEOUT_MS: ${{ secrets.APIGW_INTEGRATION_TIMEOUT_MS }}
@@ -64,13 +65,16 @@ jobs:
               raise SystemExit("openapi.json not found. Generate it before deploying.")
 
           spec = json.loads(spec_path.read_text())
+          connection_type = os.environ.get("APIGW_CONNECTION_TYPE", "INTERNET").upper()
           vpc_link_id = os.environ.get("APIGW_VPC_LINK_ID", "")
-          if not vpc_link_id:
-              raise SystemExit("APIGW_VPC_LINK_ID is required.")
+          if connection_type == "VPC_LINK" and not vpc_link_id:
+              raise SystemExit("APIGW_VPC_LINK_ID is required when using VPC_LINK.")
 
           integration_uri = os.environ.get("APIGW_INTEGRATION_URI", "")
           if not integration_uri:
               raise SystemExit("APIGW_INTEGRATION_URI is required.")
+          if connection_type != "VPC_LINK" and integration_uri.startswith("arn:"):
+              raise SystemExit("APIGW_INTEGRATION_URI must be a URL when using INTERNET.")
 
           timeout_ms = os.environ.get("APIGW_INTEGRATION_TIMEOUT_MS")
           timeout_value = int(timeout_ms) if timeout_ms else 29000
@@ -81,15 +85,19 @@ jobs:
               for method, operation in list(methods.items()):
                   if method.startswith("x-"):
                       continue
-                  operation["x-amazon-apigateway-integration"] = {
+                  integration = {
                       "type": "http_proxy",
                       "httpMethod": "ANY",
                       "payloadFormatVersion": "1.0",
-                      "connectionType": "VPC_LINK",
-                      "connectionId": vpc_link_id,
                       "uri": integration_uri,
                       "timeoutInMillis": timeout_value,
                   }
+                  if connection_type == "VPC_LINK":
+                      integration["connectionType"] = "VPC_LINK"
+                      integration["connectionId"] = vpc_link_id
+                  else:
+                      integration["connectionType"] = "INTERNET"
+                  operation["x-amazon-apigateway-integration"] = integration
 
           output_path = Path("build/apigw-openapi.json")
           output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -124,6 +132,11 @@ jobs:
       - name: Attach VPC link integration to routes
         run: |
           set -euo pipefail
+          CONNECTION_TYPE="${APIGW_CONNECTION_TYPE:-INTERNET}"
+          if [ "${CONNECTION_TYPE}" != "VPC_LINK" ]; then
+            echo "Skipping VPC link integration (connection type: ${CONNECTION_TYPE})."
+            exit 0
+          fi
           TIMEOUT_MS="${APIGW_INTEGRATION_TIMEOUT_MS:-29000}"
           INTEGRATION_ID=$(aws apigatewayv2 create-integration \
             --api-id "$API_ID" \
