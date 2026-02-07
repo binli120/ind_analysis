@@ -245,6 +245,7 @@ class NCDLabelRequest(BaseModel):
     aws_region: Optional[str] = None
     page_limit: int = 5
     use_llm: bool = False
+    section_scope: str = "auto"
 
 
 class NCDRelabelRequest(BaseModel):
@@ -622,11 +623,12 @@ def _list_docx_objects(
 
 
 # ---------------------------------------------------------------------------
-# Section labeling helpers (Module 2.4 / 2.6 template-driven)
+# Section labeling helpers (IND 2.4/2.6 + CTD section list)
 # ---------------------------------------------------------------------------
 _IND_TEMPLATE_SECTIONS: List[Dict[str, str]] | None = None
 _IND_TEMPLATE_ENTRIES: List[Dict[str, Any]] | None = None
 _SECTION_LIST: List[Dict[str, Any]] | None = None
+_CTD_SECTION_SECTIONS: List[Dict[str, str]] | None = None
 
 
 def _section_list_path() -> Path:
@@ -652,10 +654,11 @@ def _load_section_list() -> List[Dict[str, Any]]:
 
 
 def _reset_ind_template_cache() -> None:
-    global _IND_TEMPLATE_SECTIONS, _IND_TEMPLATE_ENTRIES, _SECTION_LIST
+    global _IND_TEMPLATE_SECTIONS, _IND_TEMPLATE_ENTRIES, _SECTION_LIST, _CTD_SECTION_SECTIONS
     _IND_TEMPLATE_SECTIONS = None
     _IND_TEMPLATE_ENTRIES = None
     _SECTION_LIST = None
+    _CTD_SECTION_SECTIONS = None
 
 
 def _load_ind_template_sections() -> List[Dict[str, str]]:
@@ -689,6 +692,44 @@ def _load_ind_template_sections() -> List[Dict[str, str]]:
 
     _IND_TEMPLATE_SECTIONS = sections
     return _IND_TEMPLATE_SECTIONS
+
+
+def _load_ctd_section_sections() -> List[Dict[str, str]]:
+    """Load CTD section numbers/titles from sectionList.json."""
+    global _CTD_SECTION_SECTIONS
+    if _CTD_SECTION_SECTIONS is not None:
+        return _CTD_SECTION_SECTIONS
+
+    try:
+        entries = _load_section_list()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Unable to load CTD section list: %s", exc)
+        _CTD_SECTION_SECTIONS = []
+        return _CTD_SECTION_SECTIONS
+
+    sections: Dict[str, Dict[str, str]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        value = str(entry.get("value") or "").strip()
+        if not value or not re.search(r"\d", value):
+            continue
+        if value.lower().startswith("m"):
+            continue
+        text = str(entry.get("text") or value).strip()
+        text = re.sub(r"^\s+", "", text)
+        title = text
+        if title.startswith(value):
+            title = title[len(value) :].lstrip(" —-")
+        if not title:
+            title = value
+        blob_parts = [title, entry.get("desc") or ""]
+        blob = " ".join(part for part in blob_parts if part).strip()
+        if value not in sections:
+            sections[value] = {"section": value, "title": title, "blob": blob}
+
+    _CTD_SECTION_SECTIONS = list(sections.values())
+    return _CTD_SECTION_SECTIONS
 
 
 def _load_ind_template_entries() -> List[Dict[str, Any]]:
@@ -840,6 +881,9 @@ def _match_section_regex(
         sec = entry["section"]
         if not sec:
             continue
+        # Avoid trivial matches like "1" or "2" that appear in any document.
+        if re.fullmatch(r"\d+", sec):
+            continue
         pattern = rf"\b{re.escape(sec)}\b"
         if re.search(pattern, text):
             return sec, entry["title"], 0.98
@@ -928,7 +972,7 @@ def _llm_select_section(
     client = _metadata_generator._client  # type: ignore[attr-defined]
     options = "\n".join(f"- {s['section']}: {s['title']}" for s in sections[:120])
     system_prompt = (
-        "You are a regulatory assistant classifying Module 2.4/2.6 documents. "
+        "You are a regulatory assistant classifying CTD/IND documents. "
         "Choose the single best matching section number from the provided options. "
         "Respond ONLY with minified JSON: "
         '{"section_number":"<number>","section_title":"<title>","confidence":0.0} '
@@ -976,10 +1020,14 @@ def _llm_select_section(
 
 
 def _classify_section_from_text(
-    text: str, *, filename: Optional[str] = None, use_llm: bool = False
+    text: str,
+    *,
+    filename: Optional[str] = None,
+    use_llm: bool = False,
+    sections: Optional[List[Dict[str, str]]] = None,
 ) -> Tuple[str, str, float, str] | None:
     """Determine the best section using filename hints + minimal text."""
-    sections = _load_ind_template_sections()
+    sections = sections or _load_ind_template_sections()
     if not sections:
         return None
 
@@ -1005,6 +1053,36 @@ def _classify_section_from_text(
     if best:
         return best[0], best[1], best[2], method
     return None
+
+
+def _section_module(section_number: Optional[str]) -> Optional[str]:
+    if not section_number:
+        return None
+    match = re.match(r"^(\d+)", section_number)
+    return match.group(1) if match else None
+
+
+def _select_label_classification(
+    *,
+    ind_class: Optional[Tuple[str, str, float, str]],
+    ctd_class: Optional[Tuple[str, str, float, str]],
+    ind_sections: List[Dict[str, str]],
+    ctd_sections: List[Dict[str, str]],
+) -> Tuple[Optional[Tuple[str, str, float, str]], List[Dict[str, str]]]:
+    if ctd_class is None:
+        return ind_class, ind_sections
+    if ind_class is None:
+        return ctd_class, ctd_sections
+
+    ctd_module = _section_module(ctd_class[0])
+    if ctd_module and ctd_module != "2":
+        return ctd_class, ctd_sections
+    if ctd_module == "2":
+        return ind_class, ind_sections
+
+    if ctd_class[2] > ind_class[2]:
+        return ctd_class, ctd_sections
+    return ind_class, ind_sections
 
 
 def _parse_s3_context(key: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
@@ -1270,11 +1348,49 @@ async def label_s3_pdf(payload: NCDLabelRequest) -> Dict[str, Any]:
 
         try:
             sample_text, pages_sampled = _extract_sample_text(tmp_path, page_limit)
-            classification = _classify_section_from_text(
-                sample_text,
-                filename=Path(payload.key).name,
-                use_llm=payload.use_llm,
-            )
+            scope = (payload.section_scope or "auto").strip().lower()
+            if scope not in {"auto", "ind", "ctd"}:
+                raise HTTPException(
+                    status_code=400,
+                    detail="section_scope must be one of: auto, ind, ctd.",
+                )
+
+            ind_sections = _load_ind_template_sections()
+            ctd_sections = _load_ctd_section_sections()
+
+            if scope == "ind":
+                classification = _classify_section_from_text(
+                    sample_text,
+                    filename=Path(payload.key).name,
+                    use_llm=payload.use_llm,
+                    sections=ind_sections,
+                )
+            elif scope == "ctd":
+                classification = _classify_section_from_text(
+                    sample_text,
+                    filename=Path(payload.key).name,
+                    use_llm=payload.use_llm,
+                    sections=ctd_sections,
+                )
+            else:
+                ind_class = _classify_section_from_text(
+                    sample_text,
+                    filename=Path(payload.key).name,
+                    use_llm=payload.use_llm,
+                    sections=ind_sections,
+                )
+                ctd_class = _classify_section_from_text(
+                    sample_text,
+                    filename=Path(payload.key).name,
+                    use_llm=payload.use_llm,
+                    sections=ctd_sections,
+                )
+                classification, _ = _select_label_classification(
+                    ind_class=ind_class,
+                    ctd_class=ctd_class,
+                    ind_sections=ind_sections,
+                    ctd_sections=ctd_sections,
+                )
         finally:
             try:
                 tmp_path.unlink()
@@ -1366,11 +1482,15 @@ async def label_uploaded_document(
     file: UploadFile = File(..., description="PDF, RTF, or Word (DOCX) file to label"),
     page_limit: int = Form(5, ge=1, description="Max pages to sample for labeling"),
     use_llm: bool = Form(False, description="Enable optional LLM refinement"),
+    section_scope: str = Form(
+        "auto",
+        description="Label scope: ind (2.4/2.6), ctd (sectionList), or auto.",
+    ),
 ) -> Dict[str, Any]:
     """
     Label an uploaded document without using S3.
 
-    Accepts PDF, DOCX (Word), or RTF uploads and returns the predicted IND section
+    Accepts PDF, DOCX (Word), or RTF uploads and returns the predicted section
     number/title with confidence and top candidates. No S3 side-effects.
     """
     filename = file.filename or "uploaded.pdf"
@@ -1395,11 +1515,54 @@ async def label_uploaded_document(
         sample_text, pages_sampled = _extract_sample_text_generic(
             tmp_path, page_limit=page_limit, original_suffix=suffix
         )
-        classification = _classify_section_from_text(
-            sample_text, filename=filename, use_llm=use_llm
-        )
+        scope = (section_scope or "auto").strip().lower()
+        if scope not in {"auto", "ind", "ctd"}:
+            raise HTTPException(
+                status_code=400,
+                detail="section_scope must be one of: auto, ind, ctd.",
+            )
+
+        ind_sections = _load_ind_template_sections()
+        ctd_sections = _load_ctd_section_sections()
+
+        if scope == "ind":
+            classification = _classify_section_from_text(
+                sample_text,
+                filename=filename,
+                use_llm=use_llm,
+                sections=ind_sections,
+            )
+            candidate_sections = ind_sections
+        elif scope == "ctd":
+            classification = _classify_section_from_text(
+                sample_text,
+                filename=filename,
+                use_llm=use_llm,
+                sections=ctd_sections,
+            )
+            candidate_sections = ctd_sections
+        else:
+            ind_class = _classify_section_from_text(
+                sample_text,
+                filename=filename,
+                use_llm=use_llm,
+                sections=ind_sections,
+            )
+            ctd_class = _classify_section_from_text(
+                sample_text,
+                filename=filename,
+                use_llm=use_llm,
+                sections=ctd_sections,
+            )
+            classification, candidate_sections = _select_label_classification(
+                ind_class=ind_class,
+                ctd_class=ctd_class,
+                ind_sections=ind_sections,
+                ctd_sections=ctd_sections,
+            )
+
         candidates = _top_section_candidates(
-            sample_text, _load_ind_template_sections(), limit=5
+            sample_text, candidate_sections, limit=5
         )
     finally:
         try:
@@ -1535,6 +1698,10 @@ async def dev_label_local(
     file: UploadFile = File(...),
     page_limit: int = Form(5, ge=1, description="Max pages to sample for labeling"),
     use_llm: bool = Form(False, description="Enable optional LLM refinement"),
+    section_scope: str = Form(
+        "auto",
+        description="Label scope: ind (2.4/2.6), ctd (sectionList), or auto.",
+    ),
 ) -> Dict[str, Any]:
     """
     Dev-only: label a local document (PDF/DOCX/RTF) upload without S3 side-effects.
@@ -1561,13 +1728,54 @@ async def dev_label_local(
         sample_text, pages_sampled = _extract_sample_text_generic(
             tmp_path, page_limit=page_limit, original_suffix=suffix
         )
-        classification = _classify_section_from_text(
-            sample_text,
-            filename=filename,
-            use_llm=use_llm,
-        )
+        scope = (section_scope or "auto").strip().lower()
+        if scope not in {"auto", "ind", "ctd"}:
+            raise HTTPException(
+                status_code=400,
+                detail="section_scope must be one of: auto, ind, ctd.",
+            )
+
+        ind_sections = _load_ind_template_sections()
+        ctd_sections = _load_ctd_section_sections()
+
+        if scope == "ind":
+            classification = _classify_section_from_text(
+                sample_text,
+                filename=filename,
+                use_llm=use_llm,
+                sections=ind_sections,
+            )
+            candidate_sections = ind_sections
+        elif scope == "ctd":
+            classification = _classify_section_from_text(
+                sample_text,
+                filename=filename,
+                use_llm=use_llm,
+                sections=ctd_sections,
+            )
+            candidate_sections = ctd_sections
+        else:
+            ind_class = _classify_section_from_text(
+                sample_text,
+                filename=filename,
+                use_llm=use_llm,
+                sections=ind_sections,
+            )
+            ctd_class = _classify_section_from_text(
+                sample_text,
+                filename=filename,
+                use_llm=use_llm,
+                sections=ctd_sections,
+            )
+            classification, candidate_sections = _select_label_classification(
+                ind_class=ind_class,
+                ctd_class=ctd_class,
+                ind_sections=ind_sections,
+                ctd_sections=ctd_sections,
+            )
+
         candidates = _top_section_candidates(
-            sample_text, _load_ind_template_sections(), limit=5
+            sample_text, candidate_sections, limit=5
         )
     finally:
         try:
@@ -4120,6 +4328,13 @@ async def get_assets_section(
                 except Exception:
                     # leave download_url absent on presign failure
                     pass
+            # For /assets/section, expose download URLs for images instead of s3_key.
+            for asset in assets:
+                if asset.get("asset_type") == "table":
+                    continue
+                if "download_url" not in asset:
+                    asset["download_url"] = None
+                asset.pop("s3_key", None)
     finally:
         db.close()
 
