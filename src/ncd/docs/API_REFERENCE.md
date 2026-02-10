@@ -29,7 +29,7 @@ This summarizes the main FastAPI routes exposed by `pdf_analysis.api.server` tha
 - `GET  /dev/sections` — List known template sections loaded from `src/ncd/ind_24_26_template.json`.
 
 ## Notes
-- Template-driven labels come from `src/summary/ind_24_26_template.json` (fallback `src/ncd/ind_24_26_template.json`).
+- Template-driven labels come from `src/ncd/ind_24_26_template.json`.
 - Text sampling is minimal (default first 5 pages) with pdfminer → OCR → PyMuPDF → pdfplumber fallbacks; filename hints are used when present (e.g., `4.2.1.1.pdf`).
 - Optional LLM refinement requires `OPENAI_API_KEY` and infra extras installed.
 - S3 routes require `boto3` (`poetry install --with infra`). Default bucket can be set via `S3_BUCKET`.

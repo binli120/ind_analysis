@@ -69,7 +69,11 @@ class LLMClient:
                 temperature=temperature,
                 response_format=response_format,
             )
-        except Exception:
+        except Exception as exc:
+            # Only retry without response_format when the API/model rejects that parameter.
+            # Do not swallow transient failures (e.g. 429), so outer retry logic can back off.
+            if not self._should_retry_without_response_format(exc, response_format):
+                raise
             response = client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
@@ -94,6 +98,23 @@ class LLMClient:
             raise RuntimeError("OPENAI_API_KEY is required for LLMClient")
         self._client = OpenAI(api_key=api_key)
         return self._client
+
+    @staticmethod
+    def _should_retry_without_response_format(
+        exc: Exception, response_format: dict | None
+    ) -> bool:
+        if response_format is None:
+            return False
+        message = str(exc).lower()
+        signal_phrases = (
+            "response_format",
+            "json_object",
+            "unsupported",
+            "not supported",
+            "unknown parameter",
+            "invalid parameter",
+        )
+        return any(phrase in message for phrase in signal_phrases)
 
 
 def _parse_json_payload(content: str) -> Dict[str, Any]:

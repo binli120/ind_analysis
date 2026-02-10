@@ -21,13 +21,16 @@ import argparse
 import csv
 import json
 import os
+import random
 import re
 import sys
 import tempfile
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional
 from uuid import uuid4
 
 import boto3
@@ -54,6 +57,9 @@ from pdf_analysis.sqs_worker import process_message
 
 _MODULE_PATTERN = re.compile(r"^module\s*(?P<number>\d+)(?:[\s._-].*)?$", re.IGNORECASE)
 _SECTION_TOKEN_PATTERN = re.compile(r"\d+(?:\.\d+)+(?:\|\d+(?:\.\d+)+)*")
+_TRY_AGAIN_IN_SECONDS_PATTERN = re.compile(
+    r"try again in\s+([0-9]+(?:\.[0-9]+)?)s", re.IGNORECASE
+)
 
 
 def _sanitize_section_suffix(name: str) -> str:
@@ -184,6 +190,172 @@ class DummyLLM(LLMClient):
 
     def generate_text(self, system_prompt: str, user_prompt: str) -> str:  # type: ignore[override]
         return "repeat_dose_tox"
+
+
+_OPENAI_RATE_LIMIT_LOCK = threading.Lock()
+_OPENAI_NEXT_ALLOWED_AT = 0.0
+_OPENAI_CALL_SEMAPHORE = threading.Semaphore(1)
+_OPENAI_SEMAPHORE_SIZE = 1
+_OPENAI_SEMAPHORE_LOCK = threading.Lock()
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    if "too many requests" in message or "rate limit" in message or "429" in message:
+        return True
+    try:
+        from openai import RateLimitError
+
+        return isinstance(exc, RateLimitError)
+    except Exception:
+        return False
+
+
+def _extract_retry_after_seconds(exc: Exception) -> Optional[float]:
+    response = getattr(exc, "response", None)
+    if response is not None:
+        headers = getattr(response, "headers", None)
+        if headers:
+            retry_after = headers.get("retry-after") or headers.get("Retry-After")
+            if retry_after:
+                try:
+                    return max(0.0, float(retry_after))
+                except (TypeError, ValueError):
+                    pass
+
+    message = str(exc)
+    match = _TRY_AGAIN_IN_SECONDS_PATTERN.search(message)
+    if not match:
+        return None
+    try:
+        return max(0.0, float(match.group(1)))
+    except (TypeError, ValueError):
+        return None
+
+
+def _configure_openai_limiters(max_concurrent: int) -> None:
+    global _OPENAI_CALL_SEMAPHORE, _OPENAI_SEMAPHORE_SIZE
+    desired = max(1, int(max_concurrent))
+    with _OPENAI_SEMAPHORE_LOCK:
+        if desired == _OPENAI_SEMAPHORE_SIZE:
+            return
+        _OPENAI_CALL_SEMAPHORE = threading.Semaphore(desired)
+        _OPENAI_SEMAPHORE_SIZE = desired
+
+
+class ThrottledLLM(LLMClient):
+    """Thin wrapper that serializes OpenAI calls + retries on 429s."""
+
+    def __init__(
+        self,
+        base: LLMClient,
+        *,
+        min_interval_seconds: float = 0.0,
+        max_retries: int = 3,
+        initial_backoff_seconds: float = 2.0,
+        max_backoff_seconds: float = 12.0,
+        jitter_seconds: float = 0.5,
+        max_retry_after_seconds: float = 12.0,
+        max_total_retry_seconds: float = 45.0,
+    ):
+        self._base = base
+        self.model_name = base.model_name
+        self.min_interval_seconds = max(0.0, min_interval_seconds)
+        self.max_retries = max(0, max_retries)
+        self.initial_backoff_seconds = max(0.0, initial_backoff_seconds)
+        self.max_backoff_seconds = max(0.0, max_backoff_seconds)
+        self.jitter_seconds = max(0.0, jitter_seconds)
+        self.max_retry_after_seconds = max(0.0, max_retry_after_seconds)
+        self.max_total_retry_seconds = max(0.0, max_total_retry_seconds)
+
+    def _wait_for_turn(self) -> None:
+        if self.min_interval_seconds <= 0:
+            return
+        global _OPENAI_NEXT_ALLOWED_AT
+        while True:
+            with _OPENAI_RATE_LIMIT_LOCK:
+                now = time.monotonic()
+                if now >= _OPENAI_NEXT_ALLOWED_AT:
+                    _OPENAI_NEXT_ALLOWED_AT = now + self.min_interval_seconds
+                    return
+                sleep_for = _OPENAI_NEXT_ALLOWED_AT - now
+            if sleep_for > 0:
+                time.sleep(sleep_for)
+
+    def _call_with_retry(self, call: Callable[[], Any]) -> Any:
+        attempt = 0
+        total_backoff = 0.0
+        while True:
+            with _OPENAI_CALL_SEMAPHORE:
+                self._wait_for_turn()
+                try:
+                    return call()
+                except Exception as exc:
+                    if not _is_rate_limit_error(exc) or attempt >= self.max_retries:
+                        raise
+                    retry_after = _extract_retry_after_seconds(exc)
+                    backoff = min(
+                        self.max_backoff_seconds,
+                        self.initial_backoff_seconds * (2 ** attempt),
+                    )
+                    if retry_after is not None:
+                        retry_after_delay = retry_after + 0.25
+                        if self.max_retry_after_seconds > 0:
+                            retry_after_delay = min(
+                                retry_after_delay,
+                                self.max_retry_after_seconds,
+                            )
+                        backoff = max(backoff, retry_after_delay)
+                    if self.jitter_seconds > 0:
+                        backoff += random.uniform(0, self.jitter_seconds)
+                    if (
+                        self.max_total_retry_seconds > 0
+                        and total_backoff + backoff > self.max_total_retry_seconds
+                    ):
+                        print(
+                            f"[WARN] OpenAI retry budget exceeded for '{self.model_name}' "
+                            f"({total_backoff + backoff:.2f}s > "
+                            f"{self.max_total_retry_seconds:.2f}s); aborting retries",
+                            file=sys.stderr,
+                        )
+                        raise
+                    print(
+                        f"[WARN] OpenAI rate limit for '{self.model_name}' "
+                        f"(attempt {attempt + 1}/{self.max_retries + 1}); "
+                        f"retrying in {backoff:.2f}s",
+                        file=sys.stderr,
+                    )
+            time.sleep(backoff)
+            total_backoff += backoff
+            attempt += 1
+
+    def extract_json(self, system_prompt: str, user_prompt: str, response_model=None):  # type: ignore[override]
+        return self._call_with_retry(
+            lambda: self._base.extract_json(system_prompt, user_prompt, response_model)
+        )
+
+    def generate_text(self, system_prompt: str, user_prompt: str) -> str:  # type: ignore[override]
+        return str(
+            self._call_with_retry(
+                lambda: self._base.generate_text(system_prompt, user_prompt)
+            )
+        )
+
+
+def _build_llm_client(mode: str, args: argparse.Namespace) -> LLMClient:
+    base = _resolve_llm(mode)
+    if isinstance(base, DummyLLM):
+        return base
+    return ThrottledLLM(
+        base=base,
+        min_interval_seconds=args.llm_min_interval_seconds,
+        max_retries=args.llm_max_retries,
+        initial_backoff_seconds=args.llm_initial_backoff_seconds,
+        max_backoff_seconds=args.llm_max_backoff_seconds,
+        jitter_seconds=args.llm_jitter_seconds,
+        max_retry_after_seconds=args.llm_max_retry_after_seconds,
+        max_total_retry_seconds=args.llm_max_total_retry_seconds,
+    )
 
 
 def _module_number(segment: str) -> Optional[int]:
@@ -360,6 +532,220 @@ def _parse_company_project(key: str) -> tuple[Optional[str], Optional[str]]:
     return None, None
 
 
+def _key_after_prefix(key: str, prefix: str) -> str:
+    normalized = prefix.strip("/")
+    if not normalized:
+        return key
+    with_slash = f"{normalized}/"
+    if key.startswith(with_slash):
+        return key[len(with_slash) :]
+    if key.startswith(normalized):
+        return key[len(normalized) :].lstrip("/")
+    return key
+
+
+def _project_root_prefix(args: argparse.Namespace, normalized_prefix: str) -> str:
+    company = (args.company or "").strip("/")
+    project = (args.project or "").strip("/")
+    if company and project:
+        return f"{company}/{project}/"
+
+    parts = [part for part in normalized_prefix.strip("/").split("/") if part]
+    if len(parts) >= 2:
+        return f"{parts[0]}/{parts[1]}/"
+    return normalized_prefix
+
+
+def _display_key_for_logs(key: str, args: argparse.Namespace) -> str:
+    project_prefix = str(getattr(args, "project_root_prefix", "") or "")
+    if project_prefix:
+        relative = _key_after_prefix(key, project_prefix)
+        if relative and relative != key:
+            return relative
+
+    run_prefix = str(getattr(args, "run_prefix", "") or "")
+    if run_prefix:
+        relative = _key_after_prefix(key, run_prefix)
+        if relative and relative != key:
+            return relative
+
+    return key
+
+
+def _status_is_completed(status: str) -> bool:
+    return status.strip().lower() == "completed"
+
+
+def _build_already_ingested_entry(
+    obj: Dict[str, Any],
+    *,
+    args: argparse.Namespace,
+    display_key: str,
+    md_exists: bool,
+    status_completed: bool,
+    tox_data_exists: bool,
+    core_status: str,
+    langchain_status: str,
+    context_status: str,
+    summary_status: str,
+    tox_status: str,
+) -> Dict[str, Any]:
+    return {
+        "key": obj.get("key"),
+        "display_key": display_key,
+        "version_id": obj.get("version_id"),
+        "last_modified": obj.get("last_modified"),
+        "md_exists": md_exists,
+        "status_completed": status_completed,
+        "tox_data_exists": tox_data_exists,
+        "core_required": False,
+        "core_status": core_status or "completed",
+        "core_error": "",
+        "core_duration_seconds": 0.0,
+        "langchain_required": False,
+        "langchain_status": langchain_status or "completed",
+        "langchain_error": "",
+        "langchain_duration_seconds": 0.0,
+        "context_required": False,
+        "context_status": context_status or "completed",
+        "context_error": "",
+        "context_duration_seconds": 0.0,
+        "summary_required": False,
+        "summary_status": summary_status or "completed",
+        "summary_error": "",
+        "summary_duration_seconds": 0.0,
+        "summary_count": 0,
+        "document_version_id": "",
+        "tox_required": False,
+        "tox_status": tox_status or "completed",
+        "tox_error": "",
+        "tox_duration_seconds": 0.0,
+        "tox_source_document_id": "",
+        "tox_study_id": "",
+        "meta_key": "",
+    }
+
+
+def _is_fully_ingested(
+    obj: Dict[str, Any],
+    *,
+    args: argparse.Namespace,
+    s3_client: Any,
+    repo: NCDRepository,
+) -> tuple[bool, Dict[str, Any]]:
+    key = str(obj.get("key") or "")
+    version_id = obj.get("version_id")
+    file_name = Path(key).name
+    display_key = _display_key_for_logs(key, args)
+
+    md_key = f"{key}{args.md_suffix}"
+    quality_key = f"{key}.quality.json"
+    meta_key = f"{key}.meta.json"
+
+    md_exists = _s3_object_exists(s3_client, args.bucket, md_key)
+    quality_exists = _s3_object_exists(s3_client, args.bucket, quality_key)
+    meta_exists = True if args.no_meta else _s3_object_exists(s3_client, args.bucket, meta_key)
+
+    core_status = "missing"
+    langchain_status = "missing"
+    context_status = "missing"
+    summary_status = "missing"
+    tox_status = "missing"
+    tox_data_exists = False
+
+    core_row = repo.fetch_pipeline_status_for_key(
+        s3_bucket=args.bucket,
+        s3_key=key,
+        s3_version_id=version_id,
+        pipeline="core",
+    )
+    if core_row:
+        core_status = str(core_row.get("status") or core_status)
+
+    if not args.skip_langchain:
+        langchain_row = repo.fetch_pipeline_status_for_key(
+            s3_bucket=args.bucket,
+            s3_key=key,
+            s3_version_id=version_id,
+            pipeline="langchain",
+        )
+        if langchain_row:
+            langchain_status = str(langchain_row.get("status") or langchain_status)
+
+    if args.context:
+        context_row = repo.fetch_pipeline_status_for_key(
+            s3_bucket=args.bucket,
+            s3_key=key,
+            s3_version_id=version_id,
+            pipeline="context",
+        )
+        if context_row:
+            context_status = str(context_row.get("status") or context_status)
+
+    if args.section_summary:
+        summary_row = repo.fetch_pipeline_status_for_key(
+            s3_bucket=args.bucket,
+            s3_key=key,
+            s3_version_id=version_id,
+            pipeline="section-summary",
+        )
+        if summary_row:
+            summary_status = str(summary_row.get("status") or summary_status)
+
+    if args.mode in {"auto", "tox"}:
+        tox_row = repo.fetch_pipeline_status_for_key(
+            s3_bucket=args.bucket,
+            s3_key=key,
+            s3_version_id=version_id,
+            pipeline="tox",
+        )
+        if tox_row:
+            tox_status = str(tox_row.get("status") or tox_status)
+        if args.project_id:
+            tox_data_exists = _has_tox_data(repo, args.project_id, file_name)
+
+    core_outputs_complete = md_exists and quality_exists and meta_exists
+    core_pipeline_complete = _status_is_completed(core_status)
+    if not args.skip_langchain:
+        core_pipeline_complete = core_pipeline_complete and _status_is_completed(
+            langchain_status
+        )
+    if args.context:
+        core_pipeline_complete = core_pipeline_complete and _status_is_completed(
+            context_status
+        )
+    if args.section_summary:
+        core_pipeline_complete = core_pipeline_complete and _status_is_completed(
+            summary_status
+        )
+    core_complete = core_outputs_complete and core_pipeline_complete
+
+    tox_complete = _status_is_completed(tox_status) and tox_data_exists
+
+    if args.mode == "core":
+        fully_ingested = core_complete
+    elif args.mode == "tox":
+        fully_ingested = tox_complete
+    else:
+        fully_ingested = core_complete and tox_complete
+
+    status_completed = _status_is_completed(core_status)
+    state = _build_already_ingested_entry(
+        obj,
+        args=args,
+        display_key=display_key,
+        md_exists=md_exists,
+        status_completed=status_completed,
+        tox_data_exists=tox_data_exists,
+        core_status=core_status,
+        langchain_status=langchain_status,
+        context_status=context_status,
+        summary_status=summary_status,
+        tox_status=tox_status,
+    )
+    return fully_ingested, state
+
+
 def _ensure_project_id(
     repo: NCDRepository,
     *,
@@ -509,6 +895,63 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--workers", type=int, default=4, help="Concurrent worker threads."
+    )
+    parser.add_argument(
+        "--llm-max-concurrent",
+        type=int,
+        default=int(os.getenv("INGEST_LLM_MAX_CONCURRENT", "1")),
+        help="Maximum concurrent OpenAI calls across all workers.",
+    )
+    parser.add_argument(
+        "--llm-min-interval-seconds",
+        type=float,
+        default=float(os.getenv("INGEST_LLM_MIN_INTERVAL_SECONDS", "0")),
+        help=(
+            "Minimum delay between OpenAI calls across all workers. "
+            "Set >0 (e.g. 1.0-2.0) to reduce 429s."
+        ),
+    )
+    parser.add_argument(
+        "--llm-max-retries",
+        type=int,
+        default=int(os.getenv("INGEST_LLM_MAX_RETRIES", "3")),
+        help="Max retries for OpenAI 429 rate-limit errors.",
+    )
+    parser.add_argument(
+        "--llm-initial-backoff-seconds",
+        type=float,
+        default=float(os.getenv("INGEST_LLM_INITIAL_BACKOFF_SECONDS", "2")),
+        help="Initial retry backoff seconds for OpenAI 429 errors.",
+    )
+    parser.add_argument(
+        "--llm-max-backoff-seconds",
+        type=float,
+        default=float(os.getenv("INGEST_LLM_MAX_BACKOFF_SECONDS", "12")),
+        help="Maximum retry backoff seconds for OpenAI 429 errors.",
+    )
+    parser.add_argument(
+        "--llm-max-retry-after-seconds",
+        type=float,
+        default=float(os.getenv("INGEST_LLM_MAX_RETRY_AFTER_SECONDS", "12")),
+        help=(
+            "Cap for Retry-After based delays from OpenAI 429 responses. "
+            "Set to 0 to disable this cap."
+        ),
+    )
+    parser.add_argument(
+        "--llm-max-total-retry-seconds",
+        type=float,
+        default=float(os.getenv("INGEST_LLM_MAX_TOTAL_RETRY_SECONDS", "45")),
+        help=(
+            "Maximum cumulative retry sleep time per OpenAI call before failing fast. "
+            "Set to 0 to disable this cap."
+        ),
+    )
+    parser.add_argument(
+        "--llm-jitter-seconds",
+        type=float,
+        default=float(os.getenv("INGEST_LLM_JITTER_SECONDS", "0.5")),
+        help="Random jitter added to OpenAI retry backoff.",
     )
     parser.add_argument("--mode", choices=("auto", "core", "tox"), default="core")
     parser.add_argument(
@@ -705,10 +1148,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str, Any]:
     key = obj["key"]
+    display_key = _display_key_for_logs(key, args)
     version_id = obj.get("version_id")
     last_modified = obj.get("last_modified")
     file_name = Path(key).name
     md_key = f"{key}{args.md_suffix}"
+    print(f"[PROCESSING] {display_key}")
 
     s3_client = boto3.client("s3", region_name=args.aws_region)
     repo: Optional[NCDRepository] = None
@@ -980,7 +1425,7 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
             started = datetime.now(timezone.utc)
             local_pdf = None
             try:
-                llm_client = _resolve_llm(args.tox_llm)
+                llm_client = _build_llm_client(args.tox_llm, args)
                 local_pdf = _download_s3_pdf(s3_client, args.bucket, key, version_id)
                 content_hash = sha256_file(local_pdf)
                 repo = repo or NCDRepository()
@@ -1123,7 +1568,7 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                     sections,
                     replace_existing=True,
                 )
-                llm_client = LLMClient()
+                llm_client = _build_llm_client("real", args)
                 summary_rows: List[Dict[str, Any]] = []
                 for section in sections:
                     text = markdown[section.char_start : section.char_end].strip()
@@ -1226,6 +1671,7 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
                 )
         return {
             "key": key,
+            "display_key": display_key,
             "version_id": version_id,
             "last_modified": last_modified,
             "md_exists": md_exists,
@@ -1261,6 +1707,7 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
         core_error = core_error or _format_error(exc)
         return {
             "key": key,
+            "display_key": display_key,
             "version_id": version_id,
             "last_modified": last_modified,
             "md_exists": md_exists,
@@ -1295,6 +1742,8 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    _configure_openai_limiters(args.llm_max_concurrent)
+
     if not args.bucket:
         print("S3 bucket is required (set --bucket or S3_BUCKET).", file=sys.stderr)
         return 1
@@ -1349,6 +1798,12 @@ def main(argv: list[str]) -> int:
         prefix = prefix
     elif not prefix.endswith("/"):
         prefix = f"{prefix}/"
+    args.run_prefix = prefix
+    args.project_root_prefix = _project_root_prefix(args, prefix)
+    print(
+        "[INFO] Logging file paths relative to "
+        f"'{args.project_root_prefix.strip('/')}/'"
+    )
 
     if args.core_text_engines:
         os.environ["PDF_PIPELINE_TEXT_ENGINES"] = args.core_text_engines
@@ -1395,9 +1850,51 @@ def main(argv: list[str]) -> int:
         if args.limit is not None and len(docs) >= args.limit:
             break
         docs.append(obj)
+    print(f"[INFO] Queued {len(docs)} PDF file(s) from prefix '{prefix}'")
+
+    pending_docs = docs
+    if not args.dry_run and docs:
+        pending_docs = []
+        guard_skipped = 0
+        guard_repo: Optional[NCDRepository] = None
+        try:
+            guard_repo = NCDRepository()
+            for obj in docs:
+                key = str(obj.get("key") or "")
+                display_key = _display_key_for_logs(key, args)
+                try:
+                    fully_ingested, precheck_entry = _is_fully_ingested(
+                        obj,
+                        args=args,
+                        s3_client=client,
+                        repo=guard_repo,
+                    )
+                except Exception as exc:
+                    print(
+                        f"[WARN] Guard check failed for {display_key}: {exc}",
+                        file=sys.stderr,
+                    )
+                    pending_docs.append(obj)
+                    continue
+
+                if fully_ingested:
+                    entries.append(precheck_entry)
+                    guard_skipped += 1
+                    doc_skipped += 1
+                    print(f"[ALREADY_INGESTED] {display_key}")
+                else:
+                    pending_docs.append(obj)
+        finally:
+            if guard_repo is not None:
+                guard_repo.close()
+
+        print(
+            f"[INFO] Pending {len(pending_docs)} file(s); "
+            f"already ingested {guard_skipped} file(s)"
+        )
 
     with ThreadPoolExecutor(max_workers=max(1, args.workers)) as executor:
-        futures = [executor.submit(_process_document, obj, args) for obj in docs]
+        futures = [executor.submit(_process_document, obj, args) for obj in pending_docs]
         for future in as_completed(futures):
             entry = future.result()
             entries.append(entry)
@@ -1470,7 +1967,7 @@ def main(argv: list[str]) -> int:
                 status = "failed"
             elif required:
                 status = "completed"
-            print(f"[{status.upper()}] {entry['key']}")
+            print(f"[{status.upper()}] {entry.get('display_key') or entry['key']}")
             if failed:
                 if entry.get("core_error"):
                     print(f"  core_error: {entry['core_error']}", file=sys.stderr)
@@ -1506,6 +2003,14 @@ def main(argv: list[str]) -> int:
         "force_langchain": args.force_langchain,
         "force_tox": args.force_tox,
         "workers": args.workers,
+        "llm_max_concurrent": args.llm_max_concurrent,
+        "llm_min_interval_seconds": args.llm_min_interval_seconds,
+        "llm_max_retries": args.llm_max_retries,
+        "llm_initial_backoff_seconds": args.llm_initial_backoff_seconds,
+        "llm_max_backoff_seconds": args.llm_max_backoff_seconds,
+        "llm_max_retry_after_seconds": args.llm_max_retry_after_seconds,
+        "llm_max_total_retry_seconds": args.llm_max_total_retry_seconds,
+        "llm_jitter_seconds": args.llm_jitter_seconds,
         "doc_processed": doc_processed,
         "doc_failed": doc_failed,
         "doc_skipped": doc_skipped,
@@ -1531,6 +2036,7 @@ def main(argv: list[str]) -> int:
             fh,
             fieldnames=[
                 "key",
+                "display_key",
                 "version_id",
                 "last_modified",
                 "md_exists",

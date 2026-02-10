@@ -266,7 +266,6 @@ class NCDRepository:
         if document_version_id is None:
             raise RuntimeError("Failed to insert document_versions")
         db.commit()
-        return chunk_ids
         return str(document_id), str(document_version_id)
 
     def _insert_document(self, *, tenant_id: str, title: str) -> str | None:

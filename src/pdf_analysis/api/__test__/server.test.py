@@ -115,3 +115,46 @@ def test_format_embedding_for_prompt(server: Any) -> None:
     assert server._format_embedding_for_prompt([]) == ""
     result = server._format_embedding_for_prompt([0.1, 0.2])
     assert result.startswith("[") and result.endswith("]")
+
+
+def test_gap_key_mentions_module4_section(server: Any) -> None:
+    assert server._gap_key_mentions_module4_section(
+        "filynai.com/demo/4.2.1.1/report.pdf",
+        "4.2.1.1",
+    )
+    assert server._gap_key_mentions_module4_section(
+        "filynai.com/demo/4211-primary-pd/report.pdf",
+        "4.2.1.1",
+    )
+    assert not server._gap_key_mentions_module4_section(
+        "filynai.com/demo/4.2.2.1/report.pdf",
+        "4.2.1.1",
+    )
+
+
+def test_gap_collect_required_fields(server: Any) -> None:
+    entry = {
+        "required_content": ["Study ID", "Synopsis"],
+        "required_parameters": ["Cmax", "AUC"],
+        "validation_rules": {"hERG_required": True},
+        "extraction_focus": {"pk": {"single_dose": ["Tmax"]}},
+    }
+    fields = server._gap_collect_required_fields(entry)
+    assert "Study ID" in fields
+    assert "AUC" in fields
+    assert "hERG required" in fields
+    assert "single dose" in fields
+
+
+def test_gap_field_is_present(server: Any) -> None:
+    corpus = "Study ID LT3114-PHA-001 includes Cmax and AUC observations."
+    assert server._gap_field_is_present("Study ID", corpus)
+    assert server._gap_field_is_present("AUC", corpus)
+    assert not server._gap_field_is_present("Respiratory system effects", corpus)
+
+
+def test_gap_parse_module_number(server: Any) -> None:
+    assert server._gap_parse_module_number("Module 1. Administrative") == "1"
+    assert server._gap_parse_module_number("module4_nonclinical") == "4"
+    assert server._gap_parse_module_number("5") == "5"
+    assert server._gap_parse_module_number("no-module") is None

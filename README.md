@@ -246,6 +246,7 @@ export USER_UUID="00000000-0000-0000-0000-000000000000"
 2) Core extraction for all modules (1-5):
 
 ```shell
+LLM_MODEL_NAME=gpt-4.1-mini \
 poetry run python scripts/ingest_module4_batch.py \
   --bucket doc-repository-dev \
   --company filynai.com \
@@ -258,7 +259,16 @@ poetry run python scripts/ingest_module4_batch.py \
   --mode core \
   --force-core \
   --core-table-engines pdfplumber,camelot \
-  --workers 4
+  --workers 1 \
+  --llm-max-concurrent 1 \
+  --llm-min-interval-seconds 5 \
+  --llm-max-retries 3 \
+  --llm-initial-backoff-seconds 2 \
+  --llm-max-backoff-seconds 12 \
+  --llm-max-retry-after-seconds 12 \
+  --llm-max-total-retry-seconds 45 \
+  --llm-jitter-seconds 0.5 \
+  --summary-max-chars 2000
 ```
 
 3) Optional: AI metadata labels for all modules (writes `.meta.json` updates + Redis entries):
@@ -277,6 +287,7 @@ poetry run python scripts/s3_sync.py \
 
 ```shell
 LANGCHAIN_TRACING_V2=false LANGCHAIN_API_KEY= \
+LLM_MODEL_NAME=gpt-4.1-mini \
 poetry run python scripts/ingest_module4_batch.py \
   --bucket doc-repository-dev \
   --company filynai.com \
@@ -288,13 +299,23 @@ poetry run python scripts/ingest_module4_batch.py \
   --mode core \
   --run-langchain --force-langchain \
   --core-table-engines pdfplumber,camelot \
-  --workers 4
+  --workers 1 \
+  --llm-max-concurrent 1 \
+  --llm-min-interval-seconds 5 \
+  --llm-max-retries 3 \
+  --llm-initial-backoff-seconds 2 \
+  --llm-max-backoff-seconds 12 \
+  --llm-max-retry-after-seconds 12 \
+  --llm-max-total-retry-seconds 45 \
+  --llm-jitter-seconds 0.5 \
+  --summary-max-chars 2000
 ```
 
 5) Module 4 tox pipeline (ncd_finding/exposure/safety summary):
 
 ```shell
 LANGCHAIN_TRACING_V2=false LANGCHAIN_API_KEY= \
+LLM_MODEL_NAME=gpt-4.1-mini \
 poetry run python scripts/ingest_module4_batch.py \
   --bucket doc-repository-dev \
   --company filynai.com \
@@ -305,8 +326,19 @@ poetry run python scripts/ingest_module4_batch.py \
   --prefix "filynai.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/" \
   --mode tox \
   --force-tox \
-  --workers 2
+  --workers 1 \
+  --llm-max-concurrent 1 \
+  --llm-min-interval-seconds 5 \
+  --llm-max-retries 3 \
+  --llm-initial-backoff-seconds 2 \
+  --llm-max-backoff-seconds 12 \
+  --llm-max-retry-after-seconds 12 \
+  --llm-max-total-retry-seconds 45 \
+  --llm-jitter-seconds 0.5
 ```
+
+If you still see many `429 Too Many Requests` errors, increase
+`--llm-min-interval-seconds` (for example `10` or `15`) and keep `--workers 1`.
 
 6) Review the latest ingestion report:
 
