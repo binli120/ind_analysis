@@ -91,6 +91,10 @@ try:  # Optional OpenAI dependency for section summary embeddings.
     from openai import OpenAI
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
     OpenAI = None  # type: ignore[misc]
+try:  # Optional tokenizer for accurate embedding chunking.
+    import tiktoken
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    tiktoken = None  # type: ignore[assignment]
 
 try:
     from pdf_analysis.service.embedding_store import SupabaseEmbeddingStore
@@ -360,6 +364,8 @@ else:  # pragma: no cover - optional dependency missing
 
 
 _EMBEDDING_CLIENT: Optional[OpenAI] = None
+_EMBEDDING_MAX_INPUT_TOKENS = 6000
+_EMBEDDING_CHUNK_OVERLAP_TOKENS = 200
 
 
 def _get_embedding_client() -> Optional[OpenAI]:
@@ -374,21 +380,153 @@ def _get_embedding_client() -> Optional[OpenAI]:
     return _EMBEDDING_CLIENT
 
 
+def _embedding_encoding() -> Any:
+    if tiktoken is None:
+        return None
+    try:
+        model_name = settings.embedding_model_name or ""
+        return tiktoken.encoding_for_model(model_name)
+    except Exception:
+        try:
+            return tiktoken.get_encoding("cl100k_base")
+        except Exception:
+            return None
+
+
+def _approx_token_count(text: str) -> int:
+    encoding = _embedding_encoding()
+    if encoding is not None:
+        try:
+            return len(encoding.encode(text))
+        except Exception:
+            pass
+    # Fallback approximation when tokenizer is unavailable.
+    return max(1, len(text) // 4)
+
+
+def _split_text_for_embedding(
+    text: str,
+    *,
+    max_tokens: int = _EMBEDDING_MAX_INPUT_TOKENS,
+    overlap_tokens: int = _EMBEDDING_CHUNK_OVERLAP_TOKENS,
+) -> List[str]:
+    normalized = str(text or "").strip()
+    if not normalized:
+        return []
+    if max_tokens <= 0:
+        return [normalized]
+
+    encoding = _embedding_encoding()
+    if encoding is not None:
+        try:
+            tokens = encoding.encode(normalized)
+        except Exception:
+            tokens = []
+        if tokens:
+            if len(tokens) <= max_tokens:
+                return [normalized]
+            chunks: List[str] = []
+            step = max(1, max_tokens - max(0, overlap_tokens))
+            start = 0
+            while start < len(tokens):
+                end = min(len(tokens), start + max_tokens)
+                chunk_tokens = tokens[start:end]
+                if not chunk_tokens:
+                    break
+                chunk_text = encoding.decode(chunk_tokens).strip()
+                if chunk_text:
+                    chunks.append(chunk_text)
+                if end >= len(tokens):
+                    break
+                start += step
+            return chunks
+
+    if _approx_token_count(normalized) <= max_tokens:
+        return [normalized]
+
+    max_chars = max(1000, max_tokens * 4)
+    chunks: List[str] = []
+    start = 0
+    while start < len(normalized):
+        end = min(len(normalized), start + max_chars)
+        if end < len(normalized):
+            split_at = normalized.rfind(" ", start, end)
+            if split_at > start + 200:
+                end = split_at
+        chunk = normalized[start:end].strip()
+        if chunk:
+            chunks.append(chunk)
+        if end >= len(normalized):
+            break
+        overlap_chars = max(100, overlap_tokens * 4)
+        start = max(0, end - overlap_chars)
+    return chunks
+
+
+def _weighted_average_embeddings(
+    embeddings: Sequence[List[float]], weights: Sequence[float]
+) -> Optional[List[float]]:
+    if not embeddings or not weights or len(embeddings) != len(weights):
+        return None
+    total_weight = sum(weight for weight in weights if weight > 0)
+    if total_weight <= 0:
+        return None
+    dim = len(embeddings[0])
+    if dim == 0:
+        return None
+    for emb in embeddings:
+        if len(emb) != dim:
+            return None
+    merged = [0.0] * dim
+    for emb, weight in zip(embeddings, weights):
+        if weight <= 0:
+            continue
+        for idx, value in enumerate(emb):
+            merged[idx] += float(value) * weight
+    return [value / total_weight for value in merged]
+
+
+def _request_embedding(client: OpenAI, text: str) -> Optional[List[float]]:
+    response = client.embeddings.create(
+        model=settings.embedding_model_name,
+        input=text,
+    )
+    if not response.data:
+        return None
+    return list(response.data[0].embedding)
+
+
 def _generate_embedding(text: str, expected_dim: int = 1536) -> Optional[List[float]]:
     client = _get_embedding_client()
     if not client:
         return None
-    try:
-        response = client.embeddings.create(
-            model=settings.embedding_model_name,
-            input=text,
-        )
-    except Exception as exc:  # pragma: no cover - network/API failure
-        logger.warning("Failed to generate section summary embedding: %s", exc)
+    text_value = str(text or "").strip()
+    if not text_value:
         return None
-    if not response.data:
+    chunks = _split_text_for_embedding(text_value)
+    if not chunks:
         return None
-    embedding = list(response.data[0].embedding)
+    chunk_embeddings: List[List[float]] = []
+    chunk_weights: List[float] = []
+    for chunk in chunks:
+        try:
+            embedding = _request_embedding(client, chunk)
+        except Exception as exc:  # pragma: no cover - network/API failure
+            logger.warning("Failed to generate section summary embedding: %s", exc)
+            return None
+        if not embedding:
+            continue
+        chunk_embeddings.append(embedding)
+        chunk_weights.append(float(_approx_token_count(chunk)))
+    if not chunk_embeddings:
+        return None
+    if len(chunk_embeddings) == 1:
+        embedding = chunk_embeddings[0]
+    else:
+        merged = _weighted_average_embeddings(chunk_embeddings, chunk_weights)
+        if not merged:
+            return None
+        embedding = merged
     if expected_dim and len(embedding) != expected_dim:
         logger.warning(
             "Embedding dimension mismatch (expected %s, got %s); skipping storage.",
@@ -2502,6 +2640,8 @@ def _summary_to_text(value: Any) -> str:
 
 
 def _trim_section_summary_context(context: Dict[str, Any]) -> Dict[str, Any]:
+    section_value = str(context.get("section") or "")
+
     def _row_key(row: Dict[str, Any]) -> tuple[Any, Any, Any]:
         return (
             row.get("document_section_id") or row.get("section_id"),
@@ -2566,6 +2706,17 @@ def _trim_section_summary_context(context: Dict[str, Any]) -> Dict[str, Any]:
             "fold",
             "cmax",
             "auc",
+            "half-life",
+            "half life",
+            "terminal",
+            "clearance",
+            "cl",
+            "vss",
+            "bioavailability",
+            "urine",
+            "feces",
+            "iv",
+            "ip",
             "ic50",
             "ec50",
             "kd",
@@ -2655,7 +2806,8 @@ def _trim_section_summary_context(context: Dict[str, Any]) -> Dict[str, Any]:
         selected_rows = _select_rows(
             sources, limit=limit, head_count=5, length_field="summary_text"
         )
-        section_is_262 = str(context.get("section") or "").startswith("2.6.2")
+        section_is_262 = section_value.startswith("2.6.2")
+        section_is_264 = section_value.startswith("2.6.4")
         required_groups: tuple[tuple[str, ...], ...] = ()
         protected_patterns: set[str] = set()
         # For 2.6.2, preserve key anti-tumor response studies even when the
@@ -2752,11 +2904,13 @@ def _trim_section_summary_context(context: Dict[str, Any]) -> Dict[str, Any]:
             if is_protected:
                 summary_limit = max(summary_limit, 320)
             raw_summary = _coerce_summary_body(row.get("summary_text"))
-            numeric_evidence = (
-                _extract_numeric_evidence(raw_summary, max_items=4, max_chars=170)
-                if is_protected
-                else []
+            numeric_evidence = _extract_numeric_evidence(
+                raw_summary,
+                max_items=6 if section_is_264 else 4,
+                max_chars=220 if section_is_264 else 170,
             )
+            if numeric_evidence:
+                summary_limit = max(summary_limit, 320)
             trimmed.append(
                 {
                     "section_number": row.get("section_number"),
@@ -2793,6 +2947,104 @@ def _trim_section_summary_context(context: Dict[str, Any]) -> Dict[str, Any]:
                 }
             )
         return trimmed
+
+    def _trim_table_specs(
+        entries: Sequence[Dict[str, Any]],
+        *,
+        limit: int,
+        max_columns: int,
+    ) -> List[Dict[str, Any]]:
+        trimmed: List[Dict[str, Any]] = []
+        if limit <= 0:
+            return trimmed
+        for row in entries:
+            if len(trimmed) >= limit:
+                break
+            if not isinstance(row, dict):
+                continue
+            trimmed.append(
+                {
+                    "subsection": row.get("subsection"),
+                    "subsection_header": row.get("subsection_header"),
+                    "columns": (row.get("columns") or [])[:max_columns],
+                }
+            )
+        return trimmed
+
+    def _trim_table_numeric_evidence(
+        assets: Sequence[Dict[str, Any]],
+        *,
+        asset_limit: int,
+        rows_per_asset: int,
+        max_items: int,
+        max_row_chars: int,
+    ) -> List[Dict[str, Any]]:
+        if max_items <= 0:
+            return []
+
+        evidence: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        tokens = (
+            "mg/kg",
+            "%",
+            "cmax",
+            "auc",
+            "half-life",
+            "half life",
+            "terminal",
+            "vss",
+            "cl",
+            "clearance",
+            "bioavailability",
+            "urine",
+            "feces",
+            "iv",
+            "ip",
+            "peak concentration",
+            "target organ",
+        )
+        for asset in assets[:asset_limit]:
+            if not isinstance(asset, dict):
+                continue
+            source = (
+                asset.get("caption")
+                or asset.get("description")
+                or asset.get("s3_key")
+                or asset.get("json_key")
+                or f"table_asset:{asset.get('id')}"
+            )
+            rows = asset.get("preview_rows") or []
+            for row in rows[:rows_per_asset]:
+                if not isinstance(row, dict):
+                    continue
+                parts: List[str] = []
+                for key, value in row.items():
+                    key_text = str(key).strip()
+                    value_text = str(value).strip() if value is not None else ""
+                    if not key_text or not value_text:
+                        continue
+                    parts.append(f"{key_text}: {value_text}")
+                if not parts:
+                    continue
+                row_text = "; ".join(parts)
+                lowered = row_text.lower()
+                if not any(ch.isdigit() for ch in row_text):
+                    continue
+                if not any(token in lowered for token in tokens):
+                    continue
+                normalized = re.sub(r"\s+", " ", lowered)
+                if normalized in seen:
+                    continue
+                seen.add(normalized)
+                evidence.append(
+                    {
+                        "source": _truncate_text(str(source), 140),
+                        "row": _truncate_text(row_text, max_row_chars),
+                    }
+                )
+                if len(evidence) >= max_items:
+                    return evidence
+        return evidence
 
     def _trim_mapping(entries: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
         trimmed: List[Dict[str, Any]] = []
@@ -2896,6 +3148,9 @@ def _trim_section_summary_context(context: Dict[str, Any]) -> Dict[str, Any]:
         summary_chars: int,
         key_chars: int,
     ) -> Dict[str, Any]:
+        section_is_pk = section_value.startswith("2.6.4") or section_value.startswith(
+            "2.6.5"
+        )
         return {
             "section": context.get("section"),
             "ctd_targets": context.get("ctd_targets") or [],
@@ -2915,6 +3170,18 @@ def _trim_section_summary_context(context: Dict[str, Any]) -> Dict[str, Any]:
                 context.get("section_key_sections") or [],
                 limit=key_limit,
                 max_text_chars=key_chars,
+            ),
+            "table_specs": _trim_table_specs(
+                context.get("table_specs") or [],
+                limit=10 if section_is_pk else 0,
+                max_columns=10,
+            ),
+            "table_numeric_evidence": _trim_table_numeric_evidence(
+                context.get("table_assets") or [],
+                asset_limit=8,
+                rows_per_asset=6,
+                max_items=18 if section_is_pk else 0,
+                max_row_chars=280,
             ),
             "elements": _trim_elements(
                 context.get("elements") or [],
@@ -3847,9 +4114,25 @@ def _template_entries_for_section(section: str) -> List[Dict[str, Any]]:
 
 
 def _element_entries_for_section(section: str) -> List[str]:
-    if section.strip() != "2.4.5":
+    target = normalize_element_number(section)
+    if not target:
         return []
-    return [f"{section}-a", f"{section}-b", f"{section}-c"]
+
+    elements: List[str] = []
+    seen: Set[str] = set()
+    for entry in _load_ind_template_entries():
+        raw = entry.get("element_number")
+        normalized = normalize_element_number(raw)
+        if not normalized or normalized in seen:
+            continue
+        if (
+            normalized == target
+            or normalized.startswith(f"{target}.")
+            or normalized.startswith(f"{target}-")
+        ):
+            elements.append(normalized)
+            seen.add(normalized)
+    return elements
 
 
 def _build_section_summary_context(
@@ -3912,6 +4195,28 @@ def _build_section_summary_context(
         module4_sections=module4_sections,
         section_type=None,
     )
+    table_specs: List[Dict[str, Any]] = []
+    table_assets: List[Dict[str, Any]] = []
+    if section.startswith("2.6.4") or section.startswith("2.6.5"):
+        try:
+            tabulated_context, _ = _build_tabulated_context(
+                db,
+                section=section,
+                tenant_id=tenant_id,
+                project_id=project_id,
+                bucket=bucket,
+                max_table_rows=8,
+                max_tables=16,
+            )
+            table_specs = tabulated_context.get("table_specs") or []
+            table_assets = tabulated_context.get("table_assets") or []
+        except Exception as exc:
+            logger.warning(
+                "section summary ctx: failed to load tabulated context for section=%s project=%s: %s",
+                section,
+                project_id,
+                exc,
+            )
 
     element_numbers = _element_entries_for_section(section)
     element_payloads: List[Dict[str, Any]] = []
@@ -3950,6 +4255,8 @@ def _build_section_summary_context(
         "template_entries": _template_entries_for_section(section),
         "section_sources": _slim_sources([dict(row) for row in sources]),
         "section_key_sections": _slim_key_sections([dict(row) for row in key_sections]),
+        "table_specs": table_specs,
+        "table_assets": table_assets,
         "elements": element_payloads,
     }
     return context, used_elements
@@ -3987,23 +4294,39 @@ def _build_section_summary_prompt(
     previous_summary: Optional[str],
     previous_embedding: Any,
 ) -> tuple[str, str]:
+    section_is_pk = section.startswith("2.6.4") or section.startswith("2.6.5")
     system_prompt = (
         "You are an expert nonclinical regulatory writer. "
         "Generate CTD Module 2.4/2.6 section summaries using only the provided data. "
         "Do not invent data. If key data is missing, state what is missing. "
         "If numeric outcomes are present (dose levels, fold changes, % inhibition, p-values, Cmax/AUC), include them. "
+        "For PK sections (2.6.4/2.6.5), report available numeric PK values by study when present "
+        "(for example half-life, Cmax, AUC, CL, Vss, bioavailability, urinary/fecal recovery). "
         "Do not claim that data is missing when it appears in the provided context. "
+        "Only state that a parameter is unavailable when no corresponding value appears anywhere in the provided context. "
         "Preserve mixed or negative findings and explicitly label non-significant outcomes when reported. "
         "Use exact numbers from the source text only; do not round, average, or merge non-equivalent values. "
         "If studies report different values, present them separately by study and note the discrepancy. "
         "When section_sources include numeric_evidence, prioritize those numbers over paraphrased narrative text. "
+        "When table_numeric_evidence is present, treat it as source-of-truth numeric evidence and use it directly with units. "
+        "Do not state a PK parameter is unavailable when a value for that parameter appears in table_numeric_evidence. "
         "Write in concise CTD dossier prose (paragraphs with clear study-result statements), avoiding unnecessary outline labels."
     )
+    if section_is_pk:
+        system_prompt += (
+            " For PK sections (2.6.4/2.6.5), preserve subsection structure and present study-by-study numeric findings "
+            "for dose, route, half-life, Cmax, AUC, CL, Vss, and bioavailability whenever present."
+        )
     instructions = (
         user_prompt.strip()
         if user_prompt
         else (
             "Use the template guidance and data to produce a concise section summary."
+            if not section_is_pk
+            else (
+                "Use the template guidance and data to produce a subsection-aligned PK summary that stays close "
+                "to the source table wording and numeric values."
+            )
         )
     )
     parts = [
@@ -4043,8 +4366,13 @@ def _truncate_preview_value(value: Any, max_len: int = 300) -> str:
 
 
 def _trim_tabulated_context(context: Dict[str, Any]) -> Dict[str, Any]:
-    max_assets = 8
-    max_preview_rows = 6
+    section = str(context.get("section") or "")
+    if section.startswith("2.6.3"):
+        max_assets = 24
+        max_preview_rows = 8
+    else:
+        max_assets = 8
+        max_preview_rows = 6
     max_columns = 12
     trimmed_assets: List[Dict[str, Any]] = []
     for asset in (context.get("table_assets") or [])[:max_assets]:
@@ -4069,12 +4397,65 @@ def _trim_tabulated_context(context: Dict[str, Any]) -> Dict[str, Any]:
                 "preview_rows": preview_rows,
             }
         )
+    trimmed_sources: List[Dict[str, Any]] = []
+    for source in (context.get("section_sources") or [])[:30]:
+        if not isinstance(source, dict):
+            continue
+        trimmed_sources.append(
+            {
+                "section_number": source.get("section_number"),
+                "section_title": source.get("section_title"),
+                "summary_text": _truncate_text(
+                    str(source.get("summary_text") or ""), max_chars=1200
+                ),
+                "keywords": (source.get("keywords") or [])[:15],
+            }
+        )
+    payload = context.get("ncd_payload") or {}
+    ncd_studies = []
+    if isinstance(payload, dict):
+        for study in (payload.get("studies") or [])[:120]:
+            if not isinstance(study, dict):
+                continue
+            extra = _normalize_extra_attributes(study.get("extra_attributes"))
+            ncd_studies.append(
+                {
+                    "sponsor_study_id": study.get("sponsor_study_id"),
+                    "study_type": study.get("study_type"),
+                    "glp_status": study.get("glp_status"),
+                    "species": study.get("species"),
+                    "strain": study.get("strain"),
+                    "route": study.get("route"),
+                    "module4_section": study.get("module4_section"),
+                    "extra_attributes": {
+                        "type_of_study": extra.get("type_of_study"),
+                        "study_title": extra.get("study_title"),
+                        "test_system": extra.get("test_system"),
+                        "species_strain": extra.get("species_strain"),
+                        "method_of_administration": extra.get(
+                            "method_of_administration"
+                        ),
+                        "dose": extra.get("dose"),
+                        "dose_level": extra.get("dose_level"),
+                        "dose_levels": extra.get("dose_levels"),
+                        "endpoints": extra.get("endpoints"),
+                        "assays": extra.get("assays"),
+                        "key_findings": extra.get("key_findings"),
+                        "noteworthy_findings": extra.get("noteworthy_findings"),
+                        "organ_systems": extra.get("organ_systems"),
+                        "testing_facility": extra.get("testing_facility"),
+                        "location_in_ctd": extra.get("location_in_ctd"),
+                    },
+                }
+            )
     return {
         "section": context.get("section"),
         "ctd_targets": context.get("ctd_targets") or [],
         "module4_sections": (context.get("module4_sections") or [])[:20],
         "table_specs": context.get("table_specs") or [],
         "table_assets": trimmed_assets,
+        "section_sources": trimmed_sources,
+        "ncd_studies": ncd_studies,
     }
 
 
@@ -4103,7 +4484,7 @@ def _extract_study_ids(text: str) -> List[str]:
             continue
         if len(cleaned) < 6:
             continue
-        if sum(1 for ch in cleaned if ch.isdigit()) < 3:
+        if sum(1 for ch in cleaned if ch.isdigit()) < 2:
             continue
         if not STUDY_ID_RE.fullmatch(cleaned):
             continue
@@ -4443,196 +4824,24 @@ def _pick_first_value(
     return ""
 
 
-def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, str]]:
-    candidates: List[Dict[str, str]] = []
-    seen: set[str] = set()
-    for asset in context.get("table_assets", []) or []:
-        preview_rows = asset.get("preview_rows") or []
-        for row in preview_rows:
-            if not isinstance(row, dict):
-                continue
-            key_map = {_normalize_header_token(str(key)): key for key in row.keys()}
-            if "type of study" not in key_map or not (
-                key_map.get("species strain") or key_map.get("test system")
-            ):
-                continue
-            study_number = _pick_first_value(row, key_map, "study number")
-            if not study_number or study_number in seen:
-                continue
-            doses_key = key_map.get("doses")
-            candidates.append(
-                {
-                    "type_of_study": _pick_first_value(row, key_map, "type of study"),
-                    "species_strain": _pick_first_value(
-                        row,
-                        key_map,
-                        "species strain",
-                        "test system",
-                        "species strain or test system",
-                    ),
-                    "method_of_admin": _pick_first_value(
-                        row, key_map, "method of administration"
-                    ),
-                    "doses": (
-                        str(row.get(doses_key or "") or "").strip() if doses_key else ""
-                    ),
-                    "gender_group": _pick_first_value(
-                        row, key_map, "gender and no per group", "gender", "sex"
-                    ),
-                    "findings": _pick_first_value(
-                        row,
-                        key_map,
-                        "noteworthy findings",
-                        "key findings",
-                        "key results",
-                    ),
-                    "study_number": study_number,
-                }
-            )
-            seen.add(study_number)
-    return candidates
+def _study_sort_key(study_number: str) -> Tuple[Any, ...]:
+    tokens = re.split(r"(\d+)", (study_number or "").upper())
+    key: List[Tuple[int, Any]] = []
+    for token in tokens:
+        if not token:
+            continue
+        if token.isdigit():
+            key.append((0, int(token)))
+        else:
+            key.append((1, token))
+    return tuple(key)
 
 
-def _repair_primary_pharmacodynamics_table(
-    tables: Sequence[Dict[str, Any]],
+def _extract_ncd_study_records(
     context: Dict[str, Any],
-) -> None:
-    target = next(
-        (table for table in tables if str(table.get("subsection") or "") == "2.6.3.2"),
-        None,
-    )
-    if not target:
-        return
-    candidates = _extract_primary_pd_candidates(context)
-    if not candidates:
-        return
-    columns = [
-        "Type of Study",
-        "Species/Strain",
-        "Method of Admin.",
-        "Doses (mg/kg)",
-        "Gender and No. per Group",
-        "Noteworthy Findings",
-        "Study Number",
-    ]
-    target["columns"] = columns
-    target["rows"] = [
-        {
-            "Type of Study": candidate.get("type_of_study", ""),
-            "Species/Strain": candidate.get("species_strain", ""),
-            "Method of Admin.": candidate.get("method_of_admin", ""),
-            "Doses (mg/kg)": candidate.get("doses", ""),
-            "Gender and No. per Group": candidate.get("gender_group", ""),
-            "Noteworthy Findings": candidate.get("findings", ""),
-            "Study Number": candidate.get("study_number", ""),
-        }
-        for candidate in candidates
-    ]
-
-
-def _extract_safety_pharmacology_candidates(
-    context: Dict[str, Any]
-) -> List[Dict[str, str]]:
-    candidates: List[Dict[str, str]] = []
-    seen: set[str] = set()
-    for asset in context.get("table_assets", []) or []:
-        preview_rows = asset.get("preview_rows") or []
-        for row in preview_rows:
-            if not isinstance(row, dict):
-                continue
-            key_map = {_normalize_header_token(str(key)): key for key in row.keys()}
-            if (
-                "organ systems evaluated" not in key_map
-                or "glp compliance" not in key_map
-            ):
-                continue
-            study_number = _pick_first_value(row, key_map, "study number")
-            if not study_number or study_number in seen:
-                continue
-            doses_key = key_map.get("doses")
-            candidates.append(
-                {
-                    "organ_systems": _pick_first_value(
-                        row, key_map, "organ systems evaluated"
-                    ),
-                    "species_strain": _pick_first_value(row, key_map, "species strain"),
-                    "method_of_admin": _pick_first_value(
-                        row, key_map, "method of administration"
-                    ),
-                    "doses": (
-                        str(row.get(doses_key or "") or "").strip() if doses_key else ""
-                    ),
-                    "gender_group": _pick_first_value(
-                        row, key_map, "gender and no per group", "gender", "sex"
-                    ),
-                    "findings": _pick_first_value(row, key_map, "noteworthy findings"),
-                    "glp": _pick_first_value(row, key_map, "glp compliance"),
-                    "study_number": study_number,
-                }
-            )
-            seen.add(study_number)
-    return candidates
-
-
-def _repair_safety_pharmacology_table(
-    tables: Sequence[Dict[str, Any]],
-    context: Dict[str, Any],
-) -> None:
-    target = next(
-        (table for table in tables if str(table.get("subsection") or "") == "2.6.3.4"),
-        None,
-    )
-    if not target:
-        return
-    candidates = _extract_safety_pharmacology_candidates(context)
-    if not candidates:
-        return
-    columns = [
-        "Organ Systems Evaluated",
-        "Species/Strain",
-        "Method of Admin.",
-        "Doses (mg/kg)",
-        "Gender and No. per Group",
-        "Noteworthy Findings",
-        "GLP Compliance",
-        "Study Number",
-    ]
-    target["columns"] = columns
-    target["rows"] = [
-        {
-            "Organ Systems Evaluated": candidate.get("organ_systems", ""),
-            "Species/Strain": candidate.get("species_strain", ""),
-            "Method of Admin.": candidate.get("method_of_admin", ""),
-            "Doses (mg/kg)": candidate.get("doses", ""),
-            "Gender and No. per Group": candidate.get("gender_group", ""),
-            "Noteworthy Findings": candidate.get("findings", ""),
-            "GLP Compliance": candidate.get("glp", ""),
-            "Study Number": candidate.get("study_number", ""),
-        }
-        for candidate in candidates
-    ]
-
-
-def _first_non_empty(values: Sequence[Any]) -> str:
-    for value in values:
-        text = str(value or "").strip()
-        if text:
-            return text
-    return ""
-
-
-def _display_title_from_path(value: str) -> str:
-    if not value:
-        return ""
-    name = Path(str(value)).name
-    if "." in name:
-        name = name.rsplit(".", 1)[0]
-    return name.strip()
-
-
-def _extract_overview_candidates_from_ncd(
-    context: Dict[str, Any]
-) -> List[Dict[str, str]]:
+    *,
+    module4_section: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     payload = context.get("ncd_payload") or {}
     if not isinstance(payload, dict):
         return []
@@ -4674,15 +4883,16 @@ def _extract_overview_candidates_from_ncd(
             source_by_study.setdefault(study_id.upper(), source)
 
     document_keys_by_study: Dict[str, str] = {}
-    for key in context.get("document_keys") or []:
+    for key in (context.get("document_keys") or []) + (
+        context.get("project_document_keys") or []
+    ):
         text = str(key or "").strip()
         if not text:
             continue
         for study_id in _extract_study_ids(text):
             document_keys_by_study.setdefault(study_id.upper(), text)
 
-    candidates: List[Dict[str, str]] = []
-    seen: set[str] = set()
+    records_by_study: Dict[str, Dict[str, Any]] = {}
     for study in studies:
         if not isinstance(study, dict):
             continue
@@ -4692,11 +4902,8 @@ def _extract_overview_candidates_from_ncd(
         if not study_number:
             continue
         normalized_key = study_number.upper()
-        if normalized_key in seen:
-            continue
 
         extra = _normalize_extra_attributes(study.get("extra_attributes"))
-        module4_section = str(study.get("module4_section") or "").strip()
         source_doc_id = _first_non_empty(
             (
                 study.get("main_source_document_id"),
@@ -4706,17 +4913,35 @@ def _extract_overview_candidates_from_ncd(
         source_doc = source_by_id.get(source_doc_id)
         if source_doc is None:
             source_doc = source_by_study.get(normalized_key)
-        if not module4_section and isinstance(source_doc, dict):
-            module4_section = str(source_doc.get("ctd_section") or "").strip()
 
-        type_of_study = _first_non_empty(
+        module4 = _first_non_empty(
             (
-                extra.get("type_of_study"),
-                extra.get("study_title"),
-                extra.get("title"),
-                category_by_module.get(module4_section),
+                study.get("module4_section"),
+                source_doc.get("ctd_section") if isinstance(source_doc, dict) else "",
             )
         )
+        if module4_section and not section_number_matches(module4, module4_section):
+            continue
+
+        source_title = ""
+        if isinstance(source_doc, dict):
+            source_title = _display_title_from_path(str(source_doc.get("file_name") or ""))
+        if not source_title:
+            source_title = _display_title_from_path(
+                document_keys_by_study.get(normalized_key, "")
+            )
+        location_in_ctd = _first_non_empty(
+            (
+                extra.get("location_in_ctd"),
+                (
+                    f'Module 4, Section {module4}: "{source_title}"'
+                    if module4 and source_title
+                    else ""
+                ),
+                f"Module 4, Section {module4}" if module4 else "",
+            )
+        )
+
         species = str(study.get("species") or "").strip()
         strain = str(study.get("strain") or "").strip()
         test_system = _first_non_empty(
@@ -4728,66 +4953,512 @@ def _extract_overview_candidates_from_ncd(
                 species,
             )
         )
-        method_of_administration = _first_non_empty(
-            (
-                extra.get("method_of_administration"),
-                extra.get("route_of_administration"),
-                extra.get("route"),
-                study.get("route"),
-            )
-        )
-        testing_facility = _first_non_empty(
-            (
-                extra.get("testing_facility"),
-                extra.get("test_facility"),
-                extra.get("facility"),
-                extra.get("laboratory"),
-            )
-        )
 
-        source_title = ""
-        if isinstance(source_doc, dict):
-            source_title = _display_title_from_path(
-                str(source_doc.get("file_name") or "")
-            )
-        if not source_title:
-            source_title = _display_title_from_path(
-                document_keys_by_study.get(normalized_key, "")
-            )
-        location_in_ctd = _first_non_empty(
-            (
-                extra.get("location_in_ctd"),
+        record = {
+            "study_id": str(study.get("id") or "").strip(),
+            "study_number": study_number,
+            "module4_section": module4,
+            "type_of_study": _first_non_empty(
                 (
-                    f'Module 4, Section {module4_section}: "{source_title}"'
-                    if module4_section and source_title
-                    else ""
-                ),
+                    extra.get("type_of_study"),
+                    study.get("study_type"),
+                    extra.get("study_title"),
+                    extra.get("title"),
+                    category_by_module.get(module4),
+                )
+            ),
+            "species": species,
+            "strain": strain,
+            "test_system": test_system,
+            "method_of_administration": _first_non_empty(
                 (
-                    f"Module 4, Section {module4_section}"
-                    if module4_section
-                    else ""
-                ),
+                    extra.get("method_of_administration"),
+                    extra.get("route_of_administration"),
+                    extra.get("route"),
+                    study.get("route"),
+                )
+            ),
+            "testing_facility": _first_non_empty(
+                (
+                    extra.get("testing_facility"),
+                    extra.get("test_facility"),
+                    extra.get("facility"),
+                    extra.get("laboratory"),
+                )
+            ),
+            "glp_compliance": _first_non_empty(
+                (
+                    study.get("glp_status"),
+                    extra.get("glp_compliance"),
+                    extra.get("glp_status"),
+                    extra.get("glp"),
+                )
+            ),
+            "location_in_ctd": location_in_ctd,
+            "extra": extra,
+        }
+        score = sum(
+            1
+            for field in (
+                "type_of_study",
+                "test_system",
+                "method_of_administration",
+                "testing_facility",
+                "glp_compliance",
+                "location_in_ctd",
             )
+            if str(record.get(field) or "").strip()
         )
+        existing = records_by_study.get(normalized_key)
+        if existing is not None and int(existing.get("_score", 0)) >= score:
+            continue
+        record["_score"] = score
+        records_by_study[normalized_key] = record
 
+    records = [
+        {k: v for k, v in record.items() if k != "_score"}
+        for record in records_by_study.values()
+    ]
+    records.sort(key=lambda record: _study_sort_key(str(record.get("study_number") or "")))
+    return records
+
+
+def _render_dose_group_summary(groups: Sequence[Dict[str, Any]]) -> Tuple[str, str]:
+    doses: List[str] = []
+    sex_counts: List[str] = []
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        dose_value = group.get("dose_mg_per_kg")
+        if dose_value is not None and str(dose_value).strip() != "":
+            dose_text = str(dose_value).strip()
+            if dose_text not in doses:
+                doses.append(dose_text)
+        sex = str(group.get("sex") or "").strip()
+        n_animals = group.get("n_animals")
+        if sex and n_animals is not None and str(n_animals).strip() != "":
+            sex_counts.append(f"{sex} (n={n_animals})")
+        elif sex:
+            sex_counts.append(sex)
+    return ", ".join(doses), "; ".join(sex_counts)
+
+
+def _rows_from_token_candidates(
+    columns: Sequence[str], candidates: Sequence[Dict[str, str]]
+) -> List[Dict[str, str]]:
+    rows: List[Dict[str, str]] = []
+    study_col = next(
+        (col for col in columns if _normalize_header_token(col) == "study number"), None
+    )
+    deduped: Dict[str, Dict[str, Any]] = {}
+    for candidate in candidates:
+        row = {str(col): "" for col in columns}
+        for col in columns:
+            token = _normalize_header_token(str(col))
+            value = str(candidate.get(token) or "").strip()
+            if value:
+                row[str(col)] = value
+        if not any(str(value).strip() for value in row.values()):
+            continue
+        if not study_col:
+            rows.append(row)
+            continue
+        parsed_ids = _extract_study_ids(str(row.get(study_col) or ""))
+        if not parsed_ids:
+            rows.append(row)
+            continue
+        canonical_id = parsed_ids[0]
+        row[study_col] = canonical_id
+        score = sum(1 for value in row.values() if str(value).strip())
+        current = deduped.get(canonical_id)
+        if current is None or score > int(current.get("_score", 0)):
+            row_with_score = dict(row)
+            row_with_score["_score"] = score
+            deduped[canonical_id] = row_with_score
+    if deduped:
+        ordered_ids = sorted(deduped.keys(), key=_study_sort_key)
+        return [
+            {k: v for k, v in deduped[study_id].items() if k != "_score"}
+            for study_id in ordered_ids
+        ]
+    return rows
+
+
+def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, str]]:
+    candidates: List[Dict[str, str]] = []
+    ncd_records = _extract_ncd_study_records(context, module4_section="4.2.1.1")
+    if ncd_records:
+        payload = context.get("ncd_payload") or {}
+        dose_groups = payload.get("dose_groups") if isinstance(payload, dict) else []
+        dose_groups_by_study: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        if isinstance(dose_groups, list):
+            for group in dose_groups:
+                if not isinstance(group, dict):
+                    continue
+                study_id = str(group.get("study_id") or "").strip()
+                if study_id:
+                    dose_groups_by_study[study_id].append(group)
+        for record in ncd_records:
+            extra = record.get("extra") if isinstance(record.get("extra"), dict) else {}
+            study_id = str(record.get("study_id") or "").strip()
+            study_dose_groups = dose_groups_by_study.get(study_id, [])
+            dose_text, _ = _render_dose_group_summary(study_dose_groups)
+            candidates.append(
+                {
+                    "study number": str(record.get("study_number") or ""),
+                    "species strain or test system": _first_non_empty(
+                        (
+                            record.get("test_system"),
+                            f"{record.get('species')}; {record.get('strain')}"
+                            if record.get("species") and record.get("strain")
+                            else "",
+                            record.get("species"),
+                        )
+                    ),
+                    "method of administration": str(
+                        record.get("method_of_administration") or ""
+                    ),
+                    "dose concentration": _first_non_empty(
+                        (
+                            extra.get("dose_concentration") if extra else "",
+                            extra.get("dose_levels") if extra else "",
+                            extra.get("dose_level") if extra else "",
+                            extra.get("dose") if extra else "",
+                            dose_text,
+                        )
+                    ),
+                    "endpoints assays": _first_non_empty(
+                        (
+                            extra.get("endpoints_assays") if extra else "",
+                            extra.get("endpoints") if extra else "",
+                            extra.get("assays") if extra else "",
+                        )
+                    ),
+                    "noteworthy findings": _first_non_empty(
+                        (
+                            extra.get("key_findings") if extra else "",
+                            extra.get("noteworthy_findings") if extra else "",
+                            extra.get("findings") if extra else "",
+                            extra.get("result_summary") if extra else "",
+                        )
+                    ),
+                    "glp compliance": str(record.get("glp_compliance") or ""),
+                    "location in ctd": str(record.get("location_in_ctd") or ""),
+                }
+            )
+        return candidates
+
+    seen: set[str] = set()
+    for asset in context.get("table_assets", []) or []:
+        preview_rows = asset.get("preview_rows") or []
+        for row in preview_rows:
+            if not isinstance(row, dict):
+                continue
+            key_map = {_normalize_header_token(str(key)): key for key in row.keys()}
+            if "type of study" not in key_map or not (
+                key_map.get("species strain") or key_map.get("test system")
+            ):
+                continue
+            study_number = _pick_first_value(row, key_map, "study number")
+            if not study_number:
+                continue
+            parsed_ids = _extract_study_ids(study_number)
+            canonical_id = parsed_ids[0] if parsed_ids else study_number.strip()
+            if not canonical_id or canonical_id.upper() in seen:
+                continue
+            doses_key = key_map.get("doses")
+            candidates.append(
+                {
+                    "study number": canonical_id,
+                    "species strain or test system": _pick_first_value(
+                        row,
+                        key_map,
+                        "species strain",
+                        "test system",
+                        "species strain or test system",
+                    ),
+                    "method of administration": _pick_first_value(
+                        row, key_map, "method of administration"
+                    ),
+                    "dose concentration": (
+                        str(row.get(doses_key or "") or "").strip() if doses_key else ""
+                    ),
+                    "endpoints assays": "",
+                    "noteworthy findings": _pick_first_value(
+                        row,
+                        key_map,
+                        "noteworthy findings",
+                        "key findings",
+                        "key results",
+                    ),
+                    "glp compliance": _pick_first_value(row, key_map, "glp compliance"),
+                    "location in ctd": _pick_first_value(row, key_map, "location in ctd"),
+                }
+            )
+            seen.add(canonical_id.upper())
+    return candidates
+
+
+def _repair_primary_pharmacodynamics_table(
+    tables: Sequence[Dict[str, Any]],
+    context: Dict[str, Any],
+) -> None:
+    target = next(
+        (table for table in tables if str(table.get("subsection") or "") == "2.6.3.2"),
+        None,
+    )
+    if not target:
+        return
+    candidates = _extract_primary_pd_candidates(context)
+    if not candidates:
+        return
+    columns = [str(col) for col in (target.get("columns") or []) if str(col).strip()]
+    if not columns:
+        columns = [
+            "Study Number",
+            "Species/Strain or Test System",
+            "Method of Administration",
+            "Dose/Concentration",
+            "Endpoints/Assays",
+            "Key Findings",
+            "GLP Compliance",
+            "Location in CTD",
+        ]
+        target["columns"] = columns
+    target["rows"] = _rows_from_token_candidates(columns, candidates)
+
+
+def _extract_safety_pharmacology_candidates(
+    context: Dict[str, Any]
+) -> List[Dict[str, str]]:
+    candidates: List[Dict[str, str]] = []
+    ncd_records = _extract_ncd_study_records(context, module4_section="4.2.1.3")
+    if ncd_records:
+        payload = context.get("ncd_payload") or {}
+        dose_groups = payload.get("dose_groups") if isinstance(payload, dict) else []
+        findings = payload.get("findings") if isinstance(payload, dict) else []
+        safety_summaries = (
+            payload.get("safety_summaries") if isinstance(payload, dict) else []
+        )
+        findings_by_study: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        summaries_by_study: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        dose_groups_by_study: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        if isinstance(findings, list):
+            for finding in findings:
+                if not isinstance(finding, dict):
+                    continue
+                study_id = str(finding.get("study_id") or "").strip()
+                if study_id:
+                    findings_by_study[study_id].append(finding)
+        if isinstance(safety_summaries, list):
+            for summary in safety_summaries:
+                if not isinstance(summary, dict):
+                    continue
+                study_id = str(summary.get("study_id") or "").strip()
+                if study_id:
+                    summaries_by_study[study_id].append(summary)
+        if isinstance(dose_groups, list):
+            for group in dose_groups:
+                if not isinstance(group, dict):
+                    continue
+                study_id = str(group.get("study_id") or "").strip()
+                if study_id:
+                    dose_groups_by_study[study_id].append(group)
+        for record in ncd_records:
+            extra = record.get("extra") if isinstance(record.get("extra"), dict) else {}
+            study_id = str(record.get("study_id") or "").strip()
+            study_findings = findings_by_study.get(study_id, [])
+            study_summaries = summaries_by_study.get(study_id, [])
+            study_dose_groups = dose_groups_by_study.get(study_id, [])
+            organ_systems: List[str] = []
+            for finding in study_findings:
+                organ_system = str(finding.get("organ_system") or "").strip()
+                if organ_system and organ_system not in organ_systems:
+                    organ_systems.append(organ_system)
+            doses_text, sex_group_text = _render_dose_group_summary(study_dose_groups)
+            summary_findings = [
+                str(summary.get("limiting_finding") or "").strip()
+                for summary in study_summaries
+                if isinstance(summary, dict)
+                and str(summary.get("limiting_finding") or "").strip()
+            ]
+            finding_terms = [
+                str(finding.get("finding_term") or "").strip()
+                for finding in study_findings
+                if isinstance(finding, dict)
+                and str(finding.get("finding_term") or "").strip()
+            ][:3]
+            findings_text = _first_non_empty(
+                (
+                    extra.get("noteworthy_findings") if extra else "",
+                    extra.get("key_findings") if extra else "",
+                    extra.get("findings") if extra else "",
+                    "; ".join(summary_findings),
+                    "; ".join(finding_terms),
+                )
+            )
+            candidates.append(
+                {
+                    "organ systems evaluated": _first_non_empty(
+                        (
+                            extra.get("organ_systems") if extra else "",
+                            extra.get("organ_system") if extra else "",
+                            "; ".join(organ_systems),
+                        )
+                    ),
+                    "species strain": _first_non_empty(
+                        (
+                            record.get("test_system"),
+                            f"{record.get('species')}; {record.get('strain')}"
+                            if record.get("species") and record.get("strain")
+                            else "",
+                            record.get("species"),
+                        )
+                    ),
+                    "method of administration": str(
+                        record.get("method_of_administration") or ""
+                    ),
+                    "doses": _first_non_empty(
+                        (
+                            extra.get("dose_levels") if extra else "",
+                            extra.get("dose_level") if extra else "",
+                            extra.get("dose") if extra else "",
+                            doses_text,
+                        )
+                    ),
+                    "gender and no per group": _first_non_empty(
+                        (
+                            extra.get("gender_group") if extra else "",
+                            extra.get("sex_and_n_per_group") if extra else "",
+                            sex_group_text,
+                        )
+                    ),
+                    "noteworthy findings": findings_text,
+                    "glp compliance": str(record.get("glp_compliance") or ""),
+                    "study number": str(record.get("study_number") or ""),
+                    "location in ctd": str(record.get("location_in_ctd") or ""),
+                }
+            )
+        return candidates
+
+    seen: set[str] = set()
+    for asset in context.get("table_assets", []) or []:
+        preview_rows = asset.get("preview_rows") or []
+        for row in preview_rows:
+            if not isinstance(row, dict):
+                continue
+            key_map = {_normalize_header_token(str(key)): key for key in row.keys()}
+            if (
+                "organ systems evaluated" not in key_map
+                or "glp compliance" not in key_map
+            ):
+                continue
+            study_number = _pick_first_value(row, key_map, "study number")
+            if not study_number:
+                continue
+            parsed_ids = _extract_study_ids(study_number)
+            canonical_id = parsed_ids[0] if parsed_ids else study_number.strip()
+            if not canonical_id or canonical_id.upper() in seen:
+                continue
+            doses_key = key_map.get("doses")
+            candidates.append(
+                {
+                    "organ systems evaluated": _pick_first_value(
+                        row, key_map, "organ systems evaluated"
+                    ),
+                    "species strain": _pick_first_value(row, key_map, "species strain"),
+                    "method of administration": _pick_first_value(
+                        row, key_map, "method of administration"
+                    ),
+                    "doses": (
+                        str(row.get(doses_key or "") or "").strip() if doses_key else ""
+                    ),
+                    "gender and no per group": _pick_first_value(
+                        row, key_map, "gender and no per group", "gender", "sex"
+                    ),
+                    "noteworthy findings": _pick_first_value(
+                        row, key_map, "noteworthy findings"
+                    ),
+                    "glp compliance": _pick_first_value(row, key_map, "glp compliance"),
+                    "study number": canonical_id,
+                    "location in ctd": _pick_first_value(row, key_map, "location in ctd"),
+                }
+            )
+            seen.add(canonical_id.upper())
+    return candidates
+
+
+def _repair_safety_pharmacology_table(
+    tables: Sequence[Dict[str, Any]],
+    context: Dict[str, Any],
+) -> None:
+    target = next(
+        (table for table in tables if str(table.get("subsection") or "") == "2.6.3.4"),
+        None,
+    )
+    if not target:
+        return
+    candidates = _extract_safety_pharmacology_candidates(context)
+    if not candidates:
+        return
+    columns = [str(col) for col in (target.get("columns") or []) if str(col).strip()]
+    if not columns:
+        columns = [
+            "Organ Systems Evaluated",
+            "Species/Strain",
+            "Method of Admin.",
+            "Doses (mg/kg)",
+            "Gender and No. per Group",
+            "Noteworthy Findings",
+            "GLP Compliance",
+            "Study Number",
+            "Location in CTD",
+        ]
+        target["columns"] = columns
+    target["rows"] = _rows_from_token_candidates(columns, candidates)
+
+
+def _first_non_empty(values: Sequence[Any]) -> str:
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _display_title_from_path(value: str) -> str:
+    if not value:
+        return ""
+    name = Path(str(value)).name
+    if "." in name:
+        name = name.rsplit(".", 1)[0]
+    return name.strip()
+
+
+def _extract_overview_candidates_from_ncd(
+    context: Dict[str, Any]
+) -> List[Dict[str, str]]:
+    candidates: List[Dict[str, str]] = []
+    for record in _extract_ncd_study_records(context):
         candidates.append(
             {
-                "type_of_study": type_of_study,
-                "test_system": test_system,
-                "method_of_administration": method_of_administration,
-                "testing_facility": testing_facility,
-                "study_number": study_number,
-                "location_in_ctd": location_in_ctd,
+                "type_of_study": str(record.get("type_of_study") or ""),
+                "test_system": str(record.get("test_system") or ""),
+                "method_of_administration": str(
+                    record.get("method_of_administration") or ""
+                ),
+                "testing_facility": str(record.get("testing_facility") or ""),
+                "study_number": str(record.get("study_number") or ""),
+                "location_in_ctd": str(record.get("location_in_ctd") or ""),
             }
         )
-        seen.add(normalized_key)
-
     return candidates
 
 
 def _extract_overview_candidates(context: Dict[str, Any]) -> List[Dict[str, str]]:
     candidates: List[Dict[str, str]] = []
     seen: set[str] = set()
+    ncd_ids: set[str] = set()
     for candidate in _extract_overview_candidates_from_ncd(context):
         study_number = str(candidate.get("study_number") or "").strip()
         if not study_number:
@@ -4797,6 +5468,7 @@ def _extract_overview_candidates(context: Dict[str, Any]) -> List[Dict[str, str]
             continue
         candidates.append(candidate)
         seen.add(key)
+        ncd_ids.add(key)
 
     logger.debug(
         "overview: table_assets=%s preview_rows_total=%s section_sources=%s",
@@ -4831,6 +5503,8 @@ def _extract_overview_candidates(context: Dict[str, Any]) -> List[Dict[str, str]
             if not study_ids:
                 continue
             study_id = study_ids[0]
+            if ncd_ids and study_id.upper() not in ncd_ids:
+                continue
             if study_id.upper() in seen:
                 continue
             candidates.append(
@@ -4850,28 +5524,6 @@ def _extract_overview_candidates(context: Dict[str, Any]) -> List[Dict[str, str]
                     "location_in_ctd": str(
                         row.get(key_map.get("location in ctd") or "") or ""
                     ).strip(),
-                    "study_number": study_id,
-                }
-            )
-            seen.add(study_id.upper())
-    if not candidates:
-        # Fallback: synthesize candidates from any study IDs we can find in the context
-        study_id_candidates = _build_study_id_candidates(context)
-        logger.debug(
-            "overview: no table-derived candidates; using study_id_candidates=%s",
-            list(study_id_candidates.keys()),
-        )
-        for entry in study_id_candidates.values():
-            study_id = entry.get("study_id")
-            if not study_id or str(study_id).upper() in seen:
-                continue
-            candidates.append(
-                {
-                    "type_of_study": "",
-                    "test_system": "",
-                    "method_of_administration": "",
-                    "testing_facility": "",
-                    "location_in_ctd": "",
                     "study_number": study_id,
                 }
             )
@@ -4909,13 +5561,9 @@ def _repair_overview_table(
     candidates = _extract_overview_candidates(context)
     if not candidates:
         return
-    study_id_candidates = _build_study_id_candidates(context)
     allowed_ids: set[str] = set()
     for candidate in candidates:
         for study_id in _extract_study_ids(str(candidate.get("study_number") or "")):
-            allowed_ids.add(study_id.upper())
-    for entry in study_id_candidates.values():
-        for study_id in _extract_study_ids(str(entry.get("study_id") or "")):
             allowed_ids.add(study_id.upper())
 
     def candidate_text(candidate: Dict[str, str]) -> str:
@@ -4998,23 +5646,6 @@ def _repair_overview_table(
             elif key == "study number":
                 new_row[col] = candidate.get("study_number", "")
         rows.append(new_row)
-
-    if study_id_candidates:
-        existing_ids = {
-            str(row.get(study_col) or "").strip()
-            for row in rows
-            if isinstance(row, dict)
-        }
-        for entry in study_id_candidates.values():
-            study_id = str(entry.get("study_id") or "").strip()
-            if not study_id or study_id in existing_ids:
-                continue
-            new_row = {col: "" for col in columns}
-            for col in columns:
-                if _normalize_header_token(col) == "study number":
-                    new_row[col] = study_id
-            rows.append(new_row)
-            existing_ids.add(study_id)
 
     candidate_by_id = {
         str(candidate.get("study_number") or "").strip().upper(): candidate
@@ -5262,7 +5893,28 @@ def _build_tabulated_context(
     s3_client = _boto3_client("s3")
     s3_listing_keys: List[str] = []
     table_assets: List[Dict[str, Any]] = []
-    for row in assets[: max(0, max_tables)]:
+    selected_assets: List[Dict[str, Any]] = []
+    if max_tables > 0 and assets:
+        assets_by_document: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        for row in assets:
+            key = str(row.get("s3_key") or "")
+            document_key = key.split(".pdf.tables/", 1)[0] if key else ""
+            assets_by_document[document_key].append(row)
+        document_asset_keys = sorted(assets_by_document.keys())
+        while len(selected_assets) < max_tables:
+            added_in_round = False
+            for document_key in document_asset_keys:
+                bucket_rows = assets_by_document.get(document_key) or []
+                if not bucket_rows:
+                    continue
+                selected_assets.append(bucket_rows.pop(0))
+                added_in_round = True
+                if len(selected_assets) >= max_tables:
+                    break
+            if not added_in_round:
+                break
+
+    for row in selected_assets:
         extra = _normalize_extra_attributes(row.get("extra_attributes"))
         json_key = extra.get("json_key")
         preview_rows: List[Dict[str, Any]] = []
@@ -6141,6 +6793,7 @@ async def create_ctd_section_summary(
             or context.get("section_sources")
             or context.get("section_key_sections")
             or context.get("template_entries")
+            or context.get("table_assets")
         )
         if not has_context:
             raise HTTPException(

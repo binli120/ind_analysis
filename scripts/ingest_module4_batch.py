@@ -663,6 +663,18 @@ def _is_rate_limit_error(exc: Exception) -> bool:
         return False
 
 
+def _is_model_unavailable_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    signals = (
+        "model_not_found",
+        "does not exist or you do not have access",
+        "you do not have access to this model",
+        "unknown model",
+        "invalid model",
+    )
+    return any(signal in message for signal in signals)
+
+
 def _extract_retry_after_seconds(exc: Exception) -> Optional[float]:
     response = getattr(exc, "response", None)
     if response is not None:
@@ -702,6 +714,7 @@ class ThrottledLLM(LLMClient):
         self,
         base: LLMClient,
         *,
+        fallback_models: Optional[Sequence[str]] = None,
         min_interval_seconds: float = 0.0,
         max_retries: int = 3,
         initial_backoff_seconds: float = 2.0,
@@ -711,7 +724,21 @@ class ThrottledLLM(LLMClient):
         max_total_retry_seconds: float = 45.0,
     ):
         self._base = base
-        self.model_name = base.model_name
+        fallback = [str(model).strip() for model in (fallback_models or [])]
+        deduped_models: List[str] = []
+        seen: Set[str] = set()
+        for candidate in [base.model_name, *fallback]:
+            name = str(candidate or "").strip()
+            if not name:
+                continue
+            key = name.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped_models.append(name)
+        self._model_candidates = deduped_models or [base.model_name]
+        self.model_name = self._model_candidates[0]
+        self._base.model_name = self.model_name
         self.min_interval_seconds = max(0.0, min_interval_seconds)
         self.max_retries = max(0, max_retries)
         self.initial_backoff_seconds = max(0.0, initial_backoff_seconds)
@@ -719,6 +746,10 @@ class ThrottledLLM(LLMClient):
         self.jitter_seconds = max(0.0, jitter_seconds)
         self.max_retry_after_seconds = max(0.0, max_retry_after_seconds)
         self.max_total_retry_seconds = max(0.0, max_total_retry_seconds)
+
+    def _switch_model(self, model_name: str) -> None:
+        self.model_name = model_name
+        self._base.model_name = model_name
 
     def _wait_for_turn(self) -> None:
         if self.min_interval_seconds <= 0:
@@ -737,13 +768,42 @@ class ThrottledLLM(LLMClient):
     def _call_with_retry(self, call: Callable[[], Any]) -> Any:
         attempt = 0
         total_backoff = 0.0
+        attempted_models: Set[str] = {self.model_name.lower()}
         while True:
             with _OPENAI_CALL_SEMAPHORE:
                 self._wait_for_turn()
                 try:
                     return call()
                 except Exception as exc:
-                    if not _is_rate_limit_error(exc) or attempt >= self.max_retries:
+                    is_rate_limit = _is_rate_limit_error(exc)
+                    is_model_unavailable = _is_model_unavailable_error(exc)
+                    if is_rate_limit or is_model_unavailable:
+                        next_model = next(
+                            (
+                                candidate
+                                for candidate in self._model_candidates
+                                if candidate.lower() not in attempted_models
+                            ),
+                            None,
+                        )
+                        if next_model:
+                            attempted_models.add(next_model.lower())
+                            previous = self.model_name
+                            self._switch_model(next_model)
+                            attempt = 0
+                            total_backoff = 0.0
+                            reason = (
+                                "rate limit"
+                                if is_rate_limit
+                                else "model unavailable"
+                            )
+                            print(
+                                f"[WARN] OpenAI {reason} for '{previous}'; "
+                                f"switching to fallback model '{next_model}'",
+                                file=sys.stderr,
+                            )
+                            continue
+                    if not is_rate_limit or attempt >= self.max_retries:
                         raise
                     retry_after = _extract_retry_after_seconds(exc)
                     backoff = min(
@@ -798,8 +858,10 @@ def _build_llm_client(mode: str, args: argparse.Namespace) -> LLMClient:
     base = _resolve_llm(mode)
     if isinstance(base, DummyLLM):
         return base
+    fallback_models = _parse_csv_models(getattr(args, "llm_fallback_models", None))
     return ThrottledLLM(
         base=base,
+        fallback_models=fallback_models,
         min_interval_seconds=args.llm_min_interval_seconds,
         max_retries=args.llm_max_retries,
         initial_backoff_seconds=args.llm_initial_backoff_seconds,
@@ -990,6 +1052,12 @@ def _resolve_llm(mode: str) -> LLMClient:
     if mode == "real":
         return LLMClient()
     raise ValueError("tox llm mode must be 'real' or 'dummy'")
+
+
+def _parse_csv_models(value: Optional[str]) -> List[str]:
+    if not value:
+        return []
+    return [item.strip() for item in str(value).split(",") if item.strip()]
 
 
 def _core_needed(
@@ -1515,6 +1583,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         type=float,
         default=float(os.getenv("INGEST_LLM_JITTER_SECONDS", "0.5")),
         help="Random jitter added to OpenAI retry backoff.",
+    )
+    parser.add_argument(
+        "--llm-fallback-models",
+        default=os.getenv("LLM_FALLBACK_MODELS", ""),
+        help=(
+            "Comma-separated fallback models used when the active model hits rate limits "
+            "(e.g. gpt-4.1-mini,gpt-4o-mini)."
+        ),
     )
     parser.add_argument("--mode", choices=("auto", "core", "tox", "pk"), default="core")
     parser.add_argument(
@@ -2943,6 +3019,7 @@ def main(argv: list[str]) -> int:
         "llm_max_retry_after_seconds": args.llm_max_retry_after_seconds,
         "llm_max_total_retry_seconds": args.llm_max_total_retry_seconds,
         "llm_jitter_seconds": args.llm_jitter_seconds,
+        "llm_fallback_models": _parse_csv_models(args.llm_fallback_models),
         "doc_processed": doc_processed,
         "doc_failed": doc_failed,
         "doc_skipped": doc_skipped,
