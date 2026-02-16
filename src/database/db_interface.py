@@ -20,6 +20,7 @@ import re
 
 from sqlalchemy import text as sqltext
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ncd.database.db import SessionLocal, engine as default_engine
@@ -637,51 +638,108 @@ class NCDRepository:
         Upsert per-pipeline ingestion status.
         """
         db = self.session
-        row = (
-            db.execute(
-                sqltext(
-                    """
-                INSERT INTO ncd_ingestion_pipeline_status (
-                    s3_bucket, s3_key, s3_version_id,
-                    content_hash, pipeline, status,
-                    document_version_id, source_document_id, study_id,
-                    error_message
-                )
-                VALUES (
-                    :bucket, :key, :version_id,
-                    :hash, :pipeline, :status,
-                    :dvid, :sdid, :study_id,
-                    :err
-                )
-                ON CONFLICT (s3_bucket, s3_key, content_hash, pipeline)
-                DO UPDATE SET
-                    status = EXCLUDED.status,
-                    document_version_id = COALESCE(EXCLUDED.document_version_id, ncd_ingestion_pipeline_status.document_version_id),
-                    source_document_id = COALESCE(EXCLUDED.source_document_id, ncd_ingestion_pipeline_status.source_document_id),
-                    study_id = COALESCE(EXCLUDED.study_id, ncd_ingestion_pipeline_status.study_id),
-                    error_message = EXCLUDED.error_message,
-                    updated_at = now()
-                RETURNING id, status, document_version_id, source_document_id, study_id
-                """
-                ),
-                {
-                    "bucket": s3_bucket,
-                    "key": s3_key,
-                    "version_id": s3_version_id,
-                    "hash": content_hash,
-                    "pipeline": pipeline,
-                    "status": status,
-                    "dvid": document_version_id,
-                    "sdid": source_document_id,
-                    "study_id": study_id,
-                    "err": error_message,
-                },
+        params = {
+            "bucket": s3_bucket,
+            "key": s3_key,
+            "version_id": s3_version_id,
+            "hash": content_hash,
+            "pipeline": pipeline,
+            "status": status,
+            "dvid": document_version_id,
+            "sdid": source_document_id,
+            "study_id": study_id,
+            "err": error_message,
+        }
+        insert_stmt = sqltext(
+            """
+            INSERT INTO ncd_ingestion_pipeline_status (
+                s3_bucket, s3_key, s3_version_id,
+                content_hash, pipeline, status,
+                document_version_id, source_document_id, study_id,
+                error_message
             )
-            .mappings()
-            .first()
+            VALUES (
+                :bucket, :key, :version_id,
+                :hash, :pipeline, :status,
+                :dvid, :sdid, :study_id,
+                :err
+            )
+            ON CONFLICT (s3_bucket, s3_key, content_hash, pipeline)
+            DO UPDATE SET
+                status = EXCLUDED.status,
+                document_version_id = COALESCE(EXCLUDED.document_version_id, ncd_ingestion_pipeline_status.document_version_id),
+                source_document_id = COALESCE(EXCLUDED.source_document_id, ncd_ingestion_pipeline_status.source_document_id),
+                study_id = COALESCE(EXCLUDED.study_id, ncd_ingestion_pipeline_status.study_id),
+                error_message = EXCLUDED.error_message,
+                updated_at = now()
+            RETURNING id, status, document_version_id, source_document_id, study_id
+            """
+        )
+
+        try:
+            row = db.execute(insert_stmt, params).mappings().first()
+            db.commit()
+            return dict(row) if row else {}
+        except IntegrityError as exc:
+            db.rollback()
+            message = str(exc)
+            if (
+                pipeline == "pharm-overview"
+                and "ncd_ingestion_pipeline_status" in message
+                and "pipeline_check" in message
+            ):
+                self._ensure_pipeline_status_constraint_allows_pharm_overview()
+                row = db.execute(insert_stmt, params).mappings().first()
+                db.commit()
+                return dict(row) if row else {}
+            raise
+
+    def _ensure_pipeline_status_constraint_allows_pharm_overview(self) -> None:
+        """
+        Backward-compatible constraint upgrade for older deployments that do not yet
+        allow `pharm-overview` in ncd_ingestion_pipeline_status.pipeline.
+        """
+        db = self.session
+        db.execute(
+            sqltext(
+                """
+                DO $$
+                DECLARE r record;
+                BEGIN
+                    FOR r IN
+                        SELECT c.conname
+                        FROM pg_constraint c
+                        JOIN pg_class t ON t.oid = c.conrelid
+                        WHERE t.relname = 'ncd_ingestion_pipeline_status'
+                          AND c.contype = 'c'
+                          AND pg_get_constraintdef(c.oid) ILIKE '%pipeline%'
+                    LOOP
+                        EXECUTE format(
+                            'ALTER TABLE ncd_ingestion_pipeline_status DROP CONSTRAINT IF EXISTS %I',
+                            r.conname
+                        );
+                    END LOOP;
+
+                    ALTER TABLE ncd_ingestion_pipeline_status
+                    ADD CONSTRAINT ncd_ingestion_pipeline_status_pipeline_check
+                    CHECK (
+                        pipeline IN (
+                            'core',
+                            'langchain',
+                            'tox',
+                            'section-summary',
+                            'context',
+                            'pharm-overview'
+                        )
+                    );
+                EXCEPTION
+                    WHEN duplicate_object THEN
+                        NULL;
+                END $$;
+                """
+            )
         )
         db.commit()
-        return dict(row) if row else {}
 
     def fetch_pipeline_status(
         self,
@@ -766,18 +824,60 @@ class NCDRepository:
         Returns the source_document_id.
         """
         db = self.session
-        existing = db.execute(
-            sqltext(
-                """
-                SELECT id FROM ncd_source_document
+        existing = (
+            db.execute(
+                sqltext(
+                    """
+                SELECT id, file_name, module, ctd_section
+                FROM ncd_source_document
                 WHERE project_id = :pid AND sha256 = :sha
+                ORDER BY uploaded_at DESC NULLS LAST
+                LIMIT 1
                 """
-            ),
-            {"pid": project_id, "sha": sha256},
-        ).scalar()
+                ),
+                {"pid": project_id, "sha": sha256},
+            )
+            .mappings()
+            .first()
+        )
 
         if existing:
-            return str(existing)
+            existing_id = str(existing.get("id"))
+            existing_file_name = str(existing.get("file_name") or "")
+            existing_module = str(existing.get("module") or "")
+            existing_ctd_section = str(existing.get("ctd_section") or "")
+            should_update_file_name = (
+                bool(file_name)
+                and existing_file_name.lower().startswith("input.")
+                and existing_file_name.lower().endswith(".pdf")
+                and existing_file_name != file_name
+            )
+            if should_update_file_name or (
+                ctd_section and not existing_ctd_section
+            ) or (module and not existing_module):
+                db.execute(
+                    sqltext(
+                        """
+                        UPDATE ncd_source_document
+                        SET file_name = CASE
+                                WHEN :update_file_name THEN :fname
+                                ELSE file_name
+                            END,
+                            module = COALESCE(NULLIF(module, ''), :module),
+                            ctd_section = COALESCE(NULLIF(ctd_section, ''), :ctd)
+                        WHERE id = :id
+                        """
+                    ),
+                    {
+                        "id": existing_id,
+                        "update_file_name": should_update_file_name,
+                        "fname": file_name,
+                        "module": module,
+                        "ctd": ctd_section,
+                    },
+                )
+                db.commit()
+            return existing_id
 
         new_id = db.execute(
             sqltext(

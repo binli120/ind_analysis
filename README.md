@@ -217,7 +217,7 @@ This repo exposes multiple pipeline entry points. Pick the one that matches the 
 - S3 ingestion + status tracking (`src/pdf_analysis/sqs_worker.py`): downloads from S3, writes `documents`, `document_versions`, `document_ingestion_status`, uploads markdown/quality to S3. Optional LangChain writes `ncd_studies`, `ncd_noael`, `ncd_pk_parameters`, `extracted_entities` (and `document_comments` for low-confidence).
 - NCD full tox pipeline (`src/ncd/pipeline_runner.py`): local PDF to full tox outputs, including `ncd_source_document`, `ncd_document_page`, `ncd_text_chunk`, embeddings, plus `ncd_study`, `ncd_dose_group`, `ncd_exposure_metric`, `ncd_finding`, `ncd_study_safety_summary`.
 - S3 -> Redis sync (`scripts/s3_sync.py`): scans S3, extracts markdown, writes Redis + S3 sidecars. No DB writes.
-- Batch Module 4 ingestion (`scripts/ingest_module4_batch.py`): iterates S3 Module 4 PDFs and runs `pdf_analysis.sqs_worker.process_message` with status-aware skipping and per-run reports.
+- Batch Module 4 ingestion (`scripts/ingest_module4_batch.py`): iterates S3 Module 4 PDFs and runs `pdf_analysis.sqs_worker.process_message` with status-aware skipping and per-run reports, plus a pharmacology overview metadata pass (`pharm-overview`) that backfills `ncd_source_document` / `ncd_study` for 4.2.1.x (used by 2.6.3.1 tables).
 
 Decision guide:
 - S3 PDF -> DB with ingestion status: use `src/pdf_analysis/sqs_worker.py` (or `scripts/ingest_module4_batch.py` for batches).
@@ -310,6 +310,33 @@ poetry run python scripts/ingest_module4_batch.py \
   --llm-jitter-seconds 0.5 \
   --summary-max-chars 2000
 ```
+
+4.1) Backfill only pharmacology overview metadata (2.6.3.1 support) without re-running core/langchain:
+
+```shell
+LANGCHAIN_TRACING_V2=false LANGCHAIN_API_KEY= \
+LLM_MODEL_NAME=gpt-4.1-mini \
+poetry run python scripts/ingest_module4_batch.py \
+  --bucket doc-repository-dev \
+  --company filynai.com \
+  --project "${PROJECT_NAME}" \
+  --project-id "${PROJECT_UUID}" \
+  --tenant-id "${TENANT_UUID}" \
+  --created-by "${USER_UUID}" \
+  --prefix "filynai.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/4.2 Study reports/" \
+  --mode core \
+  --no-force-core \
+  --no-context \
+  --no-section-summary \
+  --skip-langchain \
+  --force-pharm-overview \
+  --workers 4
+```
+
+Notes:
+- `pharm-overview` runs by default for Module 4 pharmacology sections `4.2.1.1` to `4.2.1.4`.
+- Use `--no-pharm-overview` to disable it.
+- Per-file status/IDs are included in ingestion reports as `pharm_overview_*` fields.
 
 5) Module 4 tox pipeline (ncd_finding/exposure/safety summary):
 

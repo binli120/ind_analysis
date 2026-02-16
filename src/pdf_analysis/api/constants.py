@@ -52,5 +52,5 @@ STUDY_ID_TRAILERS = {
     "tables",
 }
 STUDY_ID_SKIP_RE = re.compile(
-    r"^(?:input\.(?:p\\d+)?\\.t\\d+|p\\d+\\.t\\d+)$", re.IGNORECASE
+    r"^(?:input\.(?:p\d+)?\.t\d+|p\d+\.t\d+)$", re.IGNORECASE
 )

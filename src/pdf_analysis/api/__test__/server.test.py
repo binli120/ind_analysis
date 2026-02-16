@@ -158,3 +158,107 @@ def test_gap_parse_module_number(server: Any) -> None:
     assert server._gap_parse_module_number("module4_nonclinical") == "4"
     assert server._gap_parse_module_number("5") == "5"
     assert server._gap_parse_module_number("no-module") is None
+
+
+def test_repair_overview_table_populates_from_ncd_payload(server: Any) -> None:
+    tables = [
+        {
+            "subsection": "2.6.3.1",
+            "columns": [
+                "Type of Study",
+                "Test System",
+                "Method of Administration",
+                "Testing Facility",
+                "Study Number",
+                "Location in CTD",
+            ],
+            "rows": [],
+        }
+    ]
+    context = {
+        "mapping": [
+            {
+                "module4_section": "4.2.1.1",
+                "category": "Primary pharmacodynamics",
+            }
+        ],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "sponsor_study_id": "LT3114-PHA-014-R",
+                    "module4_section": "4.2.1.1",
+                    "species": "Female C57BL/6 mice",
+                    "strain": "",
+                    "route": "Intraperitoneal injection, q2d",
+                    "main_source_document_id": "doc-1",
+                    "extra_attributes": {"testing_facility": "ACME Labs"},
+                }
+            ],
+            "source_documents": [
+                {
+                    "id": "doc-1",
+                    "file_name": "FGF_VEGF_Matrigel_Primary_PD.pdf",
+                    "ctd_section": "4.2.1.1",
+                    "module": "Module 4",
+                }
+            ],
+        },
+        "table_assets": [],
+        "section_sources": [],
+        "document_keys": [],
+        "ncd_study_ids": [],
+        "s3_listing_keys": [],
+    }
+
+    server._repair_overview_table(tables, context)
+
+    rows = tables[0]["rows"]
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["Study Number"] == "LT3114-PHA-014-R"
+    assert row["Type of Study"] == "Primary pharmacodynamics"
+    assert row["Test System"] == "Female C57BL/6 mice"
+    assert row["Method of Administration"] == "Intraperitoneal injection, q2d"
+    assert row["Testing Facility"] == "ACME Labs"
+    assert row["Location in CTD"].startswith("Module 4, Section 4.2.1.1")
+
+
+def test_repair_overview_table_drops_invalid_study_numbers(server: Any) -> None:
+    tables = [
+        {
+            "subsection": "2.6.3.1",
+            "columns": [
+                "Type of Study",
+                "Test System",
+                "Method of Administration",
+                "Testing Facility",
+                "Study Number",
+                "Location in CTD",
+            ],
+            "rows": [
+                {
+                    "Type of Study": "",
+                    "Test System": "",
+                    "Method of Administration": "",
+                    "Testing Facility": "",
+                    "Study Number": "u20134.8-fold",
+                    "Location in CTD": "",
+                }
+            ],
+        }
+    ]
+    context = {
+        "mapping": [],
+        "ncd_payload": {},
+        "table_assets": [],
+        "section_sources": [],
+        "document_keys": [],
+        "ncd_study_ids": ["LT3114-PHA-001-R"],
+        "s3_listing_keys": [],
+    }
+
+    server._repair_overview_table(tables, context)
+
+    rows = tables[0]["rows"]
+    assert len(rows) == 1
+    assert rows[0]["Study Number"] == "LT3114-PHA-001-R"

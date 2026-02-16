@@ -553,6 +553,89 @@ class ApiEndpointTests(unittest.TestCase):
             "Metadata JSON upload not detected",
         )
 
+    def test_create_s3_new_project_endpoint(self) -> None:
+        client = TestClient(server.app)
+        put_calls: List[Dict[str, Any]] = []
+
+        def put_object(**kwargs: Any) -> Dict[str, Any]:
+            put_calls.append(kwargs)
+            return {}
+
+        fake_s3_client = types.SimpleNamespace(put_object=put_object)
+        fake_exceptions = types.SimpleNamespace(
+            BotoCoreError=Exception, ClientError=Exception
+        )
+        fake_botocore = types.ModuleType("botocore")
+        fake_botocore.exceptions = fake_exceptions
+
+        with (
+            patch.object(
+                server,
+                "_load_s3_folder_template",
+                return_value={"Module1": {}, "Module2": {"2.1": {}}},
+            ),
+            patch.dict(
+                sys.modules,
+                {
+                    "boto3": types.SimpleNamespace(
+                        client=lambda *args, **kwargs: fake_s3_client
+                    ),
+                    "botocore": fake_botocore,
+                    "botocore.exceptions": fake_exceptions,
+                },
+            ),
+        ):
+            response = client.post(
+                "/s3/new-project",
+                json={
+                    "bucket": "demo-bucket",
+                    "tenant_name": "tenant-a",
+                    "project_name": "project-a",
+                    "aws_region": "us-east-1",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "OK")
+        self.assertEqual(payload["base_prefix"], "tenant-a/project-a/")
+        self.assertEqual(payload["created_folders"], 4)
+
+        keys = {call["Key"] for call in put_calls}
+        self.assertEqual(
+            keys,
+            {
+                "tenant-a/project-a/",
+                "tenant-a/project-a/Module1/",
+                "tenant-a/project-a/Module2/",
+                "tenant-a/project-a/Module2/2.1/",
+            },
+        )
+
+    def test_create_s3_new_project_endpoint_requires_valid_segments(self) -> None:
+        client = TestClient(server.app)
+        fake_exceptions = types.SimpleNamespace(
+            BotoCoreError=Exception, ClientError=Exception
+        )
+        fake_botocore = types.ModuleType("botocore")
+        fake_botocore.exceptions = fake_exceptions
+
+        with patch.dict(
+            sys.modules,
+            {"botocore": fake_botocore, "botocore.exceptions": fake_exceptions},
+        ):
+            response = client.post(
+                "/s3/new-project",
+                json={
+                    "bucket": "demo-bucket",
+                    "tenant_name": "/",
+                    "project_name": "project-a",
+                },
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("tenant_name is required", response.json()["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()
