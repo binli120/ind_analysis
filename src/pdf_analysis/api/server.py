@@ -4135,6 +4135,139 @@ def _element_entries_for_section(section: str) -> List[str]:
     return elements
 
 
+def _filter_mapping_entries_by_module4_sections(
+    entries: Sequence[Dict[str, Any]],
+    module4_sections: Sequence[str],
+) -> List[Dict[str, Any]]:
+    allowed = {str(section).strip() for section in module4_sections if str(section).strip()}
+    if not allowed:
+        return []
+    filtered: List[Dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        module4_section = str(entry.get("module4_section") or "").strip()
+        if module4_section in allowed:
+            filtered.append(entry)
+    return filtered
+
+
+def _sections_with_material_data(
+    module4_sections: Sequence[str],
+    *,
+    section_sources: Sequence[Dict[str, Any]],
+    document_keys: Sequence[str],
+    ncd_payload: Dict[str, Any],
+) -> List[str]:
+    studies = ncd_payload.get("studies") if isinstance(ncd_payload, dict) else []
+    source_documents = (
+        ncd_payload.get("source_documents") if isinstance(ncd_payload, dict) else []
+    )
+    resolved: List[str] = []
+    for module4_section in module4_sections:
+        section_token = str(module4_section or "").strip()
+        if not section_token:
+            continue
+        has_section_source = any(
+            section_number_matches(str(row.get("section_number") or ""), section_token)
+            for row in section_sources
+            if isinstance(row, dict)
+        )
+        has_document = any(
+            _gap_key_mentions_module4_section(str(key or ""), section_token)
+            for key in document_keys
+        )
+        has_study = any(
+            isinstance(row, dict)
+            and section_number_matches(
+                str(row.get("module4_section") or ""), section_token
+            )
+            for row in (studies or [])
+        )
+        has_source_document = any(
+            isinstance(row, dict)
+            and (
+                _gap_key_mentions_module4_section(
+                    str(row.get("file_name") or ""), section_token
+                )
+                or section_number_matches(
+                    str(row.get("ctd_section") or ""), section_token
+                )
+            )
+            for row in (source_documents or [])
+        )
+        if has_section_source or has_document or has_study or has_source_document:
+            resolved.append(section_token)
+    return sorted(set(resolved))
+
+
+def _mapped_target_sections_for_request(
+    *,
+    section: str,
+    mapping_entries: Sequence[Dict[str, Any]],
+) -> Set[str]:
+    target = str(section or "").strip()
+    if not target:
+        return set()
+    matched: Set[str] = set()
+    for entry in mapping_entries:
+        if not isinstance(entry, dict):
+            continue
+        target_rows = entry.get("matched_targets") or entry.get("targets") or []
+        for row in target_rows:
+            if not isinstance(row, dict):
+                continue
+            target_section = str(row.get("section") or "").strip()
+            if not target_section:
+                continue
+            if target_section == target or target_section.startswith(f"{target}."):
+                matched.add(target_section)
+    return matched
+
+
+def _filter_section_entries_for_targets(
+    entries: Sequence[Dict[str, Any]],
+    *,
+    target_sections: Set[str],
+) -> List[Dict[str, Any]]:
+    if not target_sections:
+        return []
+    filtered: List[Dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        subsection = str(entry.get("subsection") or "").strip()
+        section = str(entry.get("section") or "").strip()
+        if subsection and subsection in target_sections:
+            filtered.append(entry)
+            continue
+        if not subsection and section and section in target_sections:
+            filtered.append(entry)
+    return filtered
+
+
+def _filter_element_numbers_for_targets(
+    element_numbers: Sequence[str],
+    *,
+    target_sections: Set[str],
+) -> List[str]:
+    if not target_sections:
+        return []
+    filtered: List[str] = []
+    for element in element_numbers:
+        token = str(element or "").strip()
+        if not token:
+            continue
+        if any(
+            token == target
+            or token.startswith(f"{target}.")
+            or token.startswith(f"{target}-")
+            for target in target_sections
+        ):
+            filtered.append(token)
+    return filtered
+
+
 def _build_section_summary_context(
     db: Session,
     *,
@@ -4195,6 +4328,73 @@ def _build_section_summary_context(
         module4_sections=module4_sections,
         section_type=None,
     )
+    ncd_payload: Dict[str, Any] = {}
+    try:
+        ncd_payload = fetch_ncd_payload(
+            db,
+            project_id=project_id,
+            module4_sections=module4_sections,
+        )
+    except Exception as exc:
+        logger.warning(
+            "section summary ctx: failed to fetch ncd payload for section=%s project=%s: %s",
+            section,
+            project_id,
+            exc,
+        )
+        ncd_payload = {}
+
+    available_sections = _sections_with_material_data(
+        module4_sections,
+        section_sources=sources,
+        document_keys=document_keys,
+        ncd_payload=ncd_payload,
+    )
+    if set(available_sections) != set(module4_sections):
+        module4_sections = available_sections
+        mapping_entries = _filter_mapping_entries_by_module4_sections(
+            mapping_entries,
+            module4_sections,
+        )
+        sources = fetch_section_sources(
+            db,
+            tenant_id=tenant_id,
+            bucket=bucket,
+            project_like=project_like,
+            module4_sections=module4_sections,
+        )
+        document_keys = fetch_document_keys_for_sections(
+            db,
+            tenant_id=tenant_id,
+            bucket=bucket,
+            project_like=project_like,
+            module4_sections=module4_sections,
+        )
+        key_sections = fetch_key_sections_for_sections(
+            db,
+            tenant_id=tenant_id,
+            bucket=bucket,
+            project_like=project_like,
+            module4_sections=module4_sections,
+            section_type=None,
+        )
+
+    mapped_target_sections = _mapped_target_sections_for_request(
+        section=section,
+        mapping_entries=mapping_entries,
+    )
+    template_entries = _template_entries_for_section(section)
+    element_numbers = _element_entries_for_section(section)
+    if section.startswith("2.6."):
+        template_entries = _filter_section_entries_for_targets(
+            template_entries,
+            target_sections=mapped_target_sections,
+        )
+        element_numbers = _filter_element_numbers_for_targets(
+            element_numbers,
+            target_sections=mapped_target_sections,
+        )
+
     table_specs: List[Dict[str, Any]] = []
     table_assets: List[Dict[str, Any]] = []
     if section.startswith("2.6.4") or section.startswith("2.6.5"):
@@ -4218,7 +4418,6 @@ def _build_section_summary_context(
                 exc,
             )
 
-    element_numbers = _element_entries_for_section(section)
     element_payloads: List[Dict[str, Any]] = []
     used_elements: List[str] = []
     for element in element_numbers:
@@ -4252,7 +4451,7 @@ def _build_section_summary_context(
         "ctd_targets": targets,
         "module4_sections": module4_sections,
         "mapping": mapping_entries,
-        "template_entries": _template_entries_for_section(section),
+        "template_entries": template_entries,
         "section_sources": _slim_sources([dict(row) for row in sources]),
         "section_key_sections": _slim_key_sections([dict(row) for row in key_sections]),
         "table_specs": table_specs,
@@ -4498,6 +4697,24 @@ def _extract_study_ids(text: str) -> List[str]:
         seen.add(key)
         ordered.append(value)
     return ordered
+
+
+def _canonical_study_number(value: str) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    parsed = _extract_study_ids(raw)
+    if parsed:
+        return parsed[0]
+    if STUDY_ID_SKIP_RE.match(raw):
+        return ""
+    # Keep sponsor IDs that don't match strict regex (e.g., "WKP00013 Page 2"),
+    # but avoid generic labels and weak fragments.
+    digit_count = sum(1 for ch in raw if ch.isdigit())
+    alpha_count = sum(1 for ch in raw if ch.isalpha())
+    if digit_count >= 2 and alpha_count >= 2 and len(raw) >= 6:
+        return raw
+    return ""
 
 
 def _build_study_id_candidates(context: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
@@ -4897,8 +5114,7 @@ def _extract_ncd_study_records(
         if not isinstance(study, dict):
             continue
         sponsor_study_id = str(study.get("sponsor_study_id") or "").strip()
-        study_ids = _extract_study_ids(sponsor_study_id)
-        study_number = study_ids[0] if study_ids else ""
+        study_number = _canonical_study_number(sponsor_study_id)
         if not study_number:
             continue
         normalized_key = study_number.upper()
@@ -5046,7 +5262,7 @@ def _render_dose_group_summary(groups: Sequence[Dict[str, Any]]) -> Tuple[str, s
 def _rows_from_token_candidates(
     columns: Sequence[str], candidates: Sequence[Dict[str, str]]
 ) -> List[Dict[str, str]]:
-    rows: List[Dict[str, str]] = []
+    passthrough_rows: List[Dict[str, str]] = []
     study_col = next(
         (col for col in columns if _normalize_header_token(col) == "study number"), None
     )
@@ -5061,11 +5277,11 @@ def _rows_from_token_candidates(
         if not any(str(value).strip() for value in row.values()):
             continue
         if not study_col:
-            rows.append(row)
+            passthrough_rows.append(row)
             continue
         parsed_ids = _extract_study_ids(str(row.get(study_col) or ""))
         if not parsed_ids:
-            rows.append(row)
+            passthrough_rows.append(row)
             continue
         canonical_id = parsed_ids[0]
         row[study_col] = canonical_id
@@ -5077,11 +5293,12 @@ def _rows_from_token_candidates(
             deduped[canonical_id] = row_with_score
     if deduped:
         ordered_ids = sorted(deduped.keys(), key=_study_sort_key)
-        return [
+        normalized_rows = [
             {k: v for k, v in deduped[study_id].items() if k != "_score"}
             for study_id in ordered_ids
         ]
-    return rows
+        return [*normalized_rows, *passthrough_rows]
+    return passthrough_rows
 
 
 def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, str]]:
@@ -5881,6 +6098,52 @@ def _build_tabulated_context(
             exc,
         )
 
+    available_sections = _sections_with_material_data(
+        module4_sections,
+        section_sources=sources,
+        document_keys=document_keys,
+        ncd_payload=ncd_payload,
+    )
+    if set(available_sections) != set(module4_sections):
+        module4_sections = available_sections
+        mapping_entries = _filter_mapping_entries_by_module4_sections(
+            mapping_entries,
+            module4_sections,
+        )
+        sources = fetch_section_sources(
+            db,
+            tenant_id=tenant_id,
+            bucket=bucket,
+            project_like=project_like,
+            module4_sections=module4_sections,
+        )
+        document_keys = fetch_document_keys_for_sections(
+            db,
+            tenant_id=tenant_id,
+            bucket=bucket,
+            project_like=project_like,
+            module4_sections=module4_sections,
+        )
+        ncd_study_ids = fetch_study_ids_for_sections(
+            db,
+            project_id=project_id,
+            module4_sections=module4_sections,
+        )
+        try:
+            ncd_payload = fetch_ncd_payload(
+                db,
+                project_id=project_id,
+                module4_sections=module4_sections,
+            )
+        except Exception as exc:
+            ncd_payload = {}
+            logger.warning(
+                "tabulated ctx: failed to refetch ncd payload for section=%s project=%s: %s",
+                section,
+                project_id,
+                exc,
+            )
+
     assets = fetch_assets_for_sections(
         db,
         tenant_id=tenant_id,
@@ -5997,6 +6260,16 @@ def _build_tabulated_context(
                 "column_examples": raw.get("Column Example Values"),
                 "column_mapping": raw.get("Column Value in Module 4 Location Mapping"),
             }
+        )
+
+    mapped_target_sections = _mapped_target_sections_for_request(
+        section=section,
+        mapping_entries=mapping_entries,
+    )
+    if section.startswith("2.6."):
+        table_specs = _filter_section_entries_for_targets(
+            table_specs,
+            target_sections=mapped_target_sections,
         )
 
     preview_row_total = sum(

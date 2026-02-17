@@ -262,3 +262,64 @@ def test_repair_overview_table_drops_invalid_study_numbers(server: Any) -> None:
     rows = tables[0]["rows"]
     assert len(rows) == 1
     assert rows[0]["Study Number"] == "LT3114-PHA-001-R"
+
+
+def test_sections_with_material_data_skips_missing_module4_section(server: Any) -> None:
+    sections = server._sections_with_material_data(
+        ["4.2.1.1", "4.2.1.4"],
+        section_sources=[{"section_number": "4.2.1.1"}],
+        document_keys=[],
+        ncd_payload={},
+    )
+    assert sections == ["4.2.1.1"]
+
+
+def test_filter_section_entries_for_targets(server: Any) -> None:
+    entries = [
+        {"section": "2.6.3", "subsection": "2.6.3.1"},
+        {"section": "2.6.3", "subsection": "2.6.3.4"},
+        {"section": "2.6.3", "subsection": "2.6.3.5"},
+    ]
+    filtered = server._filter_section_entries_for_targets(
+        entries,
+        target_sections={"2.6.3.1", "2.6.3.4"},
+    )
+    assert [entry["subsection"] for entry in filtered] == ["2.6.3.1", "2.6.3.4"]
+
+
+def test_extract_ncd_study_records_keeps_nonregex_sponsor_study_id(server: Any) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.3", "category": "Safety Pharmacology"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "WKP00013 Page 2",
+                    "module4_section": "4.2.1.3",
+                    "species": "Cynomolgus monkey",
+                    "strain": "",
+                    "route": "IV",
+                    "extra_attributes": {},
+                }
+            ],
+            "source_documents": [],
+        },
+        "document_keys": [],
+        "project_document_keys": [],
+    }
+
+    rows = server._extract_ncd_study_records(context, module4_section="4.2.1.3")
+    assert len(rows) == 1
+    assert rows[0]["study_number"] == "WKP00013 Page 2"
+
+
+def test_rows_from_token_candidates_keeps_unparsed_study_ids(server: Any) -> None:
+    columns = ["Study Number", "Organ Systems Evaluated"]
+    candidates = [
+        {"study number": "RP-PC-60", "organ systems evaluated": "cardiovascular"},
+        {"study number": "WKP00013 Page 2", "organ systems evaluated": "respiratory"},
+    ]
+    rows = server._rows_from_token_candidates(columns, candidates)
+    study_numbers = [str(row.get("Study Number") or "") for row in rows]
+    assert "RP-PC-60" in study_numbers
+    assert "WKP00013 Page 2" in study_numbers

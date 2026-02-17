@@ -1,4 +1,5 @@
 import importlib.util
+import warnings
 from pathlib import Path
 
 from pdf_analysis.api.constants import STUDY_ID_SKIP_RE
@@ -10,7 +11,13 @@ def _load_ingest_module():
     if spec is None or spec.loader is None:
         raise RuntimeError("Unable to load ingest_module4_batch module")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"builtin type (SwigPyPacked|SwigPyObject|swigvarlink) has no __module__ attribute",
+            category=DeprecationWarning,
+        )
+        spec.loader.exec_module(module)
     return module
 
 
