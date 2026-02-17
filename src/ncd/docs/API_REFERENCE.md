@@ -5,6 +5,7 @@ This summarizes the main FastAPI routes exposed by `pdf_analysis.api.server` tha
 ## Upload/S3 (router: upload)
 - `POST /analyze` — Analyze a PDF from multipart upload or S3 JSON payload; returns markdown, tables, quality, metrics.
 - `POST /s3/upload-analyze` — Upload PDF to S3, run analysis, and write sidecars (`.meta.json`, `.analysis.json`).
+- `POST /s3/new-project` — Create `tenant/project` folder scaffolding in S3 using `config/s3_folder_template.json`.
 - `POST /s3/markdown` — Refresh markdown from S3 PDF and persist metadata.
 - `POST /s3/markdown/summary` — Refresh markdown + summary/topics via OpenAI.
 - `POST /s3/markdown/save` — Save edited markdown back to S3 with optional tags/metadata.
@@ -29,7 +30,7 @@ This summarizes the main FastAPI routes exposed by `pdf_analysis.api.server` tha
 - `GET  /dev/sections` — List known template sections loaded from `src/ncd/ind_24_26_template.json`.
 
 ## Notes
-- Template-driven labels come from `src/summary/ind_24_26_template.json` (fallback `src/ncd/ind_24_26_template.json`).
+- Template-driven labels come from `src/ncd/ind_24_26_template.json`.
 - Text sampling is minimal (default first 5 pages) with pdfminer → OCR → PyMuPDF → pdfplumber fallbacks; filename hints are used when present (e.g., `4.2.1.1.pdf`).
 - Optional LLM refinement requires `OPENAI_API_KEY` and infra extras installed.
 - S3 routes require `boto3` (`poetry install --with infra`). Default bucket can be set via `S3_BUCKET`.

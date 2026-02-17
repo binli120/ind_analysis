@@ -52,13 +52,14 @@ def run_pdf_ingest_and_extract(
     db_session: Optional[Session] = None,
     chunk_max_chars: int = 1500,
     embed: bool = True,
+    run_tox: bool = True,
+    run_pk: bool = True,
 ) -> Dict[str, Any]:
     """
-    End-to-end helper: ingest PDF pages -> chunks -> embeddings -> classify study -> run LLM extractors.
+    End-to-end helper: ingest PDF pages -> chunks -> embeddings -> optional classification/extractors.
 
-    Returns a summary dict with IDs and extraction payloads (tox and pk).
+    Returns a summary dict with IDs and extraction payloads (tox/pk when enabled).
     """
-    llm = _ensure_llm(llm_client)
     if not pdf_path.exists():
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
 
@@ -88,28 +89,36 @@ def run_pdf_ingest_and_extract(
         if embed:
             embed_chunks(db, chunk_ids)
 
-        classify_study_for_document(db, source_document_id, llm=llm)
-        study_id = db.execute(
-            sqltext(
-                """
-                    SELECT id FROM ncd_study
-                    WHERE main_source_document_id = :sid
-                    ORDER BY created_at DESC NULLS LAST
-                    LIMIT 1
+        study_id = None
+        tox_summary = None
+        pk_summary = None
+        if run_tox or run_pk:
+            llm = _ensure_llm(llm_client)
+            classify_study_for_document(db, source_document_id, llm=llm)
+            study_id = db.execute(
+                sqltext(
                     """
-            ),
-            {"sid": source_document_id},
-        ).scalar()
-        if study_id is None:
-            raise RuntimeError("Study classification failed to create ncd_study entry.")
-
-        tox_summary = extract_tox_for_study(db, str(study_id), llm)
-        pk_summary = extract_pk_for_study(db, str(study_id), llm)
+                        SELECT id FROM ncd_study
+                        WHERE main_source_document_id = :sid
+                        ORDER BY created_at DESC NULLS LAST
+                        LIMIT 1
+                        """
+                ),
+                {"sid": source_document_id},
+            ).scalar()
+            if study_id is None:
+                raise RuntimeError(
+                    "Study classification failed to create ncd_study entry."
+                )
+            if run_tox:
+                tox_summary = extract_tox_for_study(db, str(study_id), llm)
+            if run_pk:
+                pk_summary = extract_pk_for_study(db, str(study_id), llm)
 
         return {
             "project_id": project_id,
             "source_document_id": str(source_document_id),
-            "study_id": str(study_id),
+            "study_id": str(study_id) if study_id is not None else "",
             "hash": pdf_hash,
             "chunks": chunk_ids,
             "tox_summary": tox_summary.model_dump() if tox_summary else None,

@@ -32,7 +32,7 @@ DEFAULT_TEMPLATE_PREFIXES = ("2.4/", "2.6/")
 SECTION_PROMPT_MAX_CHARS = 24000
 
 STUDY_ID_RE = re.compile(
-    r"\b(?=[A-Z0-9.-]*[A-Z])(?=[A-Z0-9.-]*\d)[A-Z0-9]{2,}(?:[-.][A-Z0-9]+)+\b",
+    r"\b(?=[A-Z0-9./-]*[A-Z])(?=[A-Z0-9./-]*\d)[A-Z0-9]{2,}(?:[-./][A-Z0-9]+)+\b",
     re.IGNORECASE,
 )
 STUDY_ID_EXT_RE = re.compile(r"\.(?:pdf|xml|docx|txt|csv|json|md)$", re.IGNORECASE)
@@ -52,5 +52,5 @@ STUDY_ID_TRAILERS = {
     "tables",
 }
 STUDY_ID_SKIP_RE = re.compile(
-    r"^(?:input\.(?:p\\d+)?\\.t\\d+|p\\d+\\.t\\d+)$", re.IGNORECASE
+    r"^(?:input\.(?:p\d+)?\.t\d+|p\d+\.t\d+)$", re.IGNORECASE
 )

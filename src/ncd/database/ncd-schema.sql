@@ -683,7 +683,16 @@ CREATE TABLE IF NOT EXISTS ncd_ingestion_pipeline_status (
     s3_version_id TEXT NULL,
 
     content_hash TEXT NOT NULL,
-    pipeline TEXT NOT NULL CHECK (pipeline IN ('core','langchain','tox','section-summary','context')),
+    pipeline TEXT NOT NULL CHECK (
+        pipeline IN (
+            'core',
+            'langchain',
+            'tox',
+            'section-summary',
+            'context',
+            'pharm-overview'
+        )
+    ),
     status TEXT NOT NULL CHECK (
         status IN ('pending','processing','completed','failed','skipped')
     ),

@@ -12,7 +12,7 @@ Core utilities
 - `pipeline.py`: Run the PDF processing pipeline on a local PDF and write markdown/HTML/tables/quality outputs.
 
 Ingestion + processing
-- `ingest_module4_batch.py`: Batch ingest PDFs from S3 (core ingestion, section summaries, optional tox pipeline).
+- `ingest_module4_batch.py`: Batch ingest PDFs from S3 (core ingestion, section summaries, optional tox pipeline) and populate pharmacology overview metadata (`pharm-overview`) for Module 4 section 4.2.1.x so CTD 2.6.3.1 tables can be filled from DB.
 - `process_module4_pdfs.py`: Download PDFs from an S3 prefix and run the NCD pipeline into local output folders.
 - `run_nightly_ingest.sh`: Example cron target for nightly ingestion (sets env vars, calls `ingest_module4_batch.py`).
 - `s3_sync.py`: Sync S3 markdown sidecars into Redis; optional AI metadata, embeddings, and summaries.
@@ -38,6 +38,7 @@ API + deployment
 
 SQL + sample payloads
 - `ncd_schema_smoke_test.sql`: Smoke test for populating core NCD tables via psql.
+- `fix_ingestion_pipeline_constraint.sql`: One-time DB fix to allow `pharm-overview` in `ncd_ingestion_pipeline_status.pipeline`.
 - `section_2_4_summary.json`: Sample Section 2.4 summary payload (generated example).
 - `section_2_6_gap_analysis.json`: Sample gap analysis payload (generated example).
 - `run-tests.sh`: Example one-liner for `s3_sync.py` (not a full test runner).
