@@ -4708,6 +4708,12 @@ def _canonical_study_number(value: str) -> str:
         return parsed[0]
     if STUDY_ID_SKIP_RE.match(raw):
         return ""
+    # Keep numeric sponsor/report IDs (for example, "600210" or "1006-2525")
+    # that are common in legacy safety pharmacology reports.
+    if re.fullmatch(r"\d{5,}", raw):
+        return raw
+    if re.fullmatch(r"\d{2,}(?:[-./]\d{2,})+", raw):
+        return raw
     # Keep sponsor IDs that don't match strict regex (e.g., "WKP00013 Page 2"),
     # but avoid generic labels and weak fragments.
     digit_count = sum(1 for ch in raw if ch.isdigit())

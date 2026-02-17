@@ -313,6 +313,60 @@ def test_extract_ncd_study_records_keeps_nonregex_sponsor_study_id(server: Any) 
     assert rows[0]["study_number"] == "WKP00013 Page 2"
 
 
+def test_extract_ncd_study_records_keeps_numeric_sponsor_study_id(server: Any) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.3", "category": "Safety Pharmacology"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "600210",
+                    "module4_section": "4.2.1.3",
+                    "species": "human blood",
+                    "strain": "",
+                    "route": "",
+                    "extra_attributes": {},
+                }
+            ],
+            "source_documents": [],
+        },
+        "document_keys": [],
+        "project_document_keys": [],
+    }
+
+    rows = server._extract_ncd_study_records(context, module4_section="4.2.1.3")
+    assert len(rows) == 1
+    assert rows[0]["study_number"] == "600210"
+
+
+def test_extract_ncd_study_records_keeps_numeric_hyphen_sponsor_study_id(
+    server: Any,
+) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.3", "category": "Safety Pharmacology"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "1006-2525",
+                    "module4_section": "4.2.1.3",
+                    "species": "mouse",
+                    "strain": "CD-1",
+                    "route": "IP",
+                    "extra_attributes": {},
+                }
+            ],
+            "source_documents": [],
+        },
+        "document_keys": [],
+        "project_document_keys": [],
+    }
+
+    rows = server._extract_ncd_study_records(context, module4_section="4.2.1.3")
+    assert len(rows) == 1
+    assert rows[0]["study_number"] == "1006-2525"
+
+
 def test_rows_from_token_candidates_keeps_unparsed_study_ids(server: Any) -> None:
     columns = ["Study Number", "Organ Systems Evaluated"]
     candidates = [
