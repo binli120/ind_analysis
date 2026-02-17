@@ -185,6 +185,50 @@
         }
       }
     },
+    "/s3/new-project": {
+      "post": {
+        "tags": [
+          "upload"
+        ],
+        "summary": "Create S3 New Project",
+        "description": "Create a tenant/project folder scaffold in S3 from the configured template.",
+        "operationId": "create_s3_new_project_s3_new_project_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/S3NewProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Create S3 New Project S3 New Project Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/s3/markdown/save": {
       "post": {
         "tags": [
@@ -419,7 +463,7 @@
           "ncd"
         ],
         "summary": "Label Uploaded Document",
-        "description": "Label an uploaded document without using S3.\n\nAccepts PDF, DOCX (Word), or RTF uploads and returns the predicted IND section number/title with confidence and top candidates. No S3 side-effects.",
+        "description": "Label an uploaded document without using S3.\n\nAccepts PDF, DOCX (Word), or RTF uploads and returns the predicted section\nnumber/title with confidence and top candidates. No S3 side-effects.",
         "operationId": "label_uploaded_document_ncd_label_upload_post",
         "requestBody": {
           "content": {
@@ -501,6 +545,30 @@
         }
       }
     },
+    "/ncd/sectionList": {
+      "get": {
+        "tags": [
+          "ncd"
+        ],
+        "summary": "Ncd Section List",
+        "description": "Return the hierarchical CTD/IND section list from sectionList.json.",
+        "operationId": "ncd_section_list_ncd_sectionList_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Ncd Section List Ncd Sectionlist Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ncd/template/override": {
       "post": {
         "tags": [
@@ -551,7 +619,7 @@
           "ncd"
         ],
         "summary": "Get Template Sections",
-        "description": "Return template entries for a given section or subsection from ind_24_26_template.json.\n- If section is omitted, returns the full template JSON payload.\n- If you pass a subsection (e.g., 2.4.1-A), returns the matching entry.\n- If you pass a parent section (e.g., 2.4.1), returns all subsection entries under it.\n- The caller must provide a valid user-id header; overrides are merged when present for that user.",
+        "description": "Return template entries for a given section or subsection from ind_24_26_template.json.\n- If section is omitted, returns the full template JSON payload.\n- If you pass a subsection (e.g., 2.4.1-A), returns the matching entry.\n- If you pass a parent section (e.g., 2.4.1), returns all subsection entries under it.\n- If user_id is provided and overrides exist, they are merged (override wins).",
         "operationId": "get_template_sections_ncd_template_get",
         "parameters": [
           {
@@ -576,9 +644,10 @@
             "required": true,
             "schema": {
               "type": "string",
-              "title": "User Id"
+              "description": "Authenticated user ID (UUID) required in header",
+              "title": "User-Id"
             },
-            "description": "User ID (UUID) required in header"
+            "description": "Authenticated user ID (UUID) required in header"
           }
         ],
         "responses": {
@@ -659,16 +728,6 @@
             }
           },
           {
-            "name": "user-id",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "User Id"
-            },
-            "description": "User ID (UUID) required in header"
-          },
-          {
             "name": "aws_region",
             "in": "query",
             "required": false,
@@ -683,6 +742,17 @@
               ],
               "title": "Aws Region"
             }
+          },
+          {
+            "name": "user-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Authenticated user ID (UUID) required in header",
+              "title": "User-Id"
+            },
+            "description": "Authenticated user ID (UUID) required in header"
           }
         ],
         "responses": {
@@ -781,6 +851,158 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Get Template Docx Ncd Template Docx Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ncd/gap-analysis": {
+      "get": {
+        "tags": [
+          "ncd"
+        ],
+        "summary": "Get Gap Analysis",
+        "operationId": "get_gap_analysis_ncd_gap_analysis_get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bucket"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "project_prefix",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Prefix"
+            }
+          },
+          {
+            "name": "include_optional_p1",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Optional P1"
+            }
+          },
+          {
+            "name": "aws_region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Aws Region"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Gap Analysis Ncd Gap Analysis Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "ncd"
+        ],
+        "summary": "Post Gap Analysis",
+        "operationId": "post_gap_analysis_ncd_gap_analysis_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NCDGapAnalysisRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Post Gap Analysis Ncd Gap Analysis Post"
                 }
               }
             }
@@ -954,6 +1176,140 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Get Ctd Section Materials Ncd Ctd 2 6 Section Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ncd/assets/section": {
+      "get": {
+        "tags": [
+          "ncd"
+        ],
+        "summary": "Get Assets Section",
+        "description": "Unified context for a CTD 2.4/2.6 section:\n- Groups text, images, and tables by document, then by topic (key section).\n- Each topic carries a short title, description (text), and supporting assets.",
+        "operationId": "get_assets_section_ncd_assets_section_get",
+        "parameters": [
+          {
+            "name": "section",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Section"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bucket"
+            }
+          },
+          {
+            "name": "content_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Content Type"
+            }
+          },
+          {
+            "name": "include_assets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include Assets"
+            }
+          },
+          {
+            "name": "limit_topics_per_doc",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Limit Topics Per Doc"
+            }
+          },
+          {
+            "name": "expires_in",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 3600,
+              "title": "Expires In"
+            }
+          },
+          {
+            "name": "aws_region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Aws Region"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Assets Section Ncd Assets Section Get"
                 }
               }
             }
@@ -1514,6 +1870,12 @@
             "title": "Use Llm",
             "description": "Enable optional LLM refinement",
             "default": false
+          },
+          "section_scope": {
+            "type": "string",
+            "title": "Section Scope",
+            "description": "Label scope: ind (2.4/2.6), ctd (sectionList), or auto.",
+            "default": "auto"
           }
         },
         "type": "object",
@@ -1528,7 +1890,7 @@
             "type": "string",
             "format": "binary",
             "title": "File",
-            "description": "Upload a PDF, DOCX (Word), or RTF file."
+            "description": "PDF, RTF, or Word (DOCX) file to label"
           },
           "page_limit": {
             "type": "integer",
@@ -1542,6 +1904,12 @@
             "title": "Use Llm",
             "description": "Enable optional LLM refinement",
             "default": false
+          },
+          "section_scope": {
+            "type": "string",
+            "title": "Section Scope",
+            "description": "Label scope: ind (2.4/2.6), ctd (sectionList), or auto.",
+            "default": "auto"
           }
         },
         "type": "object",
@@ -1914,6 +2282,63 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "NCDGapAnalysisRequest": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "title": "Project Id"
+          },
+          "bucket": {
+            "type": "string",
+            "title": "Bucket"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          },
+          "project_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Prefix"
+          },
+          "include_optional_p1": {
+            "type": "boolean",
+            "title": "Include Optional P1",
+            "default": false
+          },
+          "aws_region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aws Region"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "bucket"
+        ],
+        "title": "NCDGapAnalysisRequest",
+        "description": "Request payload for project-level gap analysis."
+      },
       "NCDLabelRequest": {
         "properties": {
           "key": {
@@ -1959,6 +2384,11 @@
             "type": "boolean",
             "title": "Use Llm",
             "default": false
+          },
+          "section_scope": {
+            "type": "string",
+            "title": "Section Scope",
+            "default": "auto"
           }
         },
         "type": "object",
@@ -2149,6 +2579,40 @@
           "markdown"
         ],
         "title": "S3MarkdownUploadRequest"
+      },
+      "S3NewProjectRequest": {
+        "properties": {
+          "bucket": {
+            "type": "string",
+            "title": "Bucket"
+          },
+          "tenant_name": {
+            "type": "string",
+            "title": "Tenant Name"
+          },
+          "project_name": {
+            "type": "string",
+            "title": "Project Name"
+          },
+          "aws_region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aws Region"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bucket",
+          "tenant_name",
+          "project_name"
+        ],
+        "title": "S3NewProjectRequest"
       },
       "TemplateOverrideRequest": {
         "properties": {

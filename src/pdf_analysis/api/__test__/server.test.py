@@ -115,3 +115,265 @@ def test_format_embedding_for_prompt(server: Any) -> None:
     assert server._format_embedding_for_prompt([]) == ""
     result = server._format_embedding_for_prompt([0.1, 0.2])
     assert result.startswith("[") and result.endswith("]")
+
+
+def test_gap_key_mentions_module4_section(server: Any) -> None:
+    assert server._gap_key_mentions_module4_section(
+        "filynai.com/demo/4.2.1.1/report.pdf",
+        "4.2.1.1",
+    )
+    assert server._gap_key_mentions_module4_section(
+        "filynai.com/demo/4211-primary-pd/report.pdf",
+        "4.2.1.1",
+    )
+    assert not server._gap_key_mentions_module4_section(
+        "filynai.com/demo/4.2.2.1/report.pdf",
+        "4.2.1.1",
+    )
+
+
+def test_gap_collect_required_fields(server: Any) -> None:
+    entry = {
+        "required_content": ["Study ID", "Synopsis"],
+        "required_parameters": ["Cmax", "AUC"],
+        "validation_rules": {"hERG_required": True},
+        "extraction_focus": {"pk": {"single_dose": ["Tmax"]}},
+    }
+    fields = server._gap_collect_required_fields(entry)
+    assert "Study ID" in fields
+    assert "AUC" in fields
+    assert "hERG required" in fields
+    assert "single dose" in fields
+
+
+def test_gap_field_is_present(server: Any) -> None:
+    corpus = "Study ID LT3114-PHA-001 includes Cmax and AUC observations."
+    assert server._gap_field_is_present("Study ID", corpus)
+    assert server._gap_field_is_present("AUC", corpus)
+    assert not server._gap_field_is_present("Respiratory system effects", corpus)
+
+
+def test_gap_parse_module_number(server: Any) -> None:
+    assert server._gap_parse_module_number("Module 1. Administrative") == "1"
+    assert server._gap_parse_module_number("module4_nonclinical") == "4"
+    assert server._gap_parse_module_number("5") == "5"
+    assert server._gap_parse_module_number("no-module") is None
+
+
+def test_repair_overview_table_populates_from_ncd_payload(server: Any) -> None:
+    tables = [
+        {
+            "subsection": "2.6.3.1",
+            "columns": [
+                "Type of Study",
+                "Test System",
+                "Method of Administration",
+                "Testing Facility",
+                "Study Number",
+                "Location in CTD",
+            ],
+            "rows": [],
+        }
+    ]
+    context = {
+        "mapping": [
+            {
+                "module4_section": "4.2.1.1",
+                "category": "Primary pharmacodynamics",
+            }
+        ],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "sponsor_study_id": "LT3114-PHA-014-R",
+                    "module4_section": "4.2.1.1",
+                    "species": "Female C57BL/6 mice",
+                    "strain": "",
+                    "route": "Intraperitoneal injection, q2d",
+                    "main_source_document_id": "doc-1",
+                    "extra_attributes": {"testing_facility": "ACME Labs"},
+                }
+            ],
+            "source_documents": [
+                {
+                    "id": "doc-1",
+                    "file_name": "FGF_VEGF_Matrigel_Primary_PD.pdf",
+                    "ctd_section": "4.2.1.1",
+                    "module": "Module 4",
+                }
+            ],
+        },
+        "table_assets": [],
+        "section_sources": [],
+        "document_keys": [],
+        "ncd_study_ids": [],
+        "s3_listing_keys": [],
+    }
+
+    server._repair_overview_table(tables, context)
+
+    rows = tables[0]["rows"]
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["Study Number"] == "LT3114-PHA-014-R"
+    assert row["Type of Study"] == "Primary pharmacodynamics"
+    assert row["Test System"] == "Female C57BL/6 mice"
+    assert row["Method of Administration"] == "Intraperitoneal injection, q2d"
+    assert row["Testing Facility"] == "ACME Labs"
+    assert row["Location in CTD"].startswith("Module 4, Section 4.2.1.1")
+
+
+def test_repair_overview_table_drops_invalid_study_numbers(server: Any) -> None:
+    tables = [
+        {
+            "subsection": "2.6.3.1",
+            "columns": [
+                "Type of Study",
+                "Test System",
+                "Method of Administration",
+                "Testing Facility",
+                "Study Number",
+                "Location in CTD",
+            ],
+            "rows": [
+                {
+                    "Type of Study": "",
+                    "Test System": "",
+                    "Method of Administration": "",
+                    "Testing Facility": "",
+                    "Study Number": "u20134.8-fold",
+                    "Location in CTD": "",
+                }
+            ],
+        }
+    ]
+    context = {
+        "mapping": [],
+        "ncd_payload": {},
+        "table_assets": [],
+        "section_sources": [],
+        "document_keys": [],
+        "ncd_study_ids": ["LT3114-PHA-001-R"],
+        "s3_listing_keys": [],
+    }
+
+    server._repair_overview_table(tables, context)
+
+    rows = tables[0]["rows"]
+    assert len(rows) == 1
+    assert rows[0]["Study Number"] == "LT3114-PHA-001-R"
+
+
+def test_sections_with_material_data_skips_missing_module4_section(server: Any) -> None:
+    sections = server._sections_with_material_data(
+        ["4.2.1.1", "4.2.1.4"],
+        section_sources=[{"section_number": "4.2.1.1"}],
+        document_keys=[],
+        ncd_payload={},
+    )
+    assert sections == ["4.2.1.1"]
+
+
+def test_filter_section_entries_for_targets(server: Any) -> None:
+    entries = [
+        {"section": "2.6.3", "subsection": "2.6.3.1"},
+        {"section": "2.6.3", "subsection": "2.6.3.4"},
+        {"section": "2.6.3", "subsection": "2.6.3.5"},
+    ]
+    filtered = server._filter_section_entries_for_targets(
+        entries,
+        target_sections={"2.6.3.1", "2.6.3.4"},
+    )
+    assert [entry["subsection"] for entry in filtered] == ["2.6.3.1", "2.6.3.4"]
+
+
+def test_extract_ncd_study_records_keeps_nonregex_sponsor_study_id(server: Any) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.3", "category": "Safety Pharmacology"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "WKP00013 Page 2",
+                    "module4_section": "4.2.1.3",
+                    "species": "Cynomolgus monkey",
+                    "strain": "",
+                    "route": "IV",
+                    "extra_attributes": {},
+                }
+            ],
+            "source_documents": [],
+        },
+        "document_keys": [],
+        "project_document_keys": [],
+    }
+
+    rows = server._extract_ncd_study_records(context, module4_section="4.2.1.3")
+    assert len(rows) == 1
+    assert rows[0]["study_number"] == "WKP00013 Page 2"
+
+
+def test_extract_ncd_study_records_keeps_numeric_sponsor_study_id(server: Any) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.3", "category": "Safety Pharmacology"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "600210",
+                    "module4_section": "4.2.1.3",
+                    "species": "human blood",
+                    "strain": "",
+                    "route": "",
+                    "extra_attributes": {},
+                }
+            ],
+            "source_documents": [],
+        },
+        "document_keys": [],
+        "project_document_keys": [],
+    }
+
+    rows = server._extract_ncd_study_records(context, module4_section="4.2.1.3")
+    assert len(rows) == 1
+    assert rows[0]["study_number"] == "600210"
+
+
+def test_extract_ncd_study_records_keeps_numeric_hyphen_sponsor_study_id(
+    server: Any,
+) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.3", "category": "Safety Pharmacology"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "1006-2525",
+                    "module4_section": "4.2.1.3",
+                    "species": "mouse",
+                    "strain": "CD-1",
+                    "route": "IP",
+                    "extra_attributes": {},
+                }
+            ],
+            "source_documents": [],
+        },
+        "document_keys": [],
+        "project_document_keys": [],
+    }
+
+    rows = server._extract_ncd_study_records(context, module4_section="4.2.1.3")
+    assert len(rows) == 1
+    assert rows[0]["study_number"] == "1006-2525"
+
+
+def test_rows_from_token_candidates_keeps_unparsed_study_ids(server: Any) -> None:
+    columns = ["Study Number", "Organ Systems Evaluated"]
+    candidates = [
+        {"study number": "RP-PC-60", "organ systems evaluated": "cardiovascular"},
+        {"study number": "WKP00013 Page 2", "organ systems evaluated": "respiratory"},
+    ]
+    rows = server._rows_from_token_candidates(columns, candidates)
+    study_numbers = [str(row.get("Study Number") or "") for row in rows]
+    assert "RP-PC-60" in study_numbers
+    assert "WKP00013 Page 2" in study_numbers

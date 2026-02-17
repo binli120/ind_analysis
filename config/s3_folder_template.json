@@ -1,0 +1,75 @@
+{
+    "Module1_Administrative": {
+        "1.1_Forms": {},
+        "1.2_Application_Information": {},
+        "1.3_Amendments": {},
+        "1.4_Correspondence": {}
+    },
+    "Module2_Summary": {
+        "2.1_Table_of_Contents": {},
+        "2.2_Introduction": {},
+        "2.3_Quality_Overall_Summary": {
+            "2.3.1_Drug_Substance": {
+                "2.3.1.1_General_Information": {},
+                "2.3.1.2_Manufacture": {},
+                "2.3.1.3_Characterization": {},
+                "2.3.1.4_Control_of_Drug_Substance": {},
+                "2.3.1.5_Reference_Standards": {},
+                "2.3.1.6_Container_Closure_System": {},
+                "2.3.1.7_Stability": {}
+            },
+            "2.3.2_Drug_Product": {
+                "2.3.2.1_Description_and_Composition": {},
+                "2.3.2.2_Pharmaceutical_Development": {},
+                "2.3.2.3_Manufacture": {},
+                "2.3.2.4_Control_of_Excipients": {},
+                "2.3.2.5_Control_of_Drug_Product": {},
+                "2.3.2.6_Reference_Standards_or_Materials": {},
+                "2.3.2.7_Container_Closure_System": {},
+                "2.3.2.8_Stability": {}
+            }
+        },
+        "2.4_Nonclinical_Overview": {
+            "2.4.1_Pharmacology": {},
+            "2.4.2_Pharmacokinetics": {},
+            "2.4.3_Toxicology": {}
+        },
+        "2.5_Clinical_Overview": {
+            "2.5.1_Product_Development_Rationale": {},
+            "2.5.2_Overview_of_Clinical_Studies": {},
+            "2.5.3_Efficacy_and_Safety_Summary": {}
+        },
+        "2.6_Nonclinical_Written_Summary": {
+            "2.6.1_Pharmacology": {},
+            "2.6.2_Pharmacokinetics": {},
+            "2.6.3_Toxicology": {}
+        },
+        "2.7_Clinical_Summary": {
+            "2.7.1_Biopharmaceutics": {},
+            "2.7.2_Clinical_Pharmacology": {},
+            "2.7.3_Efficacy": {},
+            "2.7.4_Safety": {}
+        }
+    },
+    "Module3_Quality": {
+        "3.1_Table_of_Contents": {},
+        "3.2_S_Biotech_or_Small_Molecule": {},
+        "3.3_P_Drug_Product": {}
+    },
+    "Module4_Nonclinical_Study": {
+        "4.1_Table_of_Contents": {},
+        "4.2_Study_Reports": {
+            "4.2.1_Pharmacology": {},
+            "4.2.2_Pharmacokinetics": {},
+            "4.2.3_Toxicology": {}
+        }
+    },
+    "Module5_Clinical_Study": {
+        "5.1_Table_of_Contents": {},
+        "5.2_Study_Reports": {
+            "5.2.1_Study_Synopses": {},
+            "5.2.2_Efficacy": {},
+            "5.2.3_Safety": {}
+        }
+    }
+}

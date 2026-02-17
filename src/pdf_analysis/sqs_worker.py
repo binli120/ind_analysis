@@ -628,8 +628,10 @@ def _build_document_assets(
                 if table:
                     df = table.get("dataframe")
                 preview_df = None
+                preview_columns: List[str] = []
                 if df is not None:
                     preview_df = ensure_unique_columns(df.fillna("").astype(str))
+                    preview_columns = [str(col) for col in list(preview_df.columns)]
                 description = None
                 keywords: List[str] = []
                 if llm and preview_df is not None:
@@ -638,7 +640,7 @@ def _build_document_assets(
                             llm,
                             page_number=page_number,
                             index_on_page=index_on_page,
-                            columns=list(preview_df.columns),
+                            columns=preview_columns,
                             preview_rows=preview_df.head(5).to_dict(orient="records"),
                             page_text=page_text.get(int(page_number or 0), ""),
                         )
@@ -653,11 +655,7 @@ def _build_document_assets(
                     section_prefixes=("2.4", "2.6"),
                     extra_texts=[
                         caption,
-                        (
-                            " ".join(list(preview_df.columns))
-                            if preview_df is not None
-                            else ""
-                        ),
+                        " ".join(preview_columns) if preview_columns else "",
                     ],
                 )
                 assets.append(
@@ -673,11 +671,7 @@ def _build_document_assets(
                         "extra_attributes": {
                             "json_key": json_key,
                             "engine": table.get("engine") if table else None,
-                            "columns": (
-                                list(preview_df.columns)
-                                if preview_df is not None
-                                else []
-                            ),
+                            "columns": preview_columns,
                             "row_count": (
                                 int(preview_df.shape[0])
                                 if preview_df is not None

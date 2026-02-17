@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from pydantic import BaseModel
 
@@ -15,7 +15,10 @@ from ncd.config.config import settings
 
 class LLMClient:
     def __init__(self, model_name: str | None = None):
-        self.model_name = model_name or settings.llm_model_name
+        primary_model = model_name or settings.llm_model_name
+        fallback_models = _parse_model_list(os.getenv("LLM_FALLBACK_MODELS", ""))
+        self.model_candidates = _dedupe_models([primary_model, *fallback_models])
+        self.model_name = self.model_candidates[0]
         self._client = None
 
     def extract_json(
@@ -62,23 +65,94 @@ class LLMClient:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
+        ordered_candidates = [self.model_name] + [
+            candidate
+            for candidate in self.model_candidates
+            if candidate.lower() != self.model_name.lower()
+        ]
+        last_exc: Exception | None = None
+        for idx, candidate in enumerate(ordered_candidates):
+            try:
+                response = self._create_completion(
+                    client=client,
+                    model_name=candidate,
+                    messages=messages,
+                    response_format=response_format,
+                    temperature=temperature,
+                )
+                # Keep successful candidate sticky for subsequent calls.
+                self.model_name = candidate
+                self.model_candidates = [candidate] + [
+                    model
+                    for model in self.model_candidates
+                    if model.lower() != candidate.lower()
+                ]
+                content = response.choices[0].message.content
+                if not content:
+                    raise RuntimeError("OpenAI response missing content")
+                return content
+            except Exception as exc:
+                last_exc = exc
+                if (
+                    (_is_rate_limit_error(exc) or _is_model_unavailable_error(exc))
+                    and idx < len(ordered_candidates) - 1
+                ):
+                    continue
+                raise
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("OpenAI call failed without an exception")
+
+    def _create_completion(
+        self,
+        *,
+        client: Any,
+        model_name: str,
+        messages: List[Dict[str, str]],
+        response_format: dict | None,
+        temperature: float,
+    ) -> Any:
+        def _call(*, include_response_format: bool, include_temperature: bool) -> Any:
+            kwargs: Dict[str, Any] = {
+                "model": model_name,
+                "messages": messages,
+            }
+            if include_temperature:
+                kwargs["temperature"] = temperature
+            if include_response_format and response_format is not None:
+                kwargs["response_format"] = response_format
+            return client.chat.completions.create(**kwargs)
+
         try:
-            response = client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=temperature,
-                response_format=response_format,
-            )
-        except Exception:
-            response = client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=temperature,
-            )
-        content = response.choices[0].message.content
-        if not content:
-            raise RuntimeError("OpenAI response missing content")
-        return content
+            return _call(include_response_format=True, include_temperature=True)
+        except Exception as exc:
+            # Some models only accept the default temperature and reject explicit values.
+            if self._should_retry_without_temperature(exc, temperature):
+                try:
+                    return _call(
+                        include_response_format=True, include_temperature=False
+                    )
+                except Exception as no_temp_exc:
+                    if self._should_retry_without_response_format(
+                        no_temp_exc, response_format
+                    ):
+                        return _call(
+                            include_response_format=False, include_temperature=False
+                        )
+                    raise
+
+            # Only retry without response_format when the API/model rejects that parameter.
+            # Do not swallow transient failures (e.g. 429), so outer retry logic can back off.
+            if not self._should_retry_without_response_format(exc, response_format):
+                raise
+            try:
+                return _call(include_response_format=False, include_temperature=True)
+            except Exception as no_format_exc:
+                if self._should_retry_without_temperature(no_format_exc, temperature):
+                    return _call(
+                        include_response_format=False, include_temperature=False
+                    )
+                raise
 
     def _get_client(self):
         if self._client is not None:
@@ -94,6 +168,40 @@ class LLMClient:
             raise RuntimeError("OPENAI_API_KEY is required for LLMClient")
         self._client = OpenAI(api_key=api_key)
         return self._client
+
+    @staticmethod
+    def _should_retry_without_response_format(
+        exc: Exception, response_format: dict | None
+    ) -> bool:
+        if response_format is None:
+            return False
+        message = str(exc).lower()
+        signal_phrases = (
+            "response_format",
+            "json_object",
+            "unsupported",
+            "not supported",
+            "unknown parameter",
+            "invalid parameter",
+        )
+        return any(phrase in message for phrase in signal_phrases)
+
+    @staticmethod
+    def _should_retry_without_temperature(exc: Exception, temperature: float) -> bool:
+        # Preserve current behavior for default temperature.
+        if temperature == 1:
+            return False
+        message = str(exc).lower()
+        if "temperature" not in message:
+            return False
+        signal_phrases = (
+            "unsupported value",
+            "does not support",
+            "only the default",
+            "invalid parameter",
+            "unknown parameter",
+        )
+        return any(phrase in message for phrase in signal_phrases)
 
 
 def _parse_json_payload(content: str) -> Dict[str, Any]:
@@ -115,3 +223,46 @@ def _parse_json_payload(content: str) -> Dict[str, Any]:
         raise ValueError("No JSON object found in LLM response")
     candidate = candidate[: end + 1]
     return json.loads(candidate)
+
+
+def _parse_model_list(raw: str) -> List[str]:
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _dedupe_models(models: List[str]) -> List[str]:
+    seen = set()
+    ordered: List[str] = []
+    for model in models:
+        key = model.strip()
+        if not key:
+            continue
+        lowered = key.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        ordered.append(key)
+    return ordered
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    if "too many requests" in message or "rate limit" in message or "429" in message:
+        return True
+    try:
+        from openai import RateLimitError
+
+        return isinstance(exc, RateLimitError)
+    except Exception:
+        return False
+
+
+def _is_model_unavailable_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    signals = (
+        "model_not_found",
+        "does not exist or you do not have access",
+        "you do not have access to this model",
+        "unknown model",
+        "invalid model",
+    )
+    return any(signal in message for signal in signals)
