@@ -35,8 +35,16 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Set
 from urllib.parse import unquote_plus
 from uuid import uuid4
 
-import boto3
-from botocore.exceptions import ClientError
+try:
+    import boto3
+except ModuleNotFoundError:  # pragma: no cover - optional in CI unit tests
+    boto3 = None  # type: ignore[assignment]
+
+try:
+    from botocore.exceptions import ClientError
+except ModuleNotFoundError:  # pragma: no cover - optional in CI unit tests
+    class ClientError(Exception):
+        pass
 from sqlalchemy import text as sqltext
 
 # Allow running from repo root without installing the package.
@@ -113,6 +121,14 @@ _FACILITY_HINTS = (
     "facility",
 )
 _PHARM_OVERVIEW_MODULE4_SECTIONS: Optional[Set[str]] = None
+
+
+def _require_boto3() -> Any:
+    if boto3 is None:
+        raise RuntimeError(
+            "boto3 is required for S3 operations in ingest_module4_batch.py."
+        )
+    return boto3
 
 
 def _sanitize_section_suffix(name: str) -> str:
@@ -1821,7 +1837,7 @@ def _process_document(obj: Dict[str, Any], args: argparse.Namespace) -> Dict[str
     pharm_overview_applicable = bool(module4_section) and bool(args.pharm_overview)
     print(f"[PROCESSING] {display_key}")
 
-    s3_client = boto3.client("s3", region_name=args.aws_region)
+    s3_client = _require_boto3().client("s3", region_name=args.aws_region)
     repo: Optional[NCDRepository] = None
     md_exists = False
     status_completed = False
@@ -2778,7 +2794,7 @@ def main(argv: list[str]) -> int:
         # Safe default to avoid camelot/tabula crashes; override with --core-table-engines.
         os.environ.setdefault("PDF_PIPELINE_TABLE_ENGINES", "pdfplumber")
 
-    client = boto3.client("s3", region_name=args.aws_region)
+    client = _require_boto3().client("s3", region_name=args.aws_region)
 
     run_id = f"module{args.module}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
     report_dir = Path(args.report_dir).expanduser()
