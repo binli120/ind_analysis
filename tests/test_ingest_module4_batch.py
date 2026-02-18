@@ -1,4 +1,6 @@
 import importlib.util
+import sys
+import types
 import warnings
 from pathlib import Path
 
@@ -6,19 +8,47 @@ from pdf_analysis.api.constants import STUDY_ID_SKIP_RE
 
 
 def _load_ingest_module():
+    injected_modules: list[str] = []
+    if "boto3" not in sys.modules:
+        boto3_stub = types.ModuleType("boto3")
+        boto3_stub.client = lambda *args, **kwargs: None
+        sys.modules["boto3"] = boto3_stub
+        injected_modules.append("boto3")
+
+    if "botocore.exceptions" not in sys.modules:
+        botocore_module = sys.modules.get("botocore")
+        if botocore_module is None:
+            botocore_module = types.ModuleType("botocore")
+            sys.modules["botocore"] = botocore_module
+            injected_modules.append("botocore")
+
+        botocore_exceptions = types.ModuleType("botocore.exceptions")
+
+        class _ClientError(Exception):
+            pass
+
+        botocore_exceptions.ClientError = _ClientError
+        sys.modules["botocore.exceptions"] = botocore_exceptions
+        botocore_module.exceptions = botocore_exceptions
+        injected_modules.append("botocore.exceptions")
+
     path = Path("scripts/ingest_module4_batch.py").resolve()
     spec = importlib.util.spec_from_file_location("ingest_module4_batch", path)
     if spec is None or spec.loader is None:
         raise RuntimeError("Unable to load ingest_module4_batch module")
     module = importlib.util.module_from_spec(spec)
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore",
-            message=r"builtin type (SwigPyPacked|SwigPyObject|swigvarlink) has no __module__ attribute",
-            category=DeprecationWarning,
-        )
-        spec.loader.exec_module(module)
-    return module
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"builtin type (SwigPyPacked|SwigPyObject|swigvarlink) has no __module__ attribute",
+                category=DeprecationWarning,
+            )
+            spec.loader.exec_module(module)
+        return module
+    finally:
+        for module_name in reversed(injected_modules):
+            sys.modules.pop(module_name, None)
 
 
 def test_extract_pharm_overview_metadata_from_title_page():
