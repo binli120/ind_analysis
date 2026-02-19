@@ -17,6 +17,7 @@ import re
 import shutil
 import subprocess
 from collections import defaultdict
+from decimal import Decimal, InvalidOperation
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -341,6 +342,29 @@ class NCDGapAnalysisRequest(BaseModel):
     project_prefix: Optional[str] = None
     include_optional_p1: bool = False
     aws_region: Optional[str] = None
+
+
+_ANALYZE_REQUEST_BODY_OPENAPI = {
+    "required": True,
+    "content": {
+        "application/json": {
+            "schema": {"$ref": "#/components/schemas/S3AnalyzeRequest"}
+        },
+        "multipart/form-data": {
+            "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "format": "binary",
+                        "description": "PDF file to analyze.",
+                    }
+                },
+            }
+        },
+    },
+}
 
 
 try:
@@ -3288,7 +3312,7 @@ _GAP_FIELD_STOPWORDS: Set[str] = {
     "with",
 }
 
-_GAP_MODULE_RE = re.compile(r"\bmodule[\s._-]*([1-5])\b", re.IGNORECASE)
+_GAP_MODULE_RE = re.compile(r"\bmodule[\s._-]*([1-5])(?!\d)", re.IGNORECASE)
 _GAP_MODULES = ("1", "2", "3", "4", "5")
 
 
@@ -4629,6 +4653,9 @@ def _trim_tabulated_context(context: Dict[str, Any]) -> Dict[str, Any]:
                     "extra_attributes": {
                         "type_of_study": extra.get("type_of_study"),
                         "study_title": extra.get("study_title"),
+                        "study_number_display": extra.get("study_number_display"),
+                        "sponsor_study_number": extra.get("sponsor_study_number"),
+                        "cro_study_number": extra.get("cro_study_number"),
                         "test_system": extra.get("test_system"),
                         "species_strain": extra.get("species_strain"),
                         "method_of_administration": extra.get(
@@ -4642,6 +4669,7 @@ def _trim_tabulated_context(context: Dict[str, Any]) -> Dict[str, Any]:
                         "key_findings": extra.get("key_findings"),
                         "noteworthy_findings": extra.get("noteworthy_findings"),
                         "organ_systems": extra.get("organ_systems"),
+                        "glp_compliance": extra.get("glp_compliance"),
                         "testing_facility": extra.get("testing_facility"),
                         "location_in_ctd": extra.get("location_in_ctd"),
                     },
@@ -4902,11 +4930,21 @@ def _normalize_header_token(value: str) -> str:
         "study no": "study number",
         "study no.": "study number",
         "study #": "study number",
+        "study number no": "study number",
+        "report study no": "study number",
+        "report study number": "study number",
+        "report number": "study number",
         "species strain": "species strain",
         "species strain or test system": "species strain or test system",
         "species strain or test system or species": "species strain or test system",
         "organ system": "organ systems evaluated",
         "organ systems": "organ systems evaluated",
+        "systems evaluated": "organ systems evaluated",
+        "system evaluated": "organ systems evaluated",
+        "organ systems assessed": "organ systems evaluated",
+        "target organ": "organ systems evaluated",
+        "target organs": "organ systems evaluated",
+        "safety pharmacology domain": "organ systems evaluated",
         "organ systems evaluated": "organ systems evaluated",
         "glp": "glp compliance",
         "sex": "gender",
@@ -4933,6 +4971,8 @@ def _normalize_header_token(value: str) -> str:
     if cleaned.startswith("doses "):
         return "doses"
     if cleaned.startswith("organ system"):
+        return "organ systems evaluated"
+    if re.search(r"\borgan\b.*\bsystem", cleaned):
         return "organ systems evaluated"
     return cleaned
 
@@ -5246,23 +5286,371 @@ def _extract_ncd_study_records(
 
 
 def _render_dose_group_summary(groups: Sequence[Dict[str, Any]]) -> Tuple[str, str]:
+    def _compact_number(value: Any) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        try:
+            number = Decimal(text)
+        except (InvalidOperation, ValueError):
+            return text
+        normalized = number.normalize()
+        if normalized == normalized.to_integral():
+            return str(normalized.quantize(Decimal("1")))
+        formatted = format(normalized, "f").rstrip("0").rstrip(".")
+        return formatted or "0"
+
+    def _sex_label(value: str) -> str:
+        cleaned = str(value or "").strip()
+        if not cleaned:
+            return ""
+        upper = cleaned.upper()
+        if upper in {"M", "MALE"}:
+            return "Male"
+        if upper in {"F", "FEMALE"}:
+            return "Female"
+        if upper in {"M/F", "F/M", "MALE/FEMALE", "FEMALE/MALE"}:
+            return "Male/Female"
+        return cleaned
+
     doses: List[str] = []
-    sex_counts: List[str] = []
+    dose_seen: Set[str] = set()
+    sex_profiles: List[Tuple[str, str]] = []
+    sex_seen: Set[Tuple[str, str]] = set()
+    control_present = False
     for group in groups:
         if not isinstance(group, dict):
             continue
+        group_name = str(group.get("name") or "").strip().lower()
+        if "vehicle" in group_name or "control" in group_name:
+            control_present = True
         dose_value = group.get("dose_mg_per_kg")
         if dose_value is not None and str(dose_value).strip() != "":
-            dose_text = str(dose_value).strip()
-            if dose_text not in doses:
+            dose_text = _compact_number(dose_value)
+            if dose_text in {"0", "0.0"}:
+                control_present = True
+            elif dose_text and dose_text not in dose_seen:
+                dose_seen.add(dose_text)
                 doses.append(dose_text)
-        sex = str(group.get("sex") or "").strip()
+        sex = _sex_label(str(group.get("sex") or ""))
         n_animals = group.get("n_animals")
-        if sex and n_animals is not None and str(n_animals).strip() != "":
-            sex_counts.append(f"{sex} (n={n_animals})")
-        elif sex:
-            sex_counts.append(sex)
-    return ", ".join(doses), "; ".join(sex_counts)
+        n_text = _compact_number(n_animals) if n_animals is not None else ""
+        if sex:
+            key = (sex, n_text)
+            if key not in sex_seen:
+                sex_seen.add(key)
+                sex_profiles.append(key)
+    doses_text = ", ".join(doses)
+    if control_present:
+        doses_text = (
+            f"{doses_text} (plus vehicle control)" if doses_text else "Vehicle control"
+        )
+    sex_parts: List[str] = []
+    for sex, n_text in sex_profiles:
+        sex_parts.append(f"{sex}, n={n_text}" if n_text else sex)
+    sex_text = "; ".join(sex_parts)
+    if len(sex_profiles) == 1 and sex_text:
+        sex_text = f"{sex_text} (1 group)"
+    return doses_text, sex_text
+
+
+def _merge_text_segments(*values: str, separator: str = "; ") -> str:
+    merged: List[str] = []
+    seen: Set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        parts = [part.strip() for part in re.split(r"\s*;\s*", text) if part.strip()]
+        if not parts:
+            parts = [text]
+        for part in parts:
+            key = part.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(part)
+    return separator.join(merged)
+
+
+def _study_numbers_overlap(left: str, right: str) -> bool:
+    left_ids = {sid.upper() for sid in _extract_study_ids(str(left or ""))}
+    right_ids = {sid.upper() for sid in _extract_study_ids(str(right or ""))}
+    if left_ids and right_ids:
+        return bool(left_ids & right_ids)
+    left_value = str(left or "").strip().upper()
+    right_value = str(right or "").strip().upper()
+    return bool(left_value and right_value and left_value == right_value)
+
+
+_SAFETY_NEGATIVE_FINDING_RE = re.compile(
+    r"\b(no|not|without)\b.*\b(treatment-related|change|changes|adverse|"
+    r"effect|effects|toxicologically meaningful|clinically meaningful)\b",
+    re.IGNORECASE,
+)
+_SAFETY_POSITIVE_FINDING_RE = re.compile(
+    r"\b(increase|increased|decrease|decreased|prolong|shorten|elevat|reduc|"
+    r"finding|signal|change)\b",
+    re.IGNORECASE,
+)
+
+_SAFETY_ORGAN_SYSTEM_RULES: Sequence[Tuple[str, Sequence[str]]] = (
+    (
+        "Cardiovascular",
+        (
+            r"\bcardiovascular\b",
+            r"\bcardiac\b",
+            r"\bhemodynamic[s]?\b",
+            r"\bblood pressure\b",
+            r"\bheart rate\b",
+            r"\becg\b",
+            r"\bqtc?\b",
+            r"\bqrs\b",
+            r"\bpr interval\b",
+            r"\bherg\b",
+            r"\btelemetry\b",
+        ),
+    ),
+    (
+        "CNS",
+        (
+            r"\bcns\b",
+            r"\bcentral nervous",
+            r"\bneuro(?:logical|behavior|behaviour)?\b",
+            r"\birwin\b",
+            r"\bfob\b",
+            r"\bfunctional observational battery\b",
+            r"\bmotor activity\b",
+            r"\bconvulsion",
+            r"\bseizure",
+        ),
+    ),
+    (
+        "Respiratory",
+        (
+            r"\brespiratory\b",
+            r"\bpulmonary\b",
+            r"\bplethysmography\b",
+            r"\btidal volume\b",
+            r"\bminute volume\b",
+            r"\brespiratory rate\b",
+            r"\bblood gases?\b",
+        ),
+    ),
+    (
+        "Gastrointestinal",
+        (
+            r"\bgastrointestinal\b",
+            r"\bgi tract\b",
+        ),
+    ),
+    (
+        "Renal",
+        (
+            r"\brenal\b",
+            r"\bkidney\b",
+        ),
+    ),
+)
+
+
+def _looks_like_safety_pharmacology_text(*values: Any) -> bool:
+    text = " ".join(str(value or "") for value in values if str(value or "").strip())
+    if not text:
+        return False
+    lowered = text.lower()
+    if "safety pharmacology" in lowered:
+        return True
+    for _label, patterns in _SAFETY_ORGAN_SYSTEM_RULES:
+        if any(re.search(pattern, lowered) for pattern in patterns):
+            return True
+    return False
+
+
+def _infer_safety_organ_systems(*values: Any) -> str:
+    text = " ".join(str(value or "") for value in values if str(value or "").strip())
+    if not text:
+        return ""
+    lowered = text.lower()
+    inferred: List[str] = []
+    for label, patterns in _SAFETY_ORGAN_SYSTEM_RULES:
+        if any(re.search(pattern, lowered) for pattern in patterns):
+            inferred.append(label)
+    return "; ".join(inferred)
+
+
+def _asset_matches_safety_pharmacology(asset: Dict[str, Any]) -> bool:
+    if not isinstance(asset, dict):
+        return False
+    extra = (
+        asset.get("extra_attributes") if isinstance(asset.get("extra_attributes"), dict) else {}
+    )
+    parts: List[str] = [
+        str(asset.get("s3_key") or ""),
+        str(asset.get("json_key") or ""),
+        str(asset.get("caption") or ""),
+        str(asset.get("description") or ""),
+        str(extra.get("section_number") or ""),
+        str(extra.get("module4_section") or ""),
+        str(extra.get("section_title") or ""),
+    ]
+    keywords = asset.get("keywords") or []
+    if isinstance(keywords, list):
+        parts.extend(str(item) for item in keywords if item)
+    blob = " ".join(part for part in parts if part).strip()
+    if not blob:
+        return False
+    if _gap_key_mentions_module4_section(blob, "4.2.1.3"):
+        return True
+    return "safety pharmacology" in blob.lower()
+
+
+def _extract_safety_sentences(text: str, max_parts: int = 4) -> List[str]:
+    parts: List[str] = []
+    for chunk in re.split(r"(?<=[.!?])\s+|\s*;\s*", str(text or "").strip()):
+        cleaned = chunk.strip(" ;")
+        if not cleaned:
+            continue
+        parts.append(cleaned)
+        if len(parts) >= max_parts:
+            break
+    return parts
+
+
+def _synthesize_safety_findings(fragments: Sequence[str]) -> str:
+    negatives: List[str] = []
+    positives: List[str] = []
+    neutral: List[str] = []
+    seen: Set[str] = set()
+    for fragment in fragments:
+        for sentence in _extract_safety_sentences(fragment):
+            key = sentence.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            if _SAFETY_NEGATIVE_FINDING_RE.search(sentence):
+                negatives.append(sentence)
+            elif _SAFETY_POSITIVE_FINDING_RE.search(sentence):
+                positives.append(sentence)
+            else:
+                neutral.append(sentence)
+    selected: List[str] = []
+    if negatives:
+        selected.append(negatives[0])
+    if positives:
+        selected.extend(positives[:2])
+    if not selected:
+        selected.extend(neutral[:2])
+    if not selected:
+        return ""
+    return _truncate_text("; ".join(selected), max_chars=900)
+
+
+def _collect_safety_context_fragments(
+    context: Dict[str, Any],
+    *,
+    study_number: str,
+) -> List[str]:
+    fragments: List[str] = []
+    for source in context.get("section_sources", []) or []:
+        if not isinstance(source, dict):
+            continue
+        section_number = str(source.get("section_number") or "").strip()
+        if section_number and not section_number_matches(section_number, "4.2.1.3"):
+            continue
+        summary_text = str(source.get("summary_text") or "").strip()
+        if not summary_text:
+            continue
+        source_blob = " ".join(
+            str(part)
+            for part in (
+                source.get("section_title"),
+                source.get("section_number"),
+                source.get("s3_key"),
+                summary_text,
+            )
+            if part
+        )
+        source_ids = _extract_study_ids(source_blob)
+        if source_ids and not any(
+            _study_numbers_overlap(sid, study_number) for sid in source_ids
+        ):
+            continue
+        fragments.extend(_extract_safety_sentences(summary_text, max_parts=3))
+    for asset in context.get("table_assets", []) or []:
+        preview_rows = asset.get("preview_rows") or []
+        for row in preview_rows:
+            if not isinstance(row, dict):
+                continue
+            key_map = {_normalize_header_token(str(key)): key for key in row.keys()}
+            row_study = _pick_first_value(row, key_map, "study number")
+            if row_study and not _study_numbers_overlap(row_study, study_number):
+                continue
+            snippet = _pick_first_value(
+                row,
+                key_map,
+                "noteworthy findings",
+                "key findings",
+                "key results",
+                "findings",
+            )
+            if snippet:
+                fragments.extend(_extract_safety_sentences(snippet, max_parts=2))
+    return fragments
+
+
+def _format_study_number_display(study_number: str, extra: Dict[str, Any]) -> str:
+    display = str(extra.get("study_number_display") or "").strip()
+    if display:
+        return display
+    sponsor = str(extra.get("sponsor_study_number") or "").strip()
+    cro = str(extra.get("cro_study_number") or "").strip()
+    combined = _merge_text_segments(
+        f"Sponsor study #: {sponsor}" if sponsor else "",
+        f"CRO study #: {cro}" if cro else "",
+    )
+    if combined:
+        return combined
+    if study_number and cro and study_number.lower() != cro.lower():
+        return _merge_text_segments(study_number, f"CRO study #: {cro}")
+    return study_number
+
+
+def _merge_safety_candidate_records(
+    candidates: Sequence[Dict[str, str]],
+) -> List[Dict[str, str]]:
+    merged_by_study: Dict[str, Dict[str, str]] = {}
+    passthrough: List[Dict[str, str]] = []
+    for candidate in candidates:
+        normalized = {str(key): str(value or "").strip() for key, value in candidate.items()}
+        study_number = normalized.get("study number", "")
+        canonical = _canonical_study_number(study_number)
+        study_key = canonical.upper() if canonical else study_number.upper()
+        if not study_key:
+            passthrough.append(normalized)
+            continue
+        existing = merged_by_study.get(study_key)
+        if existing is None:
+            merged_by_study[study_key] = normalized
+            continue
+        for field, value in normalized.items():
+            if not value:
+                continue
+            current = str(existing.get(field) or "").strip()
+            if not current:
+                existing[field] = value
+                continue
+            token = _normalize_header_token(field)
+            if (
+                token in {"study number", "organ systems evaluated", "noteworthy findings"}
+                and current.lower() != value.lower()
+            ):
+                existing[field] = _merge_text_segments(current, value)
+    ordered = sorted(
+        merged_by_study.values(),
+        key=lambda row: _study_sort_key(str(row.get("study number") or "")),
+    )
+    return [*ordered, *passthrough]
 
 
 def _rows_from_token_candidates(
@@ -5493,6 +5881,7 @@ def _extract_safety_pharmacology_candidates(
             study_findings = findings_by_study.get(study_id, [])
             study_summaries = summaries_by_study.get(study_id, [])
             study_dose_groups = dose_groups_by_study.get(study_id, [])
+            study_number = str(record.get("study_number") or "").strip()
             organ_systems: List[str] = []
             for finding in study_findings:
                 organ_system = str(finding.get("organ_system") or "").strip()
@@ -5511,24 +5900,60 @@ def _extract_safety_pharmacology_candidates(
                 if isinstance(finding, dict)
                 and str(finding.get("finding_term") or "").strip()
             ][:3]
+            finding_excerpts = [
+                str(finding.get("excerpt") or "").strip()
+                for finding in study_findings
+                if isinstance(finding, dict) and str(finding.get("excerpt") or "").strip()
+            ][:2]
+            narrative_fragments = [
+                str(extra.get("noteworthy_findings") or "").strip() if extra else "",
+                str(extra.get("key_findings") or "").strip() if extra else "",
+                str(extra.get("findings") or "").strip() if extra else "",
+                str(extra.get("result_summary") or "").strip() if extra else "",
+                "; ".join(summary_findings),
+                "; ".join(finding_terms),
+                "; ".join(finding_excerpts),
+                *(
+                    _collect_safety_context_fragments(
+                        context,
+                        study_number=study_number,
+                    )
+                    if study_number
+                    else []
+                ),
+            ]
             findings_text = _first_non_empty(
                 (
-                    extra.get("noteworthy_findings") if extra else "",
-                    extra.get("key_findings") if extra else "",
-                    extra.get("findings") if extra else "",
+                    _synthesize_safety_findings(narrative_fragments),
+                    _merge_text_segments(
+                        str(extra.get("noteworthy_findings") or "") if extra else "",
+                        str(extra.get("key_findings") or "") if extra else "",
+                        str(extra.get("findings") or "") if extra else "",
+                    ),
                     "; ".join(summary_findings),
                     "; ".join(finding_terms),
                 )
             )
+            organ_system_text = _first_non_empty(
+                (
+                    extra.get("organ_systems") if extra else "",
+                    extra.get("organ_system") if extra else "",
+                    "; ".join(organ_systems),
+                )
+            )
+            if not organ_system_text:
+                organ_system_text = _infer_safety_organ_systems(
+                    record.get("type_of_study"),
+                    extra.get("study_title") if extra else "",
+                    extra.get("title") if extra else "",
+                    extra.get("endpoints_assays") if extra else "",
+                    extra.get("endpoints") if extra else "",
+                    findings_text,
+                    "; ".join(narrative_fragments),
+                )
             candidates.append(
                 {
-                    "organ systems evaluated": _first_non_empty(
-                        (
-                            extra.get("organ_systems") if extra else "",
-                            extra.get("organ_system") if extra else "",
-                            "; ".join(organ_systems),
-                        )
-                    ),
+                    "organ systems evaluated": organ_system_text,
                     "species strain": _first_non_empty(
                         (
                             record.get("test_system"),
@@ -5557,38 +5982,43 @@ def _extract_safety_pharmacology_candidates(
                         )
                     ),
                     "noteworthy findings": findings_text,
-                    "glp compliance": str(record.get("glp_compliance") or ""),
-                    "study number": str(record.get("study_number") or ""),
+                    "glp compliance": _first_non_empty(
+                        (
+                            str(record.get("glp_compliance") or ""),
+                            str(extra.get("glp_compliance") or "") if extra else "",
+                            str(extra.get("glp_status") or "") if extra else "",
+                        )
+                    ),
+                    "study number": _format_study_number_display(study_number, extra),
                     "location in ctd": str(record.get("location_in_ctd") or ""),
                 }
             )
-        return candidates
 
-    seen: set[str] = set()
     for asset in context.get("table_assets", []) or []:
+        if not _asset_matches_safety_pharmacology(asset):
+            continue
         preview_rows = asset.get("preview_rows") or []
         for row in preview_rows:
             if not isinstance(row, dict):
                 continue
             key_map = {_normalize_header_token(str(key)): key for key in row.keys()}
-            if (
-                "organ systems evaluated" not in key_map
-                or "glp compliance" not in key_map
-            ):
-                continue
             study_number = _pick_first_value(row, key_map, "study number")
             if not study_number:
                 continue
-            parsed_ids = _extract_study_ids(study_number)
-            canonical_id = parsed_ids[0] if parsed_ids else study_number.strip()
-            if not canonical_id or canonical_id.upper() in seen:
+            row_blob = " ".join(
+                f"{str(key)}: {str(value or '').strip()}"
+                for key, value in row.items()
+                if str(value or "").strip()
+            )
+            if not _looks_like_safety_pharmacology_text(row_blob):
                 continue
+            organ_system_text = _pick_first_value(row, key_map, "organ systems evaluated")
+            if not organ_system_text:
+                organ_system_text = _infer_safety_organ_systems(row_blob)
             doses_key = key_map.get("doses")
             candidates.append(
                 {
-                    "organ systems evaluated": _pick_first_value(
-                        row, key_map, "organ systems evaluated"
-                    ),
+                    "organ systems evaluated": organ_system_text,
                     "species strain": _pick_first_value(row, key_map, "species strain"),
                     "method of administration": _pick_first_value(
                         row, key_map, "method of administration"
@@ -5603,12 +6033,11 @@ def _extract_safety_pharmacology_candidates(
                         row, key_map, "noteworthy findings"
                     ),
                     "glp compliance": _pick_first_value(row, key_map, "glp compliance"),
-                    "study number": canonical_id,
+                    "study number": study_number.strip(),
                     "location in ctd": _pick_first_value(row, key_map, "location in ctd"),
                 }
             )
-            seen.add(canonical_id.upper())
-    return candidates
+    return _merge_safety_candidate_records(candidates)
 
 
 def _repair_safety_pharmacology_table(
@@ -5638,7 +6067,87 @@ def _repair_safety_pharmacology_table(
             "Location in CTD",
         ]
         target["columns"] = columns
-    target["rows"] = _rows_from_token_candidates(columns, candidates)
+    display_by_key: Dict[str, str] = {}
+    for candidate in candidates:
+        raw = str(candidate.get("study number") or "").strip()
+        if not raw:
+            continue
+        canonical = _canonical_study_number(raw)
+        key = canonical.upper() if canonical else raw.upper()
+        if not key:
+            continue
+        current = display_by_key.get(key, "")
+        display_by_key[key] = _merge_text_segments(current, raw) if current else raw
+
+    candidate_rows = _rows_from_token_candidates(columns, candidates)
+    existing_rows = [
+        row for row in (target.get("rows") or []) if isinstance(row, dict)
+    ]
+    study_col = next(
+        (col for col in columns if _normalize_header_token(col) == "study number"), None
+    )
+    if not existing_rows:
+        if study_col:
+            for row in candidate_rows:
+                raw = str(row.get(study_col) or "").strip()
+                canonical = _canonical_study_number(raw)
+                key = canonical.upper() if canonical else raw.upper()
+                display = display_by_key.get(key, "")
+                if display:
+                    row[study_col] = display
+        target["rows"] = candidate_rows
+        return
+    if not study_col:
+        target["rows"] = existing_rows
+        return
+
+    def row_key(row: Dict[str, Any]) -> str:
+        raw = str(row.get(study_col) or "").strip()
+        canonical = _canonical_study_number(raw)
+        return canonical.upper() if canonical else raw.upper()
+
+    candidate_by_key: Dict[str, Dict[str, str]] = {}
+    for row in candidate_rows:
+        key = row_key(row)
+        if key:
+            candidate_by_key[key] = row
+
+    merged_rows: List[Dict[str, str]] = []
+    consumed: Set[str] = set()
+    for row in existing_rows:
+        normalized_row = {col: str(row.get(col) or "").strip() for col in columns}
+        key = row_key(normalized_row)
+        supplement = candidate_by_key.get(key) if key else None
+        if supplement and key:
+            consumed.add(key)
+            for col in columns:
+                current = str(normalized_row.get(col) or "").strip()
+                value = str(supplement.get(col) or "").strip()
+                if not value:
+                    continue
+                if not current:
+                    normalized_row[col] = value
+                    continue
+                token = _normalize_header_token(col)
+                if (
+                    token in {"study number", "organ systems evaluated"}
+                    and current.lower() != value.lower()
+                ):
+                    normalized_row[col] = _merge_text_segments(current, value)
+            display = display_by_key.get(key, "")
+            if display:
+                normalized_row[study_col] = display
+        merged_rows.append(normalized_row)
+
+    for key, row in candidate_by_key.items():
+        if key in consumed:
+            continue
+        candidate_row = {col: str(row.get(col) or "").strip() for col in columns}
+        display = display_by_key.get(key, "")
+        if display:
+            candidate_row[study_col] = display
+        merged_rows.append(candidate_row)
+    target["rows"] = merged_rows
 
 
 def _first_non_empty(values: Sequence[Any]) -> str:
@@ -5690,6 +6199,30 @@ def _extract_overview_candidates(context: Dict[str, Any]) -> List[Dict[str, str]
         if key in seen:
             continue
         candidates.append(candidate)
+        seen.add(key)
+        ncd_ids.add(key)
+
+    # Fallback study IDs are provided by context when extracted study records are not
+    # available; include these so invalid table IDs can still be repaired.
+    for study_number in context.get("ncd_study_ids", []) or []:
+        value = str(study_number or "").strip()
+        if not value:
+            continue
+        canonical = _canonical_study_number(value)
+        normalized = canonical or value
+        key = normalized.upper()
+        if key in seen:
+            continue
+        candidates.append(
+            {
+                "type_of_study": "",
+                "test_system": "",
+                "method_of_administration": "",
+                "testing_facility": "",
+                "location_in_ctd": "",
+                "study_number": normalized,
+            }
+        )
         seen.add(key)
         ncd_ids.add(key)
 
@@ -7643,7 +8176,7 @@ async def _analyze_s3_payload(payload: S3AnalyzeRequest) -> Dict[str, Any]:
         ) from exc
 
 
-@upload_router.post("/analyze")
+@upload_router.post("/analyze", openapi_extra={"requestBody": _ANALYZE_REQUEST_BODY_OPENAPI})
 async def analyze_pdf(request: Request) -> Dict[str, Any]:
     """
     Analyze a PDF from either a direct upload or an S3 location.
@@ -7664,8 +8197,17 @@ async def analyze_pdf(request: Request) -> Dict[str, Any]:
         or "application/json" in content_type
         or "text/json" in content_type
     ):
+        raw_body = await request.body()
+        if not raw_body:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Request body is required. Use multipart/form-data with a 'file' field "
+                    "or application/json with 'bucket' and 'key'."
+                ),
+            )
         try:
-            data = await request.json()
+            data = json.loads(raw_body)
         except Exception as exc:
             raise HTTPException(
                 status_code=400, detail="Invalid JSON payload."
@@ -7680,6 +8222,12 @@ async def analyze_pdf(request: Request) -> Dict[str, Any]:
         status_code=415,
         detail="Unsupported media type. Use multipart/form-data for uploads or application/json for S3 analysis.",
     )
+
+
+@upload_router.post("/s3/analyze")
+async def analyze_s3(payload: S3AnalyzeRequest) -> Dict[str, Any]:
+    """Analyze a PDF referenced by S3 bucket/key using a schema-stable JSON endpoint."""
+    return await _analyze_s3_payload(payload)
 
 
 @upload_router.post("/s3/upload-analyze")

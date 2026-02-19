@@ -333,10 +333,53 @@ poetry run python scripts/ingest_module4_batch.py \
   --workers 4
 ```
 
+4.2) Missing ingestion re-run (rerun only missing/failed items):
+
+Use this when you want to recover missing outputs without reprocessing already-complete files.
+
+```shell
+LANGCHAIN_TRACING_V2=false LANGCHAIN_API_KEY= \
+LLM_MODEL_NAME=gpt-4.1-mini \
+poetry run python scripts/ingest_module4_batch.py \
+  --bucket doc-repository-dev \
+  --company filynai.com \
+  --project "${PROJECT_NAME}" \
+  --project-id "${PROJECT_UUID}" \
+  --tenant-id "${TENANT_UUID}" \
+  --created-by "${USER_UUID}" \
+  --prefix "filynai.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/" \
+  --mode core \
+  --no-force-core \
+  --context \
+  --section-summary \
+  --skip-langchain \
+  --workers 4
+```
+
+If you need to force rerun only selected files, narrow `--prefix` to a single PDF key and then use force flags:
+
+```shell
+LANGCHAIN_TRACING_V2=false LANGCHAIN_API_KEY= \
+LLM_MODEL_NAME=gpt-4.1-mini \
+poetry run python scripts/ingest_module4_batch.py \
+  --bucket doc-repository-dev \
+  --company filynai.com \
+  --project "${PROJECT_NAME}" \
+  --project-id "${PROJECT_UUID}" \
+  --tenant-id "${TENANT_UUID}" \
+  --created-by "${USER_UUID}" \
+  --prefix "filynai.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/.../specific_report.pdf" \
+  --mode core \
+  --no-force-core \
+  --force-pharm-overview \
+  --workers 1
+```
+
 Notes:
 - `pharm-overview` runs by default for Module 4 pharmacology sections `4.2.1.1` to `4.2.1.4`.
 - Use `--no-pharm-overview` to disable it.
 - Per-file status/IDs are included in ingestion reports as `pharm_overview_*` fields.
+- For missing-only reruns, avoid broad `--force-*` flags on wide prefixes because they intentionally bypass skip guards.
 
 5) Module 4 tox pipeline (ncd_finding/exposure/safety summary):
 

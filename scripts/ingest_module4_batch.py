@@ -114,11 +114,40 @@ _FACILITY_HINTS = (
     "inc",
     "llc",
     "ltd",
+    "corp",
+    "corporation",
+    "company",
+    "co.",
+    "co,",
     "laborator",
+    "labs",
+    "lab ",
     "institute",
     "university",
     "center",
+    "centre",
+    "biotech",
+    "pharma",
+    "contract research",
+    "cro",
     "facility",
+)
+_FACILITY_EXCLUDE_PATTERNS = (
+    re.compile(r"(?i)\bmg\s*/?\s*kg\b"),
+    re.compile(r"(?i)\bdos(?:e|ing)\b"),
+    re.compile(r"(?i)\b(?:day|week|month)s?\b"),
+    re.compile(r"(?i)\b(?:rats?|mice|mouse|monkeys?|dogs?|rabbits?)\b"),
+)
+_FACILITY_SENTENCE_PATTERNS = (
+    re.compile(
+        r"(?im)\b(?:testing|test)\s+facilit(?:y|ies)\b(?:\s*\([^)]*\))?\s*(?:was|were|is|are|:|-)\s*([^\n;]+)"
+    ),
+    re.compile(
+        r"(?im)\b(?:study|studies|work|experiments?)\b[^.\n]{0,80}?\b(?:conducted|performed|carried out)\s+(?:at|by)\s+([^\n;]+)"
+    ),
+    re.compile(
+        r"(?im)\b(?:contract\s+research\s+organization|cro)\b(?:\s*\([^)]*\))?\s*(?::|-|was|is)?\s*([^\n;]+)"
+    ),
 )
 _PHARM_OVERVIEW_MODULE4_SECTIONS: Optional[Set[str]] = None
 
@@ -266,9 +295,19 @@ def _normalize_study_number(value: str) -> str:
         return ""
     if candidate.lower().startswith("u201") or candidate.lower().startswith("u00"):
         return ""
-    if not re.search(r"[A-Za-z]", candidate) or not re.search(r"\d", candidate):
+    if not re.search(r"\d", candidate):
         return ""
-    return candidate
+    if re.search(r"[A-Za-z]", candidate):
+        return candidate
+    # Accept legacy numeric sponsor/report IDs (for example, 301644 or 1006-2525).
+    if re.fullmatch(r"\d{5,}", candidate):
+        return candidate
+    if re.fullmatch(r"\d{2,}(?:[-./]\d{2,})+", candidate):
+        return candidate
+    # Reject short or weak numeric fragments such as page/table artifacts.
+    if re.fullmatch(r"\d{1,4}", candidate):
+        return ""
+    return ""
 
 
 def _extract_study_number(text: str, file_name: str, content_hash: str) -> str:
@@ -311,6 +350,76 @@ def _extract_study_number(text: str, file_name: str, content_hash: str) -> str:
     return f"DOC-{digits}-{digest}"
 
 
+def _extract_study_identifiers(
+    text: str,
+    file_name: str,
+    content_hash: str,
+) -> Dict[str, str]:
+    sponsor = ""
+    cro = ""
+    sponsor_match = re.search(
+        r"(?im)sponsor[^\n:;]*study(?:\s*(?:number|no\.?|id|#))?\s*[:#-]\s*([^;|\n]+)",
+        str(text or ""),
+    )
+    if sponsor_match:
+        sponsor = _normalize_study_number(sponsor_match.group(1))
+    cro_match = re.search(
+        r"(?im)cro[^\n:;]*study(?:\s*(?:number|no\.?|id|#))?\s*[:#-]\s*([^;|\n]+)",
+        str(text or ""),
+    )
+    if cro_match:
+        cro = _normalize_study_number(cro_match.group(1))
+    primary = sponsor or _extract_study_number(text, file_name, content_hash)
+    if not sponsor:
+        sponsor = primary
+    display_parts: List[str] = []
+    if sponsor:
+        display_parts.append(f"Sponsor study #: {sponsor}")
+    if cro and cro.lower() != sponsor.lower():
+        display_parts.append(f"CRO study #: {cro}")
+    display = "; ".join(display_parts) if display_parts else primary
+    return {
+        "study_number": primary,
+        "study_number_display": display,
+        "sponsor_study_number": sponsor,
+        "cro_study_number": cro,
+    }
+
+
+def _collect_study_number_aliases(*values: str) -> List[str]:
+    aliases: List[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = str(value or "").strip()
+        if not normalized:
+            continue
+        key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        aliases.append(normalized)
+    return aliases
+
+
+def _extract_glp_statement(text: str) -> str:
+    for line in str(text or "").splitlines():
+        normalized = _normalize_space(line)
+        if not normalized:
+            continue
+        if re.search(r"(?i)\bgood laboratory practice\b|\bnon[- ]?glp\b|\bglp\b", normalized):
+            return normalized[:300]
+    return ""
+
+
+def _extract_glp_status(text: str) -> str:
+    lowered = str(text or "").lower()
+    if re.search(r"\bnon[- ]?glp\b|\bnot\b[^\n]{0,60}\bglp\b", lowered):
+        return "Non-GLP"
+    if re.search(r"\bgood laboratory practice\b|\bglp\b", lowered):
+        return "GLP"
+    return ""
+
+
 def _extract_primary_species(text: str) -> str:
     lowered = str(text or "").lower()
     for pattern in _SPECIES_PATTERNS:
@@ -328,6 +437,42 @@ def _extract_route(text: str) -> str:
 
 
 def _extract_testing_facility(text: str) -> str:
+    def _clean_candidate(value: str) -> str:
+        cleaned = _normalize_space(value).strip(" ,:;()[]{}\"'")
+        cleaned = re.sub(
+            r"(?i)^(?:at|by|the|testing facility|test facility|facility|laboratory)\s+",
+            "",
+            cleaned,
+        ).strip(" ,:;")
+        return cleaned
+
+    def _looks_plausible(value: str) -> bool:
+        lowered = value.lower()
+        if not value or len(value) < 3:
+            return False
+        if lowered in {"na", "n/a", "none", "unknown", "not applicable"}:
+            return False
+        if any(pattern.search(value) for pattern in _FACILITY_EXCLUDE_PATTERNS):
+            return False
+        if not re.search(r"[A-Za-z]", value):
+            return False
+        if len(value.split()) > 20:
+            return False
+        return True
+
+    candidates: List[str] = []
+    seen: set[str] = set()
+
+    def _append_candidate(raw: str) -> None:
+        candidate = _clean_candidate(raw)
+        if not _looks_plausible(candidate):
+            return
+        key = candidate.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append(candidate)
+
     values = _extract_label_values(
         text,
         (
@@ -342,10 +487,17 @@ def _extract_testing_facility(text: str) -> str:
         ),
     )
     for value in values:
+        _append_candidate(value)
+
+    for pattern in _FACILITY_SENTENCE_PATTERNS:
+        for match in pattern.finditer(str(text or "")):
+            _append_candidate(match.group(1))
+
+    for value in candidates:
         lowered = value.lower()
         if any(token in lowered for token in _FACILITY_HINTS):
             return value
-    return values[0] if values else ""
+    return candidates[0] if candidates else ""
 
 
 def _extract_test_system(text: str) -> str:
@@ -402,19 +554,26 @@ def _extract_pharm_overview_metadata(
 ) -> Dict[str, str]:
     first_pages = _extract_pages_text(markdown, max_pages=3)
     text = _remove_markdown_tables(first_pages)
-    study_number = _extract_study_number(text, file_name, content_hash)
+    identifiers = _extract_study_identifiers(text, file_name, content_hash)
     test_system = _extract_test_system(text)
     method = _extract_method_of_administration(text)
     facility = _extract_testing_facility(text)
+    glp_statement = _extract_glp_statement(text)
+    glp_status = _extract_glp_status(text)
     study_title = Path(file_name).stem.replace("_", " ").strip()
     type_of_study = _module4_section_title(module4_section)
     location_in_ctd = f'Module 4, Section {module4_section}: "{study_title}"'
 
     return {
-        "study_number": study_number,
+        "study_number": identifiers.get("study_number", ""),
+        "study_number_display": identifiers.get("study_number_display", ""),
+        "sponsor_study_number": identifiers.get("sponsor_study_number", ""),
+        "cro_study_number": identifiers.get("cro_study_number", ""),
         "test_system": test_system,
         "method_of_administration": method,
         "testing_facility": facility,
+        "glp_status": glp_status,
+        "glp_compliance": glp_statement or glp_status,
         "type_of_study": type_of_study,
         "study_title": study_title,
         "location_in_ctd": location_in_ctd,
@@ -439,8 +598,24 @@ def _upsert_pharm_overview_to_db(
     )
 
     study_number = str(metadata.get("study_number") or "").strip()
+    sponsor_study_number = str(metadata.get("sponsor_study_number") or "").strip()
+    cro_study_number = str(metadata.get("cro_study_number") or "").strip()
+    study_number_aliases = _collect_study_number_aliases(
+        study_number,
+        sponsor_study_number,
+        cro_study_number,
+    )
+    if not study_number and study_number_aliases:
+        study_number = study_number_aliases[0]
+    primary_study_number = sponsor_study_number or study_number
+    if not primary_study_number and study_number_aliases:
+        primary_study_number = study_number_aliases[0]
+    alias_1 = study_number_aliases[0] if len(study_number_aliases) > 0 else ""
+    alias_2 = study_number_aliases[1] if len(study_number_aliases) > 1 else ""
+    alias_3 = study_number_aliases[2] if len(study_number_aliases) > 2 else ""
     test_system = str(metadata.get("test_system") or "").strip()
     method = str(metadata.get("method_of_administration") or "").strip()
+    glp_status = str(metadata.get("glp_status") or "").strip()
     species = _extract_primary_species(test_system)
     route = _extract_route(method)
     if not route:
@@ -455,7 +630,14 @@ def _upsert_pharm_overview_to_db(
             "test_system": test_system,
             "method_of_administration": method,
             "testing_facility": str(metadata.get("testing_facility") or "").strip(),
+            "glp_compliance": str(metadata.get("glp_compliance") or "").strip(),
             "study_title": str(metadata.get("study_title") or "").strip(),
+            "study_number_display": str(
+                metadata.get("study_number_display") or ""
+            ).strip(),
+            "sponsor_study_number": sponsor_study_number,
+            "cro_study_number": cro_study_number,
+            "study_number_aliases": study_number_aliases,
             "location_in_ctd": str(metadata.get("location_in_ctd") or "").strip(),
         }
     )
@@ -470,7 +652,51 @@ def _upsert_pharm_overview_to_db(
                 WHERE project_id = :pid
                   AND (
                     main_source_document_id = :source_document_id
-                    OR (:study_number <> '' AND sponsor_study_id = :study_number)
+                    OR (
+                        :alias_1 <> ''
+                        AND (
+                            LOWER(COALESCE(sponsor_study_id, '')) = LOWER(:alias_1)
+                            OR LOWER(COALESCE(extra_attributes ->> 'sponsor_study_number', '')) = LOWER(:alias_1)
+                            OR LOWER(COALESCE(extra_attributes ->> 'cro_study_number', '')) = LOWER(:alias_1)
+                            OR EXISTS (
+                                SELECT 1
+                                FROM jsonb_array_elements_text(
+                                    COALESCE(extra_attributes -> 'study_number_aliases', '[]'::jsonb)
+                                ) AS existing_alias(value)
+                                WHERE LOWER(existing_alias.value) = LOWER(:alias_1)
+                            )
+                        )
+                    )
+                    OR (
+                        :alias_2 <> ''
+                        AND (
+                            LOWER(COALESCE(sponsor_study_id, '')) = LOWER(:alias_2)
+                            OR LOWER(COALESCE(extra_attributes ->> 'sponsor_study_number', '')) = LOWER(:alias_2)
+                            OR LOWER(COALESCE(extra_attributes ->> 'cro_study_number', '')) = LOWER(:alias_2)
+                            OR EXISTS (
+                                SELECT 1
+                                FROM jsonb_array_elements_text(
+                                    COALESCE(extra_attributes -> 'study_number_aliases', '[]'::jsonb)
+                                ) AS existing_alias(value)
+                                WHERE LOWER(existing_alias.value) = LOWER(:alias_2)
+                            )
+                        )
+                    )
+                    OR (
+                        :alias_3 <> ''
+                        AND (
+                            LOWER(COALESCE(sponsor_study_id, '')) = LOWER(:alias_3)
+                            OR LOWER(COALESCE(extra_attributes ->> 'sponsor_study_number', '')) = LOWER(:alias_3)
+                            OR LOWER(COALESCE(extra_attributes ->> 'cro_study_number', '')) = LOWER(:alias_3)
+                            OR EXISTS (
+                                SELECT 1
+                                FROM jsonb_array_elements_text(
+                                    COALESCE(extra_attributes -> 'study_number_aliases', '[]'::jsonb)
+                                ) AS existing_alias(value)
+                                WHERE LOWER(existing_alias.value) = LOWER(:alias_3)
+                            )
+                        )
+                    )
                   )
                 ORDER BY
                   CASE WHEN main_source_document_id = :source_document_id THEN 0 ELSE 1 END,
@@ -483,6 +709,9 @@ def _upsert_pharm_overview_to_db(
                 "pid": project_id,
                 "source_document_id": source_document_id,
                 "study_number": study_number,
+                "alias_1": alias_1,
+                "alias_2": alias_2,
+                "alias_3": alias_3,
             },
         )
         .mappings()
@@ -496,8 +725,9 @@ def _upsert_pharm_overview_to_db(
                 """
                 UPDATE ncd_study
                 SET project_id = COALESCE(project_id, :pid),
-                    sponsor_study_id = COALESCE(NULLIF(sponsor_study_id, ''), :study_number),
+                    sponsor_study_id = COALESCE(NULLIF(sponsor_study_id, ''), NULLIF(:primary_study_number, ''), :study_number),
                     study_type = COALESCE(NULLIF(study_type, ''), :study_type),
+                    glp_status = COALESCE(NULLIF(glp_status, ''), :glp_status),
                     species = COALESCE(NULLIF(species, ''), :species),
                     route = COALESCE(NULLIF(route, ''), :route),
                     main_source_document_id = COALESCE(main_source_document_id, :source_document_id),
@@ -510,7 +740,9 @@ def _upsert_pharm_overview_to_db(
             {
                 "pid": project_id,
                 "study_number": study_number,
+                "primary_study_number": primary_study_number,
                 "study_type": study_type,
+                "glp_status": glp_status or None,
                 "species": species or None,
                 "route": route or None,
                 "source_document_id": source_document_id,
@@ -529,6 +761,7 @@ def _upsert_pharm_overview_to_db(
                 project_id,
                 sponsor_study_id,
                 study_type,
+                glp_status,
                 species,
                 route,
                 main_source_document_id,
@@ -537,8 +770,9 @@ def _upsert_pharm_overview_to_db(
             )
             VALUES (
                 :pid,
-                :study_number,
+                :primary_study_number,
                 :study_type,
+                :glp_status,
                 :species,
                 :route,
                 :source_document_id,
@@ -551,7 +785,9 @@ def _upsert_pharm_overview_to_db(
         {
             "pid": project_id,
             "study_number": study_number,
+            "primary_study_number": primary_study_number,
             "study_type": study_type,
+            "glp_status": glp_status or None,
             "species": species or None,
             "route": route or None,
             "source_document_id": source_document_id,

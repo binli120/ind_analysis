@@ -377,3 +377,191 @@ def test_rows_from_token_candidates_keeps_unparsed_study_ids(server: Any) -> Non
     study_numbers = [str(row.get("Study Number") or "") for row in rows]
     assert "RP-PC-60" in study_numbers
     assert "WKP00013 Page 2" in study_numbers
+
+
+def test_render_dose_group_summary_formats_control_and_group_counts(server: Any) -> None:
+    doses_text, sex_text = server._render_dose_group_summary(
+        [
+            {"name": "Vehicle control", "dose_mg_per_kg": "0.0", "sex": "M", "n_animals": 4},
+            {"name": "Low", "dose_mg_per_kg": "10.0", "sex": "M", "n_animals": 4},
+            {"name": "Mid", "dose_mg_per_kg": "30.0", "sex": "M", "n_animals": 4},
+            {"name": "High", "dose_mg_per_kg": "100.0", "sex": "M", "n_animals": 4},
+        ]
+    )
+    assert doses_text == "10, 30, 100 (plus vehicle control)"
+    assert sex_text == "Male, n=4 (1 group)"
+
+
+def test_repair_safety_table_merges_missing_cells_without_overwriting_findings(
+    server: Any,
+) -> None:
+    tables = [
+        {
+            "subsection": "2.6.3.4",
+            "columns": [
+                "Organ Systems Evaluated",
+                "Species/Strain",
+                "Method of Admin.",
+                "Doses (mg/kg)",
+                "Gender and No. per Group",
+                "Noteworthy Findings",
+                "GLP Compliance",
+                "Study Number",
+                "Location in CTD",
+            ],
+            "rows": [
+                {
+                    "Organ Systems Evaluated": "",
+                    "Species/Strain": "Cynomolgus monkey",
+                    "Method of Admin.": "",
+                    "Doses (mg/kg)": "10, 30, 100 (plus vehicle control)",
+                    "Gender and No. per Group": "",
+                    "Noteworthy Findings": (
+                        "No treatment-related changes in ECG or respiratory parameters; "
+                        "slight BP and HR increases at 100 mg/kg were not toxicologically meaningful."
+                    ),
+                    "GLP Compliance": "",
+                    "Study Number": "RP-PC-41",
+                    "Location in CTD": "Module 4.2.1.3",
+                }
+            ],
+        }
+    ]
+    context = {
+        "mapping": [{"module4_section": "4.2.1.3", "category": "Safety Pharmacology"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "RP-PC-41",
+                    "module4_section": "4.2.1.3",
+                    "species": "Cynomolgus monkey",
+                    "strain": "",
+                    "route": "IV infusion",
+                    "extra_attributes": {
+                        "organ_systems": "Cardiovascular; Respiratory",
+                        "method_of_administration": (
+                            "IV infusion to vascular access port (VAP), ~30 min"
+                        ),
+                        "study_number_display": (
+                            "Sponsor study #: RP-PC-41; CRO study #: WKP00013"
+                        ),
+                        "glp_compliance": "GLP",
+                    },
+                }
+            ],
+            "dose_groups": [
+                {"study_id": "study-1", "name": "Vehicle control", "dose_mg_per_kg": "0", "sex": "M", "n_animals": 4},
+                {"study_id": "study-1", "name": "Low", "dose_mg_per_kg": "10", "sex": "M", "n_animals": 4},
+                {"study_id": "study-1", "name": "Mid", "dose_mg_per_kg": "30", "sex": "M", "n_animals": 4},
+                {"study_id": "study-1", "name": "High", "dose_mg_per_kg": "100", "sex": "M", "n_animals": 4},
+            ],
+            "findings": [
+                {
+                    "study_id": "study-1",
+                    "organ_system": "Cardiovascular",
+                    "finding_term": "Increased mean arterial blood pressure",
+                }
+            ],
+            "safety_summaries": [
+                {"study_id": "study-1", "limiting_finding": "No toxicologically meaningful findings"}
+            ],
+            "source_documents": [],
+        },
+        "table_assets": [],
+        "section_sources": [
+            {
+                "section_number": "4.2.1.3",
+                "summary_text": (
+                    "No treatment-related changes in ECG intervals, respiratory rate, or blood gases. "
+                    "At 100 mg/kg, slight increases in blood pressure and heart rate were not "
+                    "toxicologically meaningful."
+                ),
+            }
+        ],
+        "document_keys": [],
+        "project_document_keys": [],
+    }
+
+    server._repair_safety_pharmacology_table(tables, context)
+
+    row = tables[0]["rows"][0]
+    assert row["Noteworthy Findings"].startswith("No treatment-related changes")
+    assert row["Organ Systems Evaluated"] == "Cardiovascular; Respiratory"
+    assert row["Method of Admin."] == "IV infusion to vascular access port (VAP), ~30 min"
+    assert row["Gender and No. per Group"] == "Male, n=4 (1 group)"
+    assert row["GLP Compliance"] == "GLP"
+    assert row["Study Number"] == "Sponsor study #: RP-PC-41; CRO study #: WKP00013"
+
+
+def test_extract_safety_candidates_infers_organ_systems_from_safety_text(
+    server: Any,
+) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.3", "category": "Safety Pharmacology"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "600210",
+                    "module4_section": "4.2.1.3",
+                    "species": "dog",
+                    "strain": "Beagle",
+                    "route": "PO",
+                    "extra_attributes": {
+                        "key_findings": (
+                            "No treatment-related effects on ECG/QTc, respiratory rate, "
+                            "or functional observational battery parameters."
+                        )
+                    },
+                }
+            ],
+            "findings": [],
+            "safety_summaries": [],
+            "dose_groups": [],
+            "source_documents": [],
+        },
+        "table_assets": [],
+        "section_sources": [],
+        "document_keys": [],
+        "project_document_keys": [],
+    }
+
+    candidates = server._extract_safety_pharmacology_candidates(context)
+    assert len(candidates) == 1
+    assert candidates[0]["study number"] == "600210"
+    assert candidates[0]["organ systems evaluated"] == "Cardiovascular; CNS; Respiratory"
+
+
+def test_extract_safety_candidates_reads_report_study_no_and_infers_organ_systems(
+    server: Any,
+) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.3", "category": "Safety Pharmacology"}],
+        "ncd_payload": {"studies": [], "source_documents": []},
+        "table_assets": [
+            {
+                "s3_key": (
+                    "filynai.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
+                    "4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/report.pdf.tables/1.json"
+                ),
+                "caption": "",
+                "description": "",
+                "keywords": [],
+                "preview_rows": [
+                    {
+                        "Report/Study No.": "1006-2525",
+                        "Species/Strain": "Beagle dog",
+                        "Key Findings": (
+                            "No meaningful ECG or QTc changes and no respiratory effects."
+                        ),
+                    }
+                ],
+            }
+        ],
+    }
+
+    candidates = server._extract_safety_pharmacology_candidates(context)
+    assert len(candidates) == 1
+    assert candidates[0]["study number"] == "1006-2525"
+    assert candidates[0]["organ systems evaluated"] == "Cardiovascular; Respiratory"

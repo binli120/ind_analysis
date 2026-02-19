@@ -564,13 +564,39 @@ def fetch_study_ids_for_sections(
         db.execute(
             sqltext(
                 """
-                SELECT DISTINCT sponsor_study_id
-                FROM ncd_study
-                WHERE project_id = :pid
-                  AND module4_section = ANY(:sections)
-                  AND sponsor_study_id IS NOT NULL
-                  AND sponsor_study_id <> ''
-                ORDER BY sponsor_study_id
+                WITH scoped_studies AS (
+                    SELECT sponsor_study_id, extra_attributes
+                    FROM ncd_study
+                    WHERE project_id = :pid
+                      AND module4_section = ANY(:sections)
+                ),
+                all_ids AS (
+                    SELECT NULLIF(BTRIM(sponsor_study_id), '') AS study_id
+                    FROM scoped_studies
+
+                    UNION
+
+                    SELECT NULLIF(BTRIM(extra_attributes ->> 'sponsor_study_number'), '')
+                    FROM scoped_studies
+
+                    UNION
+
+                    SELECT NULLIF(BTRIM(extra_attributes ->> 'cro_study_number'), '')
+                    FROM scoped_studies
+
+                    UNION
+
+                    SELECT NULLIF(BTRIM(alias.value), '')
+                    FROM scoped_studies
+                    CROSS JOIN LATERAL jsonb_array_elements_text(
+                        COALESCE(extra_attributes -> 'study_number_aliases', '[]'::jsonb)
+                    ) AS alias(value)
+                )
+                SELECT DISTINCT study_id
+                FROM all_ids
+                WHERE study_id IS NOT NULL
+                  AND study_id <> ''
+                ORDER BY study_id
                 """
             ),
             {"pid": project_id, "sections": module4_sections},
@@ -579,9 +605,9 @@ def fetch_study_ids_for_sections(
         .all()
     )
     return [
-        str(row.get("sponsor_study_id") or "")
+        str(row.get("study_id") or "")
         for row in rows
-        if row.get("sponsor_study_id")
+        if row.get("study_id")
     ]
 
 

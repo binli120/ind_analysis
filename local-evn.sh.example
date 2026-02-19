@@ -1,0 +1,37 @@
+#!/bin/bash
+# Local environment configuration template
+# Copy this file to local-evn.sh and fill in your credentials
+# DO NOT commit local-evn.sh to git - it contains secrets!
+
+export DATABASE_URL="postgresql://user:password@host:5432/database"
+export OPENAI_API_KEY="sk-proj-your-api-key-here"
+export AWS_REGION="us-east-1"
+export ENABLE_LANGCHAIN=true
+export ENABLE_CONTEXT_PIPELINE=true
+
+# Project configuration
+export PROJECT_NAME="YourProjectName"
+export PROJECT_UUID="00000000-0000-0000-0000-000000000000"
+export TENANT_UUID="00000000-0000-0000-0000-000000000000"
+export USER_UUID="00000000-0000-0000-0000-000000000000"
+export COMPANY_NAME="yourcompany.com"
+
+sleep 2
+
+# Example command - uncomment and modify as needed
+# LANGCHAIN_TRACING_V2=false LANGCHAIN_API_KEY= \
+# poetry run python scripts/ingest_module4_batch.py \
+#   --bucket doc-repository-dev \
+#   --company ${COMPANY_NAME} \
+#   --project "${PROJECT_NAME}" \
+#   --project-id "${PROJECT_UUID}" \
+#   --tenant-id "${TENANT_UUID}" \
+#   --created-by "${USER_UUID}" \
+#   --prefix "${COMPANY_NAME}/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/" \
+#   --mode core \
+#   --no-force-core \
+#   --context \
+#   --section-summary \
+#   --skip-langchain \
+#   --force-pharm-overview \
+#   --workers 4

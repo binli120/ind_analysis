@@ -69,6 +69,34 @@ DEFAULT_TENANT_ID = os.getenv("DEFAULT_TENANT_ID")
 DEFAULT_USER_ID = os.getenv("DEFAULT_USER_ID")
 
 
+def _s3_object_exists(bucket: str, key: str) -> bool:
+    try:
+        s3.head_object(Bucket=bucket, Key=key)
+        return True
+    except Exception:
+        return False
+
+
+def _markdown_sidecar_exists(bucket: str, key: str) -> bool:
+    return _s3_object_exists(bucket, f"{key}.extracted.md")
+
+
+def _should_skip_core(
+    *,
+    run_core: bool,
+    force: bool,
+    core_status_row: Optional[Dict[str, Any]],
+    bucket: str,
+    key: str,
+) -> bool:
+    if not run_core or force:
+        return False
+    if not core_status_row or core_status_row.get("status") != "completed":
+        return False
+    # Do not skip core when DB status is completed but markdown sidecar is missing.
+    return _markdown_sidecar_exists(bucket, key)
+
+
 def handler(event: Dict[str, Any], _ctx=None) -> Dict[str, Any]:
     responses: List[Dict[str, Any]] = []
     for record in event.get("Records", []):
@@ -152,14 +180,13 @@ def process_message(
             if core_status_row and core_status_row.get("document_version_id"):
                 document_version_id = str(core_status_row.get("document_version_id"))
 
-            core_skip = False
-            if (
-                run_core
-                and not force
-                and core_status_row
-                and core_status_row.get("status") == "completed"
-            ):
-                core_skip = True
+            core_skip = _should_skip_core(
+                run_core=run_core,
+                force=force,
+                core_status_row=core_status_row,
+                bucket=bucket,
+                key=key,
+            )
 
             if run_core and not core_skip:
                 started = datetime.now(timezone.utc)

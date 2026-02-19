@@ -78,3 +78,47 @@ Testing Facility: BioTest Labs, Inc.
 def test_study_id_skip_regex_filters_table_artifact_ids():
     assert STUDY_ID_SKIP_RE.match("input.p10.t1")
     assert STUDY_ID_SKIP_RE.match("p2.t3")
+
+
+def test_collect_study_number_aliases_dedupes_and_keeps_order():
+    mod = _load_ingest_module()
+    aliases = mod._collect_study_number_aliases(
+        "RP-PC-41",
+        "301644",
+        "rp-pc-41",
+        "",
+        "301644",
+    )
+    assert aliases == ["RP-PC-41", "301644"]
+
+
+def test_extract_study_identifiers_keeps_sponsor_and_cro_ids():
+    mod = _load_ingest_module()
+    payload = mod._extract_study_identifiers(
+        text="Sponsor Study Number: RP-PC-41\nCRO Study Number: 301644",
+        file_name="report.pdf",
+        content_hash="abcdef1234567890",
+    )
+    assert payload["study_number"] == "RP-PC-41"
+    assert payload["sponsor_study_number"] == "RP-PC-41"
+    assert payload["cro_study_number"] == "301644"
+
+
+def test_extract_testing_facility_from_sentence_pattern():
+    mod = _load_ingest_module()
+    text = "This study was conducted at Covance Laboratories Inc. in Madison, Wisconsin."
+    value = mod._extract_testing_facility(text)
+    assert value.startswith("Covance Laboratories Inc")
+    assert "Madison" in value
+
+
+def test_extract_testing_facility_from_testing_facility_was_pattern():
+    mod = _load_ingest_module()
+    text = "Testing Facility was WuXi AppTec Co., Ltd."
+    assert mod._extract_testing_facility(text).startswith("WuXi AppTec Co., Ltd")
+
+
+def test_extract_testing_facility_rejects_dose_phrase():
+    mod = _load_ingest_module()
+    text = "The study was conducted at 10 mg/kg/day in rats."
+    assert mod._extract_testing_facility(text) == ""

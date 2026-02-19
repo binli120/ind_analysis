@@ -17,7 +17,7 @@ import types
 import unittest
 from pathlib import Path
 from typing import Any, Dict, List, cast
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pandas as pd
 from fastapi.testclient import TestClient
@@ -256,6 +256,47 @@ class ApiEndpointTests(unittest.TestCase):
         self.assertEqual(payload["tables"][0]["row_count"], 2)
         self.assertIn("document", payload["quality"])
         self.assertEqual(payload["quality_markdown"], "# Quality")
+
+    def test_analyze_endpoint_openapi_request_body_is_documented(self) -> None:
+        schema = server.app.openapi()
+        analyze_post = schema["paths"]["/analyze"]["post"]
+        request_body = analyze_post.get("requestBody", {})
+        content = request_body.get("content", {})
+
+        self.assertIn("application/json", content)
+        self.assertIn("multipart/form-data", content)
+        self.assertEqual(
+            content["application/json"]["schema"]["$ref"],
+            "#/components/schemas/S3AnalyzeRequest",
+        )
+        self.assertEqual(
+            content["multipart/form-data"]["schema"]["properties"]["file"]["format"],
+            "binary",
+        )
+
+    def test_analyze_s3_endpoint_is_repeatable(self) -> None:
+        client = TestClient(server.app)
+        payload = {
+            "bucket": "demo-bucket",
+            "key": "demo/path/report.pdf",
+            "version_id": "v-1",
+            "aws_region": "us-east-1",
+        }
+        expected = {"status": "ok", "source": "s3"}
+
+        with patch.object(
+            server,
+            "_analyze_s3_payload",
+            AsyncMock(return_value=expected),
+        ) as mocked:
+            first = client.post("/s3/analyze", json=payload)
+            second = client.post("/s3/analyze", json=payload)
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json(), expected)
+        self.assertEqual(second.json(), expected)
+        self.assertEqual(mocked.await_count, 2)
 
     def test_fetch_s3_markdown_endpoint(self) -> None:
         client = TestClient(server.app)

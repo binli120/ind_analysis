@@ -1,0 +1,74 @@
+.idea/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build artefacts
+build/
+dist/
+*.egg-info/
+
+# Tool caches
+.mypy_cache/
+.pytest_cache/
+.pyre/
+.pytype/
+
+# Coverage reports
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.sample
+local-evn.sh
+*-env.sh
+!*-env.sh.example
+
+# System files
+.DS_Store
+
+# Redis snapshot
+dump.rdb
+
+# Terraform artifacts
+.terraform.lock.hcl
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+*.tfstate
+*.tfstate.backup
+infra/terraform/api-gateway/openapi-proxy.json.tpl
+infra/terraform/dynamo/
+
+# Vendored Lambda dependencies
+lambda/pipeline_orchestrator/bin/
+lambda/pipeline_orchestrator/*.dist-info/
+lambda/pipeline_orchestrator/boto3/
+lambda/pipeline_orchestrator/botocore/
+lambda/pipeline_orchestrator/dateutil/
+lambda/pipeline_orchestrator/jmespath/
+lambda/pipeline_orchestrator/s3transfer/
+lambda/pipeline_orchestrator/six.py
+lambda/pipeline_orchestrator/urllib3/
+
+module4_extracted
+module4_extracted/*
+
+*.pdf
+tmp/*
+tmp/.DS_Store
