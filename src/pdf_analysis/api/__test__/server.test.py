@@ -565,3 +565,75 @@ def test_extract_safety_candidates_reads_report_study_no_and_infers_organ_system
     assert len(candidates) == 1
     assert candidates[0]["study number"] == "1006-2525"
     assert candidates[0]["organ systems evaluated"] == "Cardiovascular; Respiratory"
+
+
+def test_extract_safety_candidates_infers_non_glp_from_narrative(
+    server: Any,
+) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.3", "category": "Safety Pharmacology"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "RP-PC-60",
+                    "module4_section": "4.2.1.3",
+                    "species": "dog",
+                    "strain": "Beagle",
+                    "route": "PO",
+                    "extra_attributes": {
+                        "key_findings": (
+                            "This non-GLP safety pharmacology study showed no clinically "
+                            "meaningful ECG changes."
+                        )
+                    },
+                }
+            ],
+            "findings": [],
+            "safety_summaries": [],
+            "dose_groups": [],
+            "source_documents": [],
+        },
+        "table_assets": [],
+        "section_sources": [],
+        "document_keys": [],
+        "project_document_keys": [],
+    }
+
+    candidates = server._extract_safety_pharmacology_candidates(context)
+    assert len(candidates) == 1
+    assert candidates[0]["study number"] == "RP-PC-60"
+    assert candidates[0]["glp compliance"] == "Non-GLP"
+
+
+def test_extract_primary_pd_candidates_infers_glp_from_qa_statement(
+    server: Any,
+) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.1", "category": "Primary Pharmacodynamics"}],
+        "ncd_payload": {"studies": [], "source_documents": []},
+        "table_assets": [
+            {
+                "s3_key": (
+                    "filynai.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
+                    "4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/report.pdf.tables/1.json"
+                ),
+                "caption": "",
+                "description": "",
+                "keywords": [],
+                "preview_rows": [
+                    {
+                        "Type of Study": "Tumor model efficacy",
+                        "Species/Strain": "Mouse, CD-1",
+                        "Study No.": "306D326.1",
+                        "QA Statement": "Conducted in compliance with GLP",
+                    }
+                ],
+            }
+        ],
+    }
+
+    candidates = server._extract_primary_pd_candidates(context)
+    assert len(candidates) == 1
+    assert candidates[0]["study number"] == "306D326.1"
+    assert candidates[0]["glp compliance"] == "GLP"

@@ -72,3 +72,11 @@ module4_extracted/*
 *.pdf
 tmp/*
 tmp/.DS_Store
+
+# Claude IDE settings
+.claude/settings.local.json
+.claude/settings.json
+
+# Build artifacts should already be ignored, but being explicit
+dist/*.whl
+dist/*.tar.gz

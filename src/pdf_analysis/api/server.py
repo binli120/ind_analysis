@@ -4947,6 +4947,10 @@ def _normalize_header_token(value: str) -> str:
         "safety pharmacology domain": "organ systems evaluated",
         "organ systems evaluated": "organ systems evaluated",
         "glp": "glp compliance",
+        "glp status": "glp compliance",
+        "glp statement": "glp compliance",
+        "qa statement": "glp compliance",
+        "compliance with glp": "glp compliance",
         "sex": "gender",
         "gender and no per group": "gender and no per group",
         "gender and no. per group": "gender and no per group",
@@ -5250,10 +5254,10 @@ def _extract_ncd_study_records(
             ),
             "glp_compliance": _first_non_empty(
                 (
-                    study.get("glp_status"),
-                    extra.get("glp_compliance"),
-                    extra.get("glp_status"),
-                    extra.get("glp"),
+                    _normalize_glp_value(study.get("glp_status")),
+                    _normalize_glp_value(extra.get("glp_compliance")),
+                    _normalize_glp_value(extra.get("glp_status")),
+                    _normalize_glp_value(extra.get("glp")),
                 )
             ),
             "location_in_ctd": location_in_ctd,
@@ -5452,6 +5456,31 @@ _SAFETY_ORGAN_SYSTEM_RULES: Sequence[Tuple[str, Sequence[str]]] = (
         ),
     ),
 )
+
+
+def _normalize_glp_value(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    lowered = text.lower()
+    if re.search(r"\b(non[\s-]*glp|not[\s-]*glp|noncompliant)\b", lowered):
+        return "Non-GLP"
+    if re.search(r"\bglp\b", lowered):
+        return "GLP"
+    compact = re.sub(r"[^a-z0-9]+", "", lowered)
+    if compact in {"yes", "y", "true", "compliant"}:
+        return "GLP"
+    if compact in {"no", "n", "false", "na", "n/a", "unknown"}:
+        return ""
+    return text
+
+
+def _infer_glp_compliance(*values: Any) -> str:
+    for value in values:
+        normalized = _normalize_glp_value(value)
+        if normalized in {"GLP", "Non-GLP"}:
+            return normalized
+    return ""
 
 
 def _looks_like_safety_pharmacology_text(*values: Any) -> bool:
@@ -5714,6 +5743,23 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
             study_id = str(record.get("study_id") or "").strip()
             study_dose_groups = dose_groups_by_study.get(study_id, [])
             dose_text, _ = _render_dose_group_summary(study_dose_groups)
+            glp_text = _first_non_empty(
+                (
+                    str(record.get("glp_compliance") or ""),
+                    _infer_glp_compliance(
+                        extra.get("glp_compliance") if extra else "",
+                        extra.get("glp_status") if extra else "",
+                        extra.get("glp") if extra else "",
+                        extra.get("qa_statement") if extra else "",
+                        extra.get("glp_statement") if extra else "",
+                        extra.get("study_title") if extra else "",
+                        extra.get("title") if extra else "",
+                        extra.get("key_findings") if extra else "",
+                        extra.get("noteworthy_findings") if extra else "",
+                        extra.get("findings") if extra else "",
+                    ),
+                )
+            )
             candidates.append(
                 {
                     "study number": str(record.get("study_number") or ""),
@@ -5753,7 +5799,7 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
                             extra.get("result_summary") if extra else "",
                         )
                     ),
-                    "glp compliance": str(record.get("glp_compliance") or ""),
+                    "glp compliance": glp_text,
                     "location in ctd": str(record.get("location_in_ctd") or ""),
                 }
             )
@@ -5777,6 +5823,11 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
             canonical_id = parsed_ids[0] if parsed_ids else study_number.strip()
             if not canonical_id or canonical_id.upper() in seen:
                 continue
+            row_blob = " ".join(
+                f"{str(key)}: {str(value or '').strip()}"
+                for key, value in row.items()
+                if str(value or "").strip()
+            )
             doses_key = key_map.get("doses")
             candidates.append(
                 {
@@ -5802,7 +5853,14 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
                         "key findings",
                         "key results",
                     ),
-                    "glp compliance": _pick_first_value(row, key_map, "glp compliance"),
+                    "glp compliance": _first_non_empty(
+                        (
+                            _normalize_glp_value(
+                                _pick_first_value(row, key_map, "glp compliance")
+                            ),
+                            _infer_glp_compliance(row_blob),
+                        )
+                    ),
                     "location in ctd": _pick_first_value(row, key_map, "location in ctd"),
                 }
             )
@@ -5951,6 +6009,22 @@ def _extract_safety_pharmacology_candidates(
                     findings_text,
                     "; ".join(narrative_fragments),
                 )
+            glp_text = _first_non_empty(
+                (
+                    _normalize_glp_value(record.get("glp_compliance")),
+                    _normalize_glp_value(extra.get("glp_compliance") if extra else ""),
+                    _normalize_glp_value(extra.get("glp_status") if extra else ""),
+                    _normalize_glp_value(extra.get("glp") if extra else ""),
+                    _infer_glp_compliance(
+                        extra.get("qa_statement") if extra else "",
+                        extra.get("glp_statement") if extra else "",
+                        extra.get("study_title") if extra else "",
+                        extra.get("title") if extra else "",
+                        findings_text,
+                        "; ".join(narrative_fragments),
+                    ),
+                )
+            )
             candidates.append(
                 {
                     "organ systems evaluated": organ_system_text,
@@ -5982,13 +6056,7 @@ def _extract_safety_pharmacology_candidates(
                         )
                     ),
                     "noteworthy findings": findings_text,
-                    "glp compliance": _first_non_empty(
-                        (
-                            str(record.get("glp_compliance") or ""),
-                            str(extra.get("glp_compliance") or "") if extra else "",
-                            str(extra.get("glp_status") or "") if extra else "",
-                        )
-                    ),
+                    "glp compliance": glp_text,
                     "study number": _format_study_number_display(study_number, extra),
                     "location in ctd": str(record.get("location_in_ctd") or ""),
                 }
@@ -6015,6 +6083,12 @@ def _extract_safety_pharmacology_candidates(
             organ_system_text = _pick_first_value(row, key_map, "organ systems evaluated")
             if not organ_system_text:
                 organ_system_text = _infer_safety_organ_systems(row_blob)
+            glp_text = _first_non_empty(
+                (
+                    _normalize_glp_value(_pick_first_value(row, key_map, "glp compliance")),
+                    _infer_glp_compliance(row_blob),
+                )
+            )
             doses_key = key_map.get("doses")
             candidates.append(
                 {
@@ -6032,7 +6106,7 @@ def _extract_safety_pharmacology_candidates(
                     "noteworthy findings": _pick_first_value(
                         row, key_map, "noteworthy findings"
                     ),
-                    "glp compliance": _pick_first_value(row, key_map, "glp compliance"),
+                    "glp compliance": glp_text,
                     "study number": study_number.strip(),
                     "location in ctd": _pick_first_value(row, key_map, "location in ctd"),
                 }
