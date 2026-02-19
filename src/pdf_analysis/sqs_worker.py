@@ -18,7 +18,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import boto3
+try:
+    import boto3
+except ModuleNotFoundError:  # pragma: no cover - optional in CI unit tests
+    boto3 = None  # type: ignore[assignment]
 from sqlalchemy import text as sqltext
 
 from pdf_analysis.export.persist import ensure_unique_columns, save_tables
@@ -47,7 +50,13 @@ from ncd.extraction.content_extractor import (
 from ncd.extraction.fast_extract import match_fast_extract
 from ncd.llm.llm_client import LLMClient
 
-s3 = boto3.client("s3")
+
+class _MissingS3Client:
+    def __getattr__(self, _name: str) -> Any:
+        raise RuntimeError("boto3 is required for S3 operations in pdf_analysis.sqs_worker.")
+
+
+s3 = boto3.client("s3") if boto3 is not None else _MissingS3Client()
 
 ENABLE_LANGCHAIN = os.getenv("ENABLE_LANGCHAIN", "true").lower() == "true"
 ENABLE_CONTEXT_PIPELINE = os.getenv("ENABLE_CONTEXT_PIPELINE", "true").lower() == "true"
