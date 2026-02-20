@@ -4922,10 +4922,20 @@ def _normalize_header_token(value: str) -> str:
         "doses mg kg": "doses",
         "doses mg/kg": "doses",
         "dosage": "doses",
+        "dose concentration": "dose concentration",
+        "concentration": "dose concentration",
         "route of administration": "method of administration",
         "route": "method of administration",
         "administration route": "method of administration",
         "method of admin": "method of administration",
+        "endpoint": "endpoints assays",
+        "endpoints": "endpoints assays",
+        "assay": "endpoints assays",
+        "assays": "endpoints assays",
+        "endpoint assay": "endpoints assays",
+        "endpoint assays": "endpoints assays",
+        "endpoints assay": "endpoints assays",
+        "endpoints assays": "endpoints assays",
         "study id": "study number",
         "study no": "study number",
         "study no.": "study number",
@@ -4961,6 +4971,9 @@ def _normalize_header_token(value: str) -> str:
         "key results": "noteworthy findings",
         "findings": "noteworthy findings",
         "observations": "noteworthy findings",
+        "conclusion": "noteworthy findings",
+        "conclusions": "noteworthy findings",
+        "result summary": "noteworthy findings",
     }
     if cleaned in alias_map:
         return alias_map[cleaned]
@@ -5483,6 +5496,104 @@ def _infer_glp_compliance(*values: Any) -> str:
     return ""
 
 
+def _extract_location_title(value: Any) -> str:
+    def _normalize(value: str) -> str:
+        return re.sub(r"\s+", " ", str(value or "")).strip()
+
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    match = re.search(r'"([^"]+)"', text)
+    if match:
+        return _normalize(match.group(1))
+    return ""
+
+
+def _asset_single_study_id(asset: Dict[str, Any]) -> str:
+    asset_blob = " ".join(
+        str(part)
+        for part in (
+            asset.get("s3_key"),
+            asset.get("json_key"),
+            asset.get("caption"),
+            asset.get("description"),
+        )
+        if part
+    )
+    asset_study_candidates: List[str] = []
+    for token in _extract_study_ids(asset_blob):
+        cleaned = re.sub(
+            r"\.pdf(?:\.(?:tables|images))?(?:/.*)?$",
+            "",
+            str(token),
+            flags=re.IGNORECASE,
+        )
+        cleaned = cleaned.strip("._-")
+        canonical = _canonical_study_number(cleaned)
+        if canonical and "/" not in canonical:
+            asset_study_candidates.append(canonical)
+    deduped_asset_ids: List[str] = []
+    seen_asset_ids: Set[str] = set()
+    for candidate in asset_study_candidates:
+        key = candidate.upper()
+        if key in seen_asset_ids:
+            continue
+        seen_asset_ids.add(key)
+        deduped_asset_ids.append(candidate)
+    return deduped_asset_ids[0] if len(deduped_asset_ids) == 1 else ""
+
+
+def _infer_primary_pd_endpoints(*values: Any) -> str:
+    text = " ".join(str(value or "") for value in values if str(value or "").strip())
+    if not text:
+        return ""
+    lowered = text.lower()
+    labels: List[str] = []
+    if any(token in lowered for token in ("tumor", "xenograft", "allograft", "metast")):
+        labels.append("Tumor growth/volume")
+    if any(token in lowered for token in ("angiogenesis", "vascular", "matrigel")):
+        labels.append("Angiogenesis-related endpoints")
+    if any(token in lowered for token in ("survival", "mortality")):
+        labels.append("Survival")
+    if "body weight" in lowered:
+        labels.append("Body weight")
+    if any(token in lowered for token in ("pain", "nocicept", "analgesi")):
+        labels.append("Pain response endpoints")
+    if labels:
+        return "; ".join(labels)
+    return "Primary pharmacodynamic efficacy endpoints"
+
+
+def _infer_primary_pd_findings(*values: Any) -> str:
+    def _normalize(value: str) -> str:
+        return re.sub(r"\s+", " ", str(value or "")).strip()
+
+    text = " ".join(str(value or "") for value in values if str(value or "").strip())
+    if not text:
+        return ""
+    for sentence in _extract_safety_sentences(text, max_parts=6):
+        lowered = sentence.lower()
+        if any(
+            token in lowered
+            for token in (
+                "inhibit",
+                "mitigat",
+                "reduc",
+                "suppress",
+                "prevent",
+                "attenuat",
+                "improv",
+                "increase",
+                "decrease",
+            )
+        ):
+            return _truncate_text(_normalize(sentence), max_chars=320)
+    first = _extract_safety_sentences(text, max_parts=1)
+    if first:
+        return _truncate_text(_normalize(first[0]), max_chars=320)
+    return _truncate_text(_normalize(text), max_chars=320)
+
+
 def _looks_like_safety_pharmacology_text(*values: Any) -> bool:
     text = " ".join(str(value or "") for value in values if str(value or "").strip())
     if not text:
@@ -5743,6 +5854,35 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
             study_id = str(record.get("study_id") or "").strip()
             study_dose_groups = dose_groups_by_study.get(study_id, [])
             dose_text, _ = _render_dose_group_summary(study_dose_groups)
+            study_number = str(record.get("study_number") or "").strip()
+            location_in_ctd = str(record.get("location_in_ctd") or "")
+            location_title = _extract_location_title(location_in_ctd)
+            context_fragments: List[str] = []
+            for source in context.get("section_sources", []) or []:
+                if not isinstance(source, dict):
+                    continue
+                section_number = str(source.get("section_number") or "").strip()
+                if section_number and not section_number_matches(section_number, "4.2.1.1"):
+                    continue
+                summary_text = str(source.get("summary_text") or "").strip()
+                if not summary_text:
+                    continue
+                source_blob = " ".join(
+                    str(part)
+                    for part in (
+                        source.get("section_title"),
+                        source.get("section_number"),
+                        source.get("s3_key"),
+                        summary_text,
+                    )
+                    if part
+                )
+                source_ids = _extract_study_ids(source_blob)
+                if source_ids and study_number and not any(
+                    _study_numbers_overlap(sid, study_number) for sid in source_ids
+                ):
+                    continue
+                context_fragments.extend(_extract_safety_sentences(summary_text, max_parts=2))
             glp_text = _first_non_empty(
                 (
                     str(record.get("glp_compliance") or ""),
@@ -5757,12 +5897,42 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
                         extra.get("key_findings") if extra else "",
                         extra.get("noteworthy_findings") if extra else "",
                         extra.get("findings") if extra else "",
+                        location_title,
+                        "; ".join(context_fragments),
                     ),
                 )
             )
+            endpoints_text = _first_non_empty(
+                (
+                    extra.get("endpoints_assays") if extra else "",
+                    extra.get("endpoints") if extra else "",
+                    extra.get("assays") if extra else "",
+                    _infer_primary_pd_endpoints(
+                        extra.get("study_title") if extra else "",
+                        extra.get("title") if extra else "",
+                        location_title,
+                        "; ".join(context_fragments),
+                    ),
+                )
+            )
+            findings_text = _first_non_empty(
+                (
+                    extra.get("key_findings") if extra else "",
+                    extra.get("noteworthy_findings") if extra else "",
+                    extra.get("findings") if extra else "",
+                    extra.get("result_summary") if extra else "",
+                    _infer_primary_pd_findings(
+                        "; ".join(context_fragments),
+                        location_title,
+                        endpoints_text,
+                    ),
+                )
+            )
+            if not glp_text:
+                glp_text = "Not reported"
             candidates.append(
                 {
-                    "study number": str(record.get("study_number") or ""),
+                    "study number": study_number,
                     "species strain or test system": _first_non_empty(
                         (
                             record.get("test_system"),
@@ -5784,87 +5954,155 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
                             dose_text,
                         )
                     ),
-                    "endpoints assays": _first_non_empty(
-                        (
-                            extra.get("endpoints_assays") if extra else "",
-                            extra.get("endpoints") if extra else "",
-                            extra.get("assays") if extra else "",
-                        )
-                    ),
-                    "noteworthy findings": _first_non_empty(
-                        (
-                            extra.get("key_findings") if extra else "",
-                            extra.get("noteworthy_findings") if extra else "",
-                            extra.get("findings") if extra else "",
-                            extra.get("result_summary") if extra else "",
-                        )
-                    ),
+                    "endpoints assays": endpoints_text,
+                    "noteworthy findings": findings_text,
                     "glp compliance": glp_text,
-                    "location in ctd": str(record.get("location_in_ctd") or ""),
+                    "location in ctd": location_in_ctd,
                 }
             )
-        return candidates
-
     seen: set[str] = set()
+    candidate_by_study: Dict[str, Dict[str, str]] = {}
+    for candidate in candidates:
+        raw_study = str(candidate.get("study number") or "").strip()
+        canonical = _canonical_study_number(raw_study)
+        key = (canonical or raw_study).upper()
+        if not key:
+            continue
+        seen.add(key)
+        candidate_by_study[key] = candidate
+
     for asset in context.get("table_assets", []) or []:
+        asset_blob = " ".join(
+            str(part)
+            for part in (
+                asset.get("s3_key"),
+                asset.get("json_key"),
+                asset.get("caption"),
+                asset.get("description"),
+            )
+            if part
+        )
+        asset_study_id = _asset_single_study_id(asset)
         preview_rows = asset.get("preview_rows") or []
         for row in preview_rows:
             if not isinstance(row, dict):
                 continue
             key_map = {_normalize_header_token(str(key)): key for key in row.keys()}
-            if "type of study" not in key_map or not (
-                key_map.get("species strain") or key_map.get("test system")
-            ):
-                continue
             study_number = _pick_first_value(row, key_map, "study number")
-            if not study_number:
-                continue
-            parsed_ids = _extract_study_ids(study_number)
-            canonical_id = parsed_ids[0] if parsed_ids else study_number.strip()
-            if not canonical_id or canonical_id.upper() in seen:
+            if study_number:
+                parsed_ids = _extract_study_ids(study_number)
+                canonical_id = parsed_ids[0] if parsed_ids else study_number.strip()
+            else:
+                canonical_id = asset_study_id
+            if not canonical_id:
                 continue
             row_blob = " ".join(
                 f"{str(key)}: {str(value or '').strip()}"
                 for key, value in row.items()
                 if str(value or "").strip()
             )
-            doses_key = key_map.get("doses")
-            candidates.append(
-                {
-                    "study number": canonical_id,
-                    "species strain or test system": _pick_first_value(
-                        row,
-                        key_map,
-                        "species strain",
-                        "test system",
-                        "species strain or test system",
-                    ),
-                    "method of administration": _pick_first_value(
-                        row, key_map, "method of administration"
-                    ),
-                    "dose concentration": (
-                        str(row.get(doses_key or "") or "").strip() if doses_key else ""
-                    ),
-                    "endpoints assays": "",
-                    "noteworthy findings": _pick_first_value(
-                        row,
-                        key_map,
-                        "noteworthy findings",
-                        "key findings",
-                        "key results",
-                    ),
-                    "glp compliance": _first_non_empty(
-                        (
-                            _normalize_glp_value(
-                                _pick_first_value(row, key_map, "glp compliance")
-                            ),
-                            _infer_glp_compliance(row_blob),
-                        )
-                    ),
-                    "location in ctd": _pick_first_value(row, key_map, "location in ctd"),
-                }
+            type_text = _pick_first_value(
+                row,
+                key_map,
+                "type of study",
+                "study title",
+                "study description",
+                "title",
             )
-            seen.add(canonical_id.upper())
+            species_text = _pick_first_value(
+                row,
+                key_map,
+                "species strain",
+                "test system",
+                "species strain or test system",
+            )
+            method_text = _pick_first_value(row, key_map, "method of administration")
+            dose_text = _pick_first_value(row, key_map, "dose concentration", "doses")
+            endpoints_text = _pick_first_value(
+                row,
+                key_map,
+                "endpoints assays",
+                "endpoints",
+                "assays",
+            )
+            findings_text = _pick_first_value(
+                row,
+                key_map,
+                "noteworthy findings",
+                "key findings",
+                "key results",
+                "findings",
+                "result summary",
+            )
+            if not endpoints_text:
+                endpoints_text = _infer_primary_pd_endpoints(row_blob, asset_blob)
+            if not findings_text:
+                findings_text = _infer_primary_pd_findings(row_blob, asset_blob, endpoints_text)
+            glp_text = _first_non_empty(
+                (
+                    _normalize_glp_value(_pick_first_value(row, key_map, "glp compliance")),
+                    _infer_glp_compliance(row_blob),
+                )
+            )
+            if not glp_text:
+                glp_text = "Not reported"
+            location_text = _pick_first_value(row, key_map, "location in ctd")
+            if not any(
+                text
+                for text in (
+                    type_text,
+                    species_text,
+                    method_text,
+                    dose_text,
+                    endpoints_text,
+                    findings_text,
+                    glp_text,
+                    location_text,
+                )
+            ):
+                continue
+            doses_key = key_map.get("doses")
+            if not dose_text and doses_key:
+                dose_text = str(row.get(doses_key or "") or "").strip()
+            asset_candidate = {
+                "study number": canonical_id,
+                "species strain or test system": species_text,
+                "method of administration": method_text,
+                "dose concentration": dose_text,
+                "endpoints assays": endpoints_text,
+                "noteworthy findings": findings_text,
+                "glp compliance": glp_text,
+                "location in ctd": location_text,
+            }
+            key = canonical_id.upper()
+            existing = candidate_by_study.get(key)
+            if existing is None:
+                if type_text and not asset_candidate.get("type of study"):
+                    asset_candidate["type of study"] = type_text
+                candidates.append(asset_candidate)
+                candidate_by_study[key] = asset_candidate
+                seen.add(key)
+                continue
+            for field, value in asset_candidate.items():
+                if field == "study number":
+                    continue
+                text = str(value or "").strip()
+                if not text:
+                    continue
+                current = str(existing.get(field) or "").strip()
+                if not current:
+                    existing[field] = text
+                    continue
+                if field in {"dose concentration", "endpoints assays", "noteworthy findings"}:
+                    if current.lower() != text.lower():
+                        existing[field] = _merge_text_segments(current, text)
+                elif field == "glp compliance":
+                    if current not in {"GLP", "Non-GLP"}:
+                        existing[field] = text
+    if seen:
+        candidates.sort(
+            key=lambda row: _study_sort_key(str(row.get("study number") or ""))
+        )
     return candidates
 
 
