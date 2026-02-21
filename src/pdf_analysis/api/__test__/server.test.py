@@ -637,3 +637,220 @@ def test_extract_primary_pd_candidates_infers_glp_from_qa_statement(
     assert len(candidates) == 1
     assert candidates[0]["study number"] == "306D326.1"
     assert candidates[0]["glp compliance"] == "GLP"
+
+
+def test_repair_primary_pd_table_merges_asset_fields_for_existing_ncd_row(
+    server: Any,
+) -> None:
+    tables = [
+        {
+            "subsection": "2.6.3.2",
+            "columns": [
+                "Study Number",
+                "Species/Strain or Test System",
+                "Method of Administration",
+                "Dose/Concentration",
+                "Endpoints/Assays",
+                "Key Findings",
+                "GLP Compliance",
+                "Location in CTD",
+            ],
+            "rows": [
+                {
+                    "Study Number": "RP-PC-21",
+                    "Species/Strain or Test System": "Mice",
+                    "Method of Administration": "intraperitoneal",
+                    "Dose/Concentration": "",
+                    "Endpoints/Assays": "",
+                    "Key Findings": "",
+                    "GLP Compliance": "",
+                    "Location in CTD": (
+                        'Module 4, Section 4.2.1.1: "LT1002 efficacy study in ovarian SKOV3 mice"'
+                    ),
+                }
+            ],
+        }
+    ]
+
+    context = {
+        "mapping": [{"module4_section": "4.2.1.1", "category": "Primary Pharmacodynamics"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "RP-PC-21",
+                    "module4_section": "4.2.1.1",
+                    "species": "Mice",
+                    "strain": "",
+                    "route": "intraperitoneal",
+                    "extra_attributes": {},
+                }
+            ],
+            "dose_groups": [],
+            "source_documents": [],
+        },
+        "table_assets": [
+            {
+                "s3_key": (
+                    "filynai.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
+                    "4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/report.pdf.tables/3.json"
+                ),
+                "caption": "Primary pharmacology summary",
+                "description": "",
+                "keywords": ["primary pharmacology"],
+                "preview_rows": [
+                    {
+                        "Study No.": "RP-PC-21",
+                        "Dose/Concentration": "5, 10 mg/kg",
+                        "Endpoints/Assays": "Tumor volume and body weight",
+                        "Conclusions": "Dose-dependent inhibition of tumor growth",
+                        "QA Statement": "This was a non-GLP exploratory study.",
+                    }
+                ],
+            }
+        ],
+    }
+
+    server._repair_primary_pharmacodynamics_table(tables, context)
+
+    row = tables[0]["rows"][0]
+    assert row["Study Number"] == "RP-PC-21"
+    assert row["Dose/Concentration"] == "5, 10 mg/kg"
+    assert row["Endpoints/Assays"] == "Tumor volume and body weight"
+    assert row["Key Findings"] == "Dose-dependent inhibition of tumor growth"
+    assert row["GLP Compliance"] == "Non-GLP"
+
+
+def test_repair_primary_pd_table_uses_asset_study_id_when_row_lacks_study_number(
+    server: Any,
+) -> None:
+    tables = [
+        {
+            "subsection": "2.6.3.2",
+            "columns": [
+                "Study Number",
+                "Species/Strain or Test System",
+                "Method of Administration",
+                "Dose/Concentration",
+                "Endpoints/Assays",
+                "Key Findings",
+                "GLP Compliance",
+                "Location in CTD",
+            ],
+            "rows": [
+                {
+                    "Study Number": "RP-PC-22",
+                    "Species/Strain or Test System": "Mice",
+                    "Method of Administration": "intraperitoneal",
+                    "Dose/Concentration": "",
+                    "Endpoints/Assays": "",
+                    "Key Findings": "",
+                    "GLP Compliance": "",
+                    "Location in CTD": "",
+                }
+            ],
+        }
+    ]
+    context = {
+        "mapping": [{"module4_section": "4.2.1.1", "category": "Primary Pharmacodynamics"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "RP-PC-22",
+                    "module4_section": "4.2.1.1",
+                    "species": "Mice",
+                    "strain": "",
+                    "route": "intraperitoneal",
+                    "extra_attributes": {},
+                }
+            ],
+            "dose_groups": [],
+            "source_documents": [],
+        },
+        "table_assets": [
+            {
+                "s3_key": (
+                    "filynai.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
+                    "4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/RP-PC-22.pdf.tables/1.json"
+                ),
+                "caption": "RP-PC-22 efficacy table",
+                "description": "",
+                "keywords": ["primary pharmacology"],
+                "preview_rows": [
+                    {
+                        "Dose Levels": "3, 10, 30 mg/kg",
+                        "Endpoint Assay": "Tumor burden and survival",
+                        "Result Summary": "Significant efficacy at >=10 mg/kg",
+                        "QA Statement": "GLP compliant",
+                    }
+                ],
+            }
+        ],
+    }
+
+    server._repair_primary_pharmacodynamics_table(tables, context)
+    row = tables[0]["rows"][0]
+    assert row["Study Number"] == "RP-PC-22"
+    assert row["Dose/Concentration"] == "3, 10, 30 mg/kg"
+    assert row["Endpoints/Assays"] == "Tumor burden and survival"
+    assert row["Key Findings"] == "Significant efficacy at >=10 mg/kg"
+    assert row["GLP Compliance"] == "GLP"
+
+
+def test_repair_primary_pd_table_infers_fields_from_location_title_when_missing(
+    server: Any,
+) -> None:
+    tables = [
+        {
+            "subsection": "2.6.3.2",
+            "columns": [
+                "Study Number",
+                "Species/Strain or Test System",
+                "Method of Administration",
+                "Dose/Concentration",
+                "Endpoints/Assays",
+                "Key Findings",
+                "GLP Compliance",
+                "Location in CTD",
+            ],
+            "rows": [],
+        }
+    ]
+    context = {
+        "mapping": [{"module4_section": "4.2.1.1", "category": "Primary Pharmacodynamics"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "RP-PC-30",
+                    "module4_section": "4.2.1.1",
+                    "species": "Mice",
+                    "strain": "",
+                    "route": "intraperitoneal",
+                    "extra_attributes": {
+                        "study_title": (
+                            "LT1002 administered by intraperitoneal injection inhibits "
+                            "growth of established ovarian xenografts in mice"
+                        ),
+                        "location_in_ctd": (
+                            'Module 4, Section 4.2.1.1: "LT1002 administered by intraperitoneal '
+                            'injection inhibits growth of established ovarian xenografts in mice"'
+                        ),
+                    },
+                }
+            ],
+            "dose_groups": [],
+            "source_documents": [],
+        },
+        "table_assets": [],
+        "section_sources": [],
+    }
+
+    server._repair_primary_pharmacodynamics_table(tables, context)
+    assert len(tables[0]["rows"]) == 1
+    row = tables[0]["rows"][0]
+    assert row["Study Number"] == "RP-PC-30"
+    assert row["Endpoints/Assays"] == "Tumor growth/volume"
+    assert row["Key Findings"].lower().startswith("lt1002 administered")
+    assert row["GLP Compliance"] == "Not reported"
