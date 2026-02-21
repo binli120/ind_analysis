@@ -80,3 +80,4 @@ tmp/.DS_Store
 # Build artifacts should already be ignored, but being explicit
 dist/*.whl
 dist/*.tar.gz
+local-evn.sh
