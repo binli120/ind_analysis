@@ -41,6 +41,22 @@ def test_build_markdown_document_includes_tables() -> None:
     assert "[CSV](table.csv)" in doc
 
 
+def test_build_markdown_document_accepts_preview_row_dicts() -> None:
+    pages = [{"page_number": 1, "text": "Body"}]
+    table_manifest = [
+        {
+            "page_number": 1,
+            "index_on_page": 1,
+            "csv": None,
+            "json": None,
+            "preview_rows": [{"A": "1"}],
+        }
+    ]
+    doc = markdown_writer.build_markdown_document("Doc", pages, table_manifest)
+    assert "| A |" in doc
+    assert "| 1 |" in doc
+
+
 def test_build_html_document_includes_tables() -> None:
     pages = [{"page_number": 1, "text": "Body"}]
     table_manifest = [
@@ -56,3 +72,19 @@ def test_build_html_document_includes_tables() -> None:
     assert "<h1>Doc</h1>" in doc
     assert "Table (p1 t1)" in doc
     assert 'href="table.csv"' in doc
+
+
+def test_build_html_document_accepts_preview_row_dicts() -> None:
+    pages = [{"page_number": 1, "text": "Body"}]
+    table_manifest = [
+        {
+            "page_number": 1,
+            "index_on_page": 1,
+            "csv": None,
+            "json": None,
+            "preview_rows": [{"A": "1"}],
+        }
+    ]
+    doc = markdown_writer.build_html_document("Doc", pages, table_manifest)
+    assert "<h1>Doc</h1>" in doc
+    assert "<table" in doc

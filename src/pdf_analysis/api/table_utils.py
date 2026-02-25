@@ -40,7 +40,7 @@ def _build_table_manifest(
                 "engine": table["engine"],
                 "csv": None,
                 "json": None,
-                "preview_rows": df.head(preview_rows),
+                "preview_rows": df.head(preview_rows).to_dict(orient="records"),
             }
         )
     return manifest

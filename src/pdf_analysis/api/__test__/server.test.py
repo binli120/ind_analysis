@@ -122,7 +122,7 @@ def test_build_table_manifest_preview_rows(server: Any) -> None:
 
     assert len(manifest) == 1
     preview = manifest[0]["preview_rows"]
-    assert list(preview["A"]) == ["x"]
+    assert preview == [{"A": "x"}]
 
 
 def test_parse_columns_header(server: Any) -> None:
@@ -1016,6 +1016,18 @@ def test_ctd_summary_request_rejects_oversized_user_prompt(server: Any) -> None:
     too_long = "x" * (int(server.USER_PROMPT_MAX_CHARS) + 1)
     with pytest.raises(Exception):
         server.CTDSectionSummaryRequest(
+            section="2.6.6",
+            tenant_id="6fa459ea-ee8a-3ca4-894e-db77e160355e",
+            project_id="6fa459ea-ee8a-3ca4-894e-db77e160355e",
+            bucket="demo-bucket",
+            user_prompt=too_long,
+        )
+
+
+def test_ctd_tabulated_request_rejects_oversized_user_prompt(server: Any) -> None:
+    too_long = "x" * (int(server.USER_PROMPT_MAX_CHARS) + 1)
+    with pytest.raises(Exception):
+        server.CTDTabulatedSummaryRequest(
             section="2.6.6",
             tenant_id="6fa459ea-ee8a-3ca4-894e-db77e160355e",
             project_id="6fa459ea-ee8a-3ca4-894e-db77e160355e",

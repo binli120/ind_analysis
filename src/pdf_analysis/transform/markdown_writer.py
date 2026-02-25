@@ -10,13 +10,30 @@
 from html import escape
 from typing import Any, Dict, List
 
+import pandas as pd
+
 PAGE_BREAK = "\n\n---\n\n"
 
 
-def _df_to_markdown_table(df) -> str:
+def _coerce_preview_dataframe(preview: Any) -> pd.DataFrame:
+    """Coerce table preview content into a DataFrame."""
+    if isinstance(preview, pd.DataFrame):
+        return preview
+    if isinstance(preview, list):
+        rows = [row for row in preview if isinstance(row, dict)]
+        return pd.DataFrame(rows)
+    if isinstance(preview, dict):
+        return pd.DataFrame([preview])
+    return pd.DataFrame()
+
+
+def _df_to_markdown_table(df: Any) -> str:
     """
     Render a pandas DataFrame as a GitHub-flavored markdown table.
     """
+    df = _coerce_preview_dataframe(df)
+    if df.empty and len(df.columns) == 0:
+        return "_(no table preview rows)_"
     md = []
     cols = [str(c) if c is not None else "" for c in df.columns]
     md.append("| " + " | ".join(cols) + " |")
@@ -76,10 +93,13 @@ def build_markdown_document(
     return "\n".join(parts)
 
 
-def _df_to_html_table(df) -> str:
+def _df_to_html_table(df: Any) -> str:
     """
     Render DataFrame preview into HTML table. We rely on pandas' to_html to escape.
     """
+    df = _coerce_preview_dataframe(df)
+    if df.empty and len(df.columns) == 0:
+        return "<p><em>(no table preview rows)</em></p>"
     return df.to_html(index=False, escape=True, border=0, classes=["table-preview"])
 
 

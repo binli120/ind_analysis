@@ -166,7 +166,12 @@ async def upload_and_analyze_to_s3(
     try:
         object_key = _build_pdf_s3_key(company, project, folder, filename)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        _raise_sanitized_http_error(
+            status_code=400,
+            detail="Invalid S3 path inputs.",
+            exc=exc,
+            log_message="Invalid S3 key inputs for PDF upload",
+        )
 
     with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp_path = Path(tmp.name)
@@ -582,7 +587,12 @@ async def fetch_s3_markdown(payload: S3MarkdownRequest) -> Dict[str, Any]:
             log_message="Failed to download S3 object for markdown extraction",
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        _raise_sanitized_http_error(
+            status_code=422,
+            detail="Unable to extract markdown from the document.",
+            exc=exc,
+            log_message="Markdown extraction failed",
+        )
 
 
 @upload_router.post("/s3/markdown/summary")
@@ -671,7 +681,12 @@ async def fetch_s3_markdown_with_summary(payload: S3MarkdownRequest) -> Dict[str
             log_message="Failed to download S3 object for markdown summary extraction",
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        _raise_sanitized_http_error(
+            status_code=422,
+            detail="Unable to extract markdown summary from the document.",
+            exc=exc,
+            log_message="Markdown summary extraction failed",
+        )
 
 
 def _build_markdown_key(path: str, filename: str) -> str:
@@ -753,7 +768,12 @@ async def save_s3_markdown(payload: S3MarkdownUploadRequest) -> Dict[str, Any]:
     try:
         key = _build_markdown_key(payload.path, payload.filename)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        _raise_sanitized_http_error(
+            status_code=400,
+            detail="Invalid markdown path or filename.",
+            exc=exc,
+            log_message="Invalid markdown key inputs",
+        )
 
     metadata = payload.metadata.copy() if payload.metadata else {}
     if payload.label:

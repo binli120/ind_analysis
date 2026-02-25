@@ -40,6 +40,63 @@ def _sync_server_globals() -> None:
 
 _sync_server_globals()
 
+
+def _classify_by_scope(
+    *,
+    sample_text: str,
+    filename: str,
+    section_scope: str,
+    use_llm: bool,
+) -> tuple[Optional[Tuple[str, str, float, str]], List[Dict[str, Any]]]:
+    """Classify sample text against IND/CTD templates for the requested scope."""
+    scope = (section_scope or "auto").strip().lower()
+    if scope not in {"auto", "ind", "ctd"}:
+        raise HTTPException(
+            status_code=400,
+            detail="section_scope must be one of: auto, ind, ctd.",
+        )
+
+    ind_sections = _load_ind_template_sections()
+    ctd_sections = _load_ctd_section_sections()
+
+    if scope == "ind":
+        classification = _classify_section_from_text(
+            sample_text,
+            filename=filename,
+            use_llm=use_llm,
+            sections=ind_sections,
+        )
+        return classification, ind_sections
+
+    if scope == "ctd":
+        classification = _classify_section_from_text(
+            sample_text,
+            filename=filename,
+            use_llm=use_llm,
+            sections=ctd_sections,
+        )
+        return classification, ctd_sections
+
+    ind_class = _classify_section_from_text(
+        sample_text,
+        filename=filename,
+        use_llm=use_llm,
+        sections=ind_sections,
+    )
+    ctd_class = _classify_section_from_text(
+        sample_text,
+        filename=filename,
+        use_llm=use_llm,
+        sections=ctd_sections,
+    )
+    return _select_label_classification(
+        ind_class=ind_class,
+        ctd_class=ctd_class,
+        ind_sections=ind_sections,
+        ctd_sections=ctd_sections,
+    )
+
+
 @ncd_router.post("/label")
 async def label_s3_pdf(payload: NCDLabelRequest) -> Dict[str, Any]:
     """
@@ -100,49 +157,12 @@ async def label_s3_pdf(payload: NCDLabelRequest) -> Dict[str, Any]:
 
         try:
             sample_text, pages_sampled = _extract_sample_text(tmp_path, page_limit)
-            scope = (payload.section_scope or "auto").strip().lower()
-            if scope not in {"auto", "ind", "ctd"}:
-                raise HTTPException(
-                    status_code=400,
-                    detail="section_scope must be one of: auto, ind, ctd.",
-                )
-
-            ind_sections = _load_ind_template_sections()
-            ctd_sections = _load_ctd_section_sections()
-
-            if scope == "ind":
-                classification = _classify_section_from_text(
-                    sample_text,
-                    filename=Path(payload.key).name,
-                    use_llm=payload.use_llm,
-                    sections=ind_sections,
-                )
-            elif scope == "ctd":
-                classification = _classify_section_from_text(
-                    sample_text,
-                    filename=Path(payload.key).name,
-                    use_llm=payload.use_llm,
-                    sections=ctd_sections,
-                )
-            else:
-                ind_class = _classify_section_from_text(
-                    sample_text,
-                    filename=Path(payload.key).name,
-                    use_llm=payload.use_llm,
-                    sections=ind_sections,
-                )
-                ctd_class = _classify_section_from_text(
-                    sample_text,
-                    filename=Path(payload.key).name,
-                    use_llm=payload.use_llm,
-                    sections=ctd_sections,
-                )
-                classification, _ = _select_label_classification(
-                    ind_class=ind_class,
-                    ctd_class=ctd_class,
-                    ind_sections=ind_sections,
-                    ctd_sections=ctd_sections,
-                )
+            classification, _ = _classify_by_scope(
+                sample_text=sample_text,
+                filename=Path(payload.key).name,
+                section_scope=payload.section_scope,
+                use_llm=payload.use_llm,
+            )
         finally:
             try:
                 tmp_path.unlink()
@@ -275,51 +295,12 @@ async def label_uploaded_document(
         sample_text, pages_sampled = _extract_sample_text_generic(
             tmp_path, page_limit=page_limit, original_suffix=suffix
         )
-        scope = (section_scope or "auto").strip().lower()
-        if scope not in {"auto", "ind", "ctd"}:
-            raise HTTPException(
-                status_code=400,
-                detail="section_scope must be one of: auto, ind, ctd.",
-            )
-
-        ind_sections = _load_ind_template_sections()
-        ctd_sections = _load_ctd_section_sections()
-
-        if scope == "ind":
-            classification = _classify_section_from_text(
-                sample_text,
-                filename=filename,
-                use_llm=use_llm,
-                sections=ind_sections,
-            )
-            candidate_sections = ind_sections
-        elif scope == "ctd":
-            classification = _classify_section_from_text(
-                sample_text,
-                filename=filename,
-                use_llm=use_llm,
-                sections=ctd_sections,
-            )
-            candidate_sections = ctd_sections
-        else:
-            ind_class = _classify_section_from_text(
-                sample_text,
-                filename=filename,
-                use_llm=use_llm,
-                sections=ind_sections,
-            )
-            ctd_class = _classify_section_from_text(
-                sample_text,
-                filename=filename,
-                use_llm=use_llm,
-                sections=ctd_sections,
-            )
-            classification, candidate_sections = _select_label_classification(
-                ind_class=ind_class,
-                ctd_class=ctd_class,
-                ind_sections=ind_sections,
-                ctd_sections=ctd_sections,
-            )
+        classification, candidate_sections = _classify_by_scope(
+            sample_text=sample_text,
+            filename=filename,
+            section_scope=section_scope,
+            use_llm=use_llm,
+        )
 
         candidates = _top_section_candidates(
             sample_text, candidate_sections, limit=5
@@ -491,51 +472,12 @@ async def dev_label_local(
         sample_text, pages_sampled = _extract_sample_text_generic(
             tmp_path, page_limit=page_limit, original_suffix=suffix
         )
-        scope = (section_scope or "auto").strip().lower()
-        if scope not in {"auto", "ind", "ctd"}:
-            raise HTTPException(
-                status_code=400,
-                detail="section_scope must be one of: auto, ind, ctd.",
-            )
-
-        ind_sections = _load_ind_template_sections()
-        ctd_sections = _load_ctd_section_sections()
-
-        if scope == "ind":
-            classification = _classify_section_from_text(
-                sample_text,
-                filename=filename,
-                use_llm=use_llm,
-                sections=ind_sections,
-            )
-            candidate_sections = ind_sections
-        elif scope == "ctd":
-            classification = _classify_section_from_text(
-                sample_text,
-                filename=filename,
-                use_llm=use_llm,
-                sections=ctd_sections,
-            )
-            candidate_sections = ctd_sections
-        else:
-            ind_class = _classify_section_from_text(
-                sample_text,
-                filename=filename,
-                use_llm=use_llm,
-                sections=ind_sections,
-            )
-            ctd_class = _classify_section_from_text(
-                sample_text,
-                filename=filename,
-                use_llm=use_llm,
-                sections=ctd_sections,
-            )
-            classification, candidate_sections = _select_label_classification(
-                ind_class=ind_class,
-                ctd_class=ctd_class,
-                ind_sections=ind_sections,
-                ctd_sections=ctd_sections,
-            )
+        classification, candidate_sections = _classify_by_scope(
+            sample_text=sample_text,
+            filename=filename,
+            section_scope=section_scope,
+            use_llm=use_llm,
+        )
 
         candidates = _top_section_candidates(
             sample_text, candidate_sections, limit=5
@@ -651,91 +593,85 @@ async def get_template_sections(
         db = SessionLocal()
         try:
             normalized_user_id = _require_valid_user_id(db, user_id)
-        finally:
-            db.close()
-
-        if not section or not section.strip():
-            template_path = resolve_template_path()
-            if not template_path:
-                raise HTTPException(status_code=404, detail="Template file not found")
-            try:
-                payload = json.loads(template_path.read_text(encoding="utf-8"))
-            except json.JSONDecodeError as exc:
-                _raise_sanitized_http_error(
-                    status_code=500,
-                    detail="Template file is invalid JSON.",
-                    exc=exc,
-                    log_message="Template file is invalid JSON",
-                )
-            return {"template": payload, "user_id": normalized_user_id}
-
-        target = section.strip()
-        entries = _load_ind_template_entries()
-        matches: List[Dict[str, Any]] = []
-        target_lower = target.lower()
-        target_element = normalize_element_number(target)
-        for entry in entries:
-            sec = (entry.get("section") or "").lower()
-            sub = (entry.get("subsection") or "").lower()
-            element_number = (entry.get("element_number") or "").lower()
-            if element_number and target_element and element_number == target_element:
-                matches.append(entry)
-            elif sub and sub == target_lower:
-                matches.append(entry)
-            elif sec and sec == target_lower:
-                matches.append(entry)
-            elif sec and sec.startswith(target_lower):
-                matches.append(entry)
-
-        if not matches:
-            raise HTTPException(status_code=404, detail="Section not found in template")
-
-        db = SessionLocal()
-        try:
-            overrides = _fetch_template_overrides(db, normalized_user_id, target)
-        finally:
-            db.close()
-
-        if overrides:
-            override_map = {
-                ((o.get("section") or "").lower(), (o.get("subsection") or None)): o[
-                    "payload"
-                ]
-                for o in overrides
-            }
-            merged: List[Dict[str, Any]] = []
-            seen_keys = set()
-            for entry in matches:
-                key = (
-                    (entry.get("section") or "").lower(),
-                    (entry.get("subsection") or None),
-                )
-                if key in override_map:
-                    merged_entry = dict(entry)
-                    merged_entry["raw"] = {
-                        **(entry.get("raw") or {}),
-                        **(override_map[key] or {}),
-                    }
-                    merged.append(merged_entry)
-                    seen_keys.add(key)
-                else:
-                    merged.append(entry)
-                    seen_keys.add(key)
-            for key, payload in override_map.items():
-                if key not in seen_keys:
-                    merged.append(
-                        {
-                            "section": key[0],
-                            "subsection": key[1],
-                            "section_header": payload.get("Section Header"),
-                            "subsection_header": payload.get("Subsection Header"),
-                            "content": payload.get("Content"),
-                            "raw": payload,
-                        }
+            if not section or not section.strip():
+                template_path = resolve_template_path()
+                if not template_path:
+                    raise HTTPException(status_code=404, detail="Template file not found")
+                try:
+                    payload = json.loads(template_path.read_text(encoding="utf-8"))
+                except json.JSONDecodeError as exc:
+                    _raise_sanitized_http_error(
+                        status_code=500,
+                        detail="Template file is invalid JSON.",
+                        exc=exc,
+                        log_message="Template file is invalid JSON",
                     )
-            matches = merged
+                return {"template": payload, "user_id": normalized_user_id}
 
-        return {"section": target, "entries": matches, "user_id": normalized_user_id}
+            target = section.strip()
+            entries = _load_ind_template_entries()
+            matches: List[Dict[str, Any]] = []
+            target_lower = target.lower()
+            target_element = normalize_element_number(target)
+            for entry in entries:
+                sec = (entry.get("section") or "").lower()
+                sub = (entry.get("subsection") or "").lower()
+                element_number = (entry.get("element_number") or "").lower()
+                if element_number and target_element and element_number == target_element:
+                    matches.append(entry)
+                elif sub and sub == target_lower:
+                    matches.append(entry)
+                elif sec and sec == target_lower:
+                    matches.append(entry)
+                elif sec and sec.startswith(target_lower):
+                    matches.append(entry)
+
+            if not matches:
+                raise HTTPException(status_code=404, detail="Section not found in template")
+
+            overrides = _fetch_template_overrides(db, normalized_user_id, target)
+            if overrides:
+                override_map = {
+                    ((o.get("section") or "").lower(), (o.get("subsection") or None)): o[
+                        "payload"
+                    ]
+                    for o in overrides
+                }
+                merged: List[Dict[str, Any]] = []
+                seen_keys = set()
+                for entry in matches:
+                    key = (
+                        (entry.get("section") or "").lower(),
+                        (entry.get("subsection") or None),
+                    )
+                    if key in override_map:
+                        merged_entry = dict(entry)
+                        merged_entry["raw"] = {
+                            **(entry.get("raw") or {}),
+                            **(override_map[key] or {}),
+                        }
+                        merged.append(merged_entry)
+                        seen_keys.add(key)
+                    else:
+                        merged.append(entry)
+                        seen_keys.add(key)
+                for key, payload in override_map.items():
+                    if key not in seen_keys:
+                        merged.append(
+                            {
+                                "section": key[0],
+                                "subsection": key[1],
+                                "section_header": payload.get("Section Header"),
+                                "subsection_header": payload.get("Subsection Header"),
+                                "content": payload.get("Content"),
+                                "raw": payload,
+                            }
+                        )
+                matches = merged
+
+            return {"section": target, "entries": matches, "user_id": normalized_user_id}
+        finally:
+            db.close()
 
     return await asyncio.to_thread(worker)
 
