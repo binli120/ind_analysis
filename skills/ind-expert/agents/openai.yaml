@@ -1,0 +1,4 @@
+interface:
+  display_name: "IND Expert"
+  short_description: "IND nonclinical extraction, mapping, and section summaries"
+  default_prompt: "Extract and validate Module 4 evidence, then produce traceable CTD 2.4/2.6 summaries aligned to project template and mappings."

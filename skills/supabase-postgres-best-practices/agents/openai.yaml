@@ -1,0 +1,4 @@
+interface:
+  display_name: "Supabase Postgres Best Practices"
+  short_description: "Supabase-led Postgres tuning for query, schema, and RLS"
+  default_prompt: "Use $supabase-postgres-best-practices to audit this Postgres workload and return prioritized SQL, indexing, connection, and RLS improvements with validation steps."

@@ -6,11 +6,10 @@
 
 from __future__ import annotations
 
-from importlib.util import module_from_spec, spec_from_file_location
-from pathlib import Path
+import importlib
 import sys
 import types
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -41,17 +40,47 @@ def _ensure_optional_stubs() -> None:
         sys.modules["botocore"] = botocore_stub
         sys.modules["botocore.exceptions"] = exceptions_stub
 
+    try:
+        from rapidfuzz import fuzz  # noqa: F401
+    except Exception:
+        rapidfuzz_stub = types.ModuleType("rapidfuzz")
+
+        class _Fuzz:
+            @staticmethod
+            def partial_ratio(*_args: Any, **_kwargs: Any) -> float:
+                return 0.0
+
+            @staticmethod
+            def token_set_ratio(*_args: Any, **_kwargs: Any) -> float:
+                return 0.0
+
+        rapidfuzz_stub.fuzz = _Fuzz()  # type: ignore[attr-defined]
+        sys.modules["rapidfuzz"] = rapidfuzz_stub
+
 
 def _load_server_module() -> Any:
+    """Load server helpers; fall back to split helper modules when needed."""
     _ensure_optional_stubs()
-    module_path = Path(__file__).resolve().parents[1] / "server.py"
-    spec = spec_from_file_location("pdf_analysis_api_server", module_path)
-    assert spec is not None
-    module = module_from_spec(spec)
-    assert spec.loader is not None
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    server_module = importlib.import_module("pdf_analysis.api.server")
+
+    # Keep tests resilient as helpers are extracted from server.py over time.
+    fallback_modules = [
+        "pdf_analysis.api.table_utils",
+        "pdf_analysis.api.request_utils",
+        "pdf_analysis.api.rate_limit",
+        "pdf_analysis.api.gap_analysis",
+        "pdf_analysis.api.section_summary_helpers",
+        "pdf_analysis.api.tabulated_helpers",
+    ]
+    for module_name in fallback_modules:
+        module = importlib.import_module(module_name)
+        for name in dir(module):
+            if not name.startswith("_"):
+                continue
+            if hasattr(server_module, name):
+                continue
+            setattr(server_module, name, getattr(module, name))
+    return server_module
 
 
 @pytest.fixture(scope="module")
@@ -854,3 +883,214 @@ def test_repair_primary_pd_table_infers_fields_from_location_title_when_missing(
     assert row["Endpoints/Assays"] == "Tumor growth/volume"
     assert row["Key Findings"].lower().startswith("lt1002 administered")
     assert row["GLP Compliance"] == "Not reported"
+
+
+def test_build_document_detail_profiles_collects_study_level_detail(server: Any) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.3.2", "category": "Repeat-dose toxicology"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "LT3114-TOX-001-R",
+                    "module4_section": "4.2.3.2",
+                    "species": "Cynomolgus monkey",
+                    "strain": "",
+                    "route": "IV",
+                    "main_source_document_id": "doc-1",
+                    "extra_attributes": {"testing_facility": "ACME Labs"},
+                }
+            ],
+            "source_documents": [
+                {
+                    "id": "doc-1",
+                    "file_name": "repeat_dose_toxicology_report.pdf",
+                    "ctd_section": "4.2.3.2",
+                    "module": "Module 4",
+                }
+            ],
+            "dose_groups": [
+                {"study_id": "study-1", "name": "Vehicle", "dose_mg_per_kg": 0, "sex": "M", "n_animals": 4},
+                {"study_id": "study-1", "name": "Low", "dose_mg_per_kg": 10, "sex": "M", "n_animals": 4},
+                {"study_id": "study-1", "name": "Mid", "dose_mg_per_kg": 30, "sex": "M", "n_animals": 4},
+            ],
+            "exposure_metrics": [
+                {"study_id": "study-1", "parameter": "Cmax", "value": 1200, "unit": "ng/mL"},
+                {"study_id": "study-1", "parameter": "AUC0-24", "value": 8400, "unit": "ng*h/mL"},
+            ],
+            "findings": [
+                {
+                    "study_id": "study-1",
+                    "organ_system": "Liver",
+                    "finding_term": "Hepatocellular hypertrophy",
+                    "severity": "mild",
+                }
+            ],
+            "safety_summaries": [
+                {
+                    "study_id": "study-1",
+                    "noael_mg_per_kg": 30,
+                    "loael_mg_per_kg": 100,
+                    "limiting_finding": "Minimal liver hypertrophy",
+                }
+            ],
+        },
+        "document_keys": [],
+        "project_document_keys": [],
+    }
+
+    profiles = server._build_document_detail_profiles(context)
+    assert len(profiles) == 1
+    profile = profiles[0]
+    assert profile["study_number"] == "LT3114-TOX-001-R"
+    assert profile["module4_section"] == "4.2.3.2"
+    assert profile["dose_summary_mg_per_kg"] == "10, 30 (plus vehicle control)"
+    assert "Cmax 1200 ng/mL" in profile["exposure_metrics"]
+    assert profile["noael_mg_per_kg"] == "30"
+    assert profile["limiting_finding"] == "Minimal liver hypertrophy"
+    assert profile["missing_detail_fields"] == []
+
+
+def test_trim_section_summary_context_keeps_non_pk_table_evidence_and_profiles(
+    server: Any,
+) -> None:
+    context = {
+        "section": "2.6.6",
+        "ctd_targets": ["2.6.6"],
+        "module4_sections": ["4.2.3.2"],
+        "mapping": [{"module4_section": "4.2.3.2", "category": "Repeat-dose toxicology"}],
+        "template_entries": [],
+        "section_sources": [],
+        "section_key_sections": [],
+        "table_specs": [{"subsection": "2.6.6.2", "columns": ["Dose", "Finding"]}],
+        "table_assets": [
+            {
+                "caption": "Dose-response table",
+                "preview_rows": [
+                    {
+                        "Dose (mg/kg)": "10",
+                        "Finding": "ALT increased 15%",
+                    }
+                ],
+            }
+        ],
+        "document_detail_profiles": [
+            {
+                "study_number": "LT3114-TOX-001-R",
+                "module4_section": "4.2.3.2",
+                "type_of_study": "Repeat-dose toxicology",
+                "test_system": "Cynomolgus monkey",
+                "method_of_administration": "IV",
+                "dose_summary_mg_per_kg": "10, 30 (plus vehicle control)",
+                "group_size_summary": "Male, n=4 (1 group)",
+                "exposure_metrics": ["Cmax 1200 ng/mL"],
+                "finding_highlights": ["Liver: Hepatocellular hypertrophy (mild)"],
+                "traceability": {"source_chunk_refs": 3},
+                "missing_detail_fields": [],
+            }
+        ],
+        "ncd_payload": {"studies": [{}], "dose_groups": [{}], "exposure_metrics": []},
+        "elements": [],
+    }
+
+    trimmed = server._trim_section_summary_context(context)
+    assert len(trimmed["table_numeric_evidence"]) == 1
+    assert "Dose (mg/kg): 10" in trimmed["table_numeric_evidence"][0]["row"]
+    assert len(trimmed["document_detail_profiles"]) == 1
+    assert trimmed["document_detail_profiles"][0]["study_number"] == "LT3114-TOX-001-R"
+    assert trimmed["ncd_payload_counts"]["studies"] == 1
+
+
+def test_normalize_user_prompt_enforces_max_length(server: Any) -> None:
+    assert server._normalize_user_prompt(None) is None
+    assert server._normalize_user_prompt("  keep this  ") == "keep this"
+    too_long = "x" * (int(server.USER_PROMPT_MAX_CHARS) + 1)
+    with pytest.raises(Exception) as exc_info:
+        server._normalize_user_prompt(too_long)
+    exc = exc_info.value
+    assert getattr(exc, "status_code", None) == 400
+    assert "user_prompt exceeds" in str(getattr(exc, "detail", ""))
+
+
+def test_ctd_summary_request_rejects_oversized_user_prompt(server: Any) -> None:
+    too_long = "x" * (int(server.USER_PROMPT_MAX_CHARS) + 1)
+    with pytest.raises(Exception):
+        server.CTDSectionSummaryRequest(
+            section="2.6.6",
+            tenant_id="6fa459ea-ee8a-3ca4-894e-db77e160355e",
+            project_id="6fa459ea-ee8a-3ca4-894e-db77e160355e",
+            bucket="demo-bucket",
+            user_prompt=too_long,
+        )
+
+
+def test_resolve_request_client_id_prefers_forwarded_for(server: Any) -> None:
+    request = types.SimpleNamespace(
+        headers={"x-forwarded-for": "198.51.100.22, 10.0.0.1"},
+        client=types.SimpleNamespace(host="127.0.0.1"),
+    )
+    assert server._resolve_request_client_id(request) == "198.51.100.22"
+
+
+def test_consume_rate_limit_token_applies_sliding_window(server: Any) -> None:
+    with server._RATE_LIMIT_LOCK:
+        server._RATE_LIMIT_BUCKETS.clear()
+
+    assert (
+        server._consume_rate_limit_token(
+            scope="summary",
+            client_id="198.51.100.22",
+            max_requests=2,
+            window_seconds=60,
+            now=100.0,
+        )
+        is None
+    )
+    assert (
+        server._consume_rate_limit_token(
+            scope="summary",
+            client_id="198.51.100.22",
+            max_requests=2,
+            window_seconds=60,
+            now=120.0,
+        )
+        is None
+    )
+    retry_after = server._consume_rate_limit_token(
+        scope="summary",
+        client_id="198.51.100.22",
+        max_requests=2,
+        window_seconds=60,
+        now=130.0,
+    )
+    assert retry_after == 30
+    assert (
+        server._consume_rate_limit_token(
+            scope="summary",
+            client_id="198.51.100.22",
+            max_requests=2,
+            window_seconds=60,
+            now=161.0,
+        )
+        is None
+    )
+
+
+def test_enforce_llm_endpoint_rate_limit_raises_429(server: Any, monkeypatch: Any) -> None:
+    with server._RATE_LIMIT_LOCK:
+        server._RATE_LIMIT_BUCKETS.clear()
+
+    monkeypatch.setitem(server._LLM_RATE_LIMIT_POLICIES, "summary", (2, 60))
+    request = types.SimpleNamespace(
+        headers={},
+        client=types.SimpleNamespace(host="198.51.100.22"),
+    )
+    server._enforce_llm_endpoint_rate_limit(request, endpoint="summary")
+    server._enforce_llm_endpoint_rate_limit(request, endpoint="summary")
+    with pytest.raises(Exception) as exc_info:
+        server._enforce_llm_endpoint_rate_limit(request, endpoint="summary")
+
+    exc = exc_info.value
+    assert getattr(exc, "status_code", None) == 429
+    headers = getattr(exc, "headers", {}) or {}
+    assert "Retry-After" in headers
