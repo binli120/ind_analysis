@@ -146,6 +146,35 @@ def test_format_embedding_for_prompt(server: Any) -> None:
     assert result.startswith("[") and result.endswith("]")
 
 
+def test_split_text_for_embedding_without_tokenizer_chunks_conservatively(
+    server: Any,
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(server, "_embedding_encoding", lambda: None)
+    text = "a" * 13050
+    chunks = server._split_text_for_embedding(
+        text,
+        max_tokens=6000,
+        overlap_tokens=200,
+    )
+    assert len(chunks) >= 3
+    assert all(len(chunk) <= 6000 for chunk in chunks)
+
+
+def test_split_text_for_embedding_without_tokenizer_keeps_short_text(
+    server: Any,
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(server, "_embedding_encoding", lambda: None)
+    text = "a" * 2500
+    chunks = server._split_text_for_embedding(
+        text,
+        max_tokens=6000,
+        overlap_tokens=200,
+    )
+    assert chunks == [text]
+
+
 def test_gap_key_mentions_module4_section(server: Any) -> None:
     assert server._gap_key_mentions_module4_section(
         "filynai.com/demo/4.2.1.1/report.pdf",
@@ -293,6 +322,36 @@ def test_repair_overview_table_drops_invalid_study_numbers(server: Any) -> None:
     assert rows[0]["Study Number"] == "LT3114-PHA-001-R"
 
 
+def test_extract_overview_candidates_skips_fallback_ids_when_ncd_present(
+    server: Any,
+) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.1", "category": "Primary pharmacodynamics"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "LT3114-PHA-014-R",
+                    "module4_section": "4.2.1.1",
+                    "species": "Mouse",
+                    "strain": "",
+                    "route": "IV",
+                    "extra_attributes": {},
+                }
+            ],
+            "source_documents": [],
+        },
+        "table_assets": [],
+        "section_sources": [],
+        "document_keys": [],
+        "project_document_keys": [],
+        "ncd_study_ids": ["DOC-593-59D3BFF0"],
+    }
+
+    candidates = server._extract_overview_candidates(context)
+    assert [row["study_number"] for row in candidates] == ["LT3114-PHA-014-R"]
+
+
 def test_sections_with_material_data_skips_missing_module4_section(server: Any) -> None:
     sections = server._sections_with_material_data(
         ["4.2.1.1", "4.2.1.4"],
@@ -314,6 +373,217 @@ def test_filter_section_entries_for_targets(server: Any) -> None:
         target_sections={"2.6.3.1", "2.6.3.4"},
     )
     assert [entry["subsection"] for entry in filtered] == ["2.6.3.1", "2.6.3.4"]
+
+
+def test_align_pharmacology_tabulated_specs_matches_reference_pdf_columns(
+    server: Any,
+) -> None:
+    specs = [
+        {"subsection": "2.6.3.1", "columns": ["A"]},
+        {"subsection": "2.6.3.2", "columns": ["B"]},
+        {"subsection": "2.6.3.3", "columns": ["C"]},
+        {"subsection": "2.6.3.4", "columns": ["D"]},
+        {"subsection": "2.6.3.5", "columns": ["E"]},
+    ]
+
+    aligned = server._align_pharmacology_tabulated_specs("2.6.3", specs)
+
+    assert aligned[0]["columns"] == [
+        "Type of Study",
+        "Test System",
+        "Method of Administration",
+        "Testing Facility",
+        "Study Number",
+    ]
+    assert aligned[1]["columns"] == [
+        "Type of Study",
+        "Species/Strain",
+        "Method of Admin.",
+        "Doses (mg/kg)",
+        "Gender and No. per Group",
+        "Noteworthy Findings",
+        "Study Number",
+    ]
+    assert aligned[2]["columns"] == ["Statement"]
+    assert aligned[3]["columns"] == [
+        "Organ Systems Evaluated",
+        "Species/Strain",
+        "Method of Admin.",
+        "Doses (mg/kg)",
+        "Gender and No. per Group",
+        "Noteworthy Findings",
+        "GLP Compliance",
+        "Study Number",
+    ]
+    assert aligned[4]["columns"] == ["Statement"]
+
+
+def test_merge_tabulated_tables_populates_263_statement_rows(server: Any) -> None:
+    specs = [
+        {
+            "subsection": "2.6.3.3",
+            "subsection_header": "Secondary Pharmacodynamics",
+            "table_description": "",
+            "columns": ["Statement"],
+        },
+        {
+            "subsection": "2.6.3.5",
+            "subsection_header": "Pharmacodynamic Drug Interactions",
+            "table_description": "",
+            "columns": ["Statement"],
+        },
+    ]
+
+    merged = server._merge_tabulated_tables(specs, [])
+    secondary = next(row for row in merged if row.get("subsection") == "2.6.3.3")
+    interactions = next(row for row in merged if row.get("subsection") == "2.6.3.5")
+
+    assert secondary["rows"] == [
+        {"Statement": "No secondary pharmacodynamics studies were conducted."}
+    ]
+    assert interactions["rows"] == [
+        {"Statement": "No pharmacodynamic drug interaction studies were conducted."}
+    ]
+
+
+def test_repair_primary_pd_table_supports_reference_pdf_columns(server: Any) -> None:
+    tables = [
+        {
+            "subsection": "2.6.3.2",
+            "columns": [
+                "Type of Study",
+                "Species/Strain",
+                "Method of Admin.",
+                "Doses (mg/kg)",
+                "Gender and No. per Group",
+                "Noteworthy Findings",
+                "Study Number",
+            ],
+            "rows": [],
+        }
+    ]
+    context = {
+        "mapping": [{"module4_section": "4.2.1.1", "category": "Primary Pharmacodynamics"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "LT3114-PHA-020-R",
+                    "module4_section": "4.2.1.1",
+                    "species": "Rats/Sprague Dawley",
+                    "strain": "",
+                    "route": "Intravenous/intrathecal",
+                    "extra_attributes": {
+                        "type_of_study": "Primary Pharmacodynamics",
+                        "key_findings": "Mechanical hypersensitivity was reduced.",
+                    },
+                }
+            ],
+            "dose_groups": [
+                {"study_id": "study-1", "name": "Vehicle", "dose_mg_per_kg": 0, "sex": "F", "n_animals": 6},
+                {"study_id": "study-1", "name": "High", "dose_mg_per_kg": 10, "sex": "F", "n_animals": 6},
+            ],
+            "source_documents": [],
+        },
+        "table_assets": [],
+        "section_sources": [],
+        "document_keys": [],
+        "project_document_keys": [],
+    }
+
+    server._repair_primary_pharmacodynamics_table(tables, context)
+    row = tables[0]["rows"][0]
+    assert row["Type of Study"] == "Primary Pharmacodynamics"
+    assert row["Species/Strain"] == "Rats/Sprague Dawley"
+    assert row["Method of Admin."] == "Intravenous/intrathecal"
+    assert row["Doses (mg/kg)"] == "10 (plus vehicle control)"
+    assert row["Gender and No. per Group"] == "Female, n=6 (1 group)"
+    assert row["Noteworthy Findings"] == "Mechanical hypersensitivity was reduced."
+    assert row["Study Number"] == "LT3114-PHA-020-R"
+
+
+def test_build_tabulated_context_skips_s3_when_boto3_missing(
+    server: Any,
+    monkeypatch: Any,
+) -> None:
+    tabulated_helpers = importlib.import_module("pdf_analysis.api.tabulated_helpers")
+
+    monkeypatch.setattr(tabulated_helpers, "fetch_project_name", lambda *_args, **_kwargs: "demo")
+    monkeypatch.setattr(
+        tabulated_helpers,
+        "module4_sections_for_ctd_targets",
+        lambda *_args, **_kwargs: (["4.2.1.1"], [], ["2.6.3.1"]),
+    )
+    monkeypatch.setattr(tabulated_helpers, "fetch_section_sources", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        tabulated_helpers, "fetch_project_document_keys", lambda *_args, **_kwargs: []
+    )
+    monkeypatch.setattr(
+        tabulated_helpers, "fetch_document_keys_for_sections", lambda *_args, **_kwargs: []
+    )
+    monkeypatch.setattr(tabulated_helpers, "fetch_study_ids_for_sections", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        tabulated_helpers,
+        "fetch_ncd_payload",
+        lambda *_args, **_kwargs: {"studies": [], "source_documents": []},
+    )
+    monkeypatch.setattr(
+        tabulated_helpers,
+        "_sections_with_material_data",
+        lambda module4_sections, **_kwargs: list(module4_sections),
+    )
+    monkeypatch.setattr(tabulated_helpers, "fetch_assets_for_sections", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        tabulated_helpers,
+        "_mapped_target_sections_for_request",
+        lambda *_args, **_kwargs: {"2.6.3.1"},
+    )
+    monkeypatch.setattr(
+        tabulated_helpers,
+        "_filter_section_entries_for_targets",
+        lambda entries, **_kwargs: list(entries),
+    )
+    monkeypatch.setattr(
+        tabulated_helpers,
+        "_tabulated_template_entries_for_section",
+        lambda _section: [
+            {
+                "section": "2.6.3",
+                "subsection": "2.6.3.1",
+                "subsection_header": "Pharmacology: Overview",
+                "raw": {
+                    "IND Requirement": "REQUIRED",
+                    "Table Description Boilerplate": "Overview",
+                    "Row Content": "",
+                    "Column Header": "Type of Study | Test System",
+                    "Column Example Values": "",
+                    "Column Value in Module 4 Location Mapping": "",
+                },
+            }
+        ],
+    )
+
+    def _raise_missing_boto3(*_args: Any, **_kwargs: Any) -> Any:
+        raise server.HTTPException(
+            status_code=500, detail="boto3 is required for S3 operations"
+        )
+
+    monkeypatch.setattr(tabulated_helpers, "_boto3_client", _raise_missing_boto3)
+
+    context, debug = server._build_tabulated_context(
+        object(),
+        section="2.6.3",
+        tenant_id="tenant-1",
+        project_id="project-1",
+        bucket="bucket-1",
+    )
+
+    assert context["table_specs"]
+    assert debug["s3_listing_keys_count"] == 0
+    assert any(
+        "boto3 unavailable" in warning.lower()
+        for warning in debug.get("warnings", [])
+    )
 
 
 def test_extract_ncd_study_records_keeps_nonregex_sponsor_study_id(server: Any) -> None:
@@ -339,7 +609,7 @@ def test_extract_ncd_study_records_keeps_nonregex_sponsor_study_id(server: Any) 
 
     rows = server._extract_ncd_study_records(context, module4_section="4.2.1.3")
     assert len(rows) == 1
-    assert rows[0]["study_number"] == "WKP00013 Page 2"
+    assert rows[0]["study_number"] == "WKP00013 PAGE 2"
 
 
 def test_extract_ncd_study_records_keeps_numeric_sponsor_study_id(server: Any) -> None:
@@ -396,6 +666,40 @@ def test_extract_ncd_study_records_keeps_numeric_hyphen_sponsor_study_id(
     assert rows[0]["study_number"] == "1006-2525"
 
 
+def test_extract_ncd_study_records_prefers_sponsor_number_over_internal_doc_id(
+    server: Any,
+) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.1", "category": "Primary Pharmacodynamics"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "DOC-430-4CFC3CAF",
+                    "module4_section": "4.2.1.1",
+                    "species": "Rat",
+                    "strain": "",
+                    "route": "IV",
+                    "extra_attributes": {
+                        "sponsor_study_number": "LT3114-PHA-012-R",
+                        "study_number_display": (
+                            "Sponsor study #: LT3114-PHA-012-R; "
+                            "CRO study #: 1006-2525"
+                        ),
+                    },
+                }
+            ],
+            "source_documents": [],
+        },
+        "document_keys": [],
+        "project_document_keys": [],
+    }
+
+    rows = server._extract_ncd_study_records(context, module4_section="4.2.1.1")
+    assert len(rows) == 1
+    assert rows[0]["study_number"] == "LT3114-PHA-012-R"
+
+
 def test_rows_from_token_candidates_keeps_unparsed_study_ids(server: Any) -> None:
     columns = ["Study Number", "Organ Systems Evaluated"]
     candidates = [
@@ -406,6 +710,40 @@ def test_rows_from_token_candidates_keeps_unparsed_study_ids(server: Any) -> Non
     study_numbers = [str(row.get("Study Number") or "") for row in rows]
     assert "RP-PC-60" in study_numbers
     assert "WKP00013 Page 2" in study_numbers
+
+
+def test_rows_from_token_candidates_drops_placeholder_only_rows(server: Any) -> None:
+    columns = ["Study Number", "GLP Compliance", "Organ Systems Evaluated"]
+    candidates = [
+        {
+            "study number": "LT3114-PHA-007-R",
+            "glp compliance": "Not reported",
+            "organ systems evaluated": "N/A",
+        },
+        {
+            "study number": "RP-PC-60",
+            "glp compliance": "GLP",
+            "organ systems evaluated": "Cardiovascular",
+        },
+    ]
+    rows = server._rows_from_token_candidates(columns, candidates)
+
+    assert len(rows) == 1
+    assert rows[0]["Study Number"] == "RP-PC-60"
+
+
+def test_select_study_id_from_text_uses_fuzzy_alias_match(server: Any) -> None:
+    candidates = {
+        "LT3114-PHA-012-R": {
+            "study_id": "LT3114-PHA-012-R",
+            "labels": {
+                "LT3114-PHA-012-R",
+                "Module 4, Section 4.2.1.1 LT3114-PHA-012-R",
+            },
+        }
+    }
+    normalized = server._select_study_id_from_text("T3114-PHA-012-R", candidates)
+    assert normalized == "LT3114-PHA-012-R"
 
 
 def test_render_dose_group_summary_formats_control_and_group_counts(server: Any) -> None:
@@ -666,6 +1004,166 @@ def test_extract_primary_pd_candidates_infers_glp_from_qa_statement(
     assert len(candidates) == 1
     assert candidates[0]["study number"] == "306D326.1"
     assert candidates[0]["glp compliance"] == "GLP"
+
+
+def test_extract_primary_pd_candidates_ignores_safety_assets(server: Any) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.1", "category": "Primary Pharmacodynamics"}],
+        "ncd_payload": {"studies": [], "source_documents": []},
+        "table_assets": [
+            {
+                "s3_key": (
+                    "filynai.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
+                    "4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/report.pdf.tables/1.json"
+                ),
+                "caption": "Safety pharmacology summary",
+                "description": "",
+                "keywords": ["safety pharmacology", "telemetry"],
+                "preview_rows": [
+                    {
+                        "Study Number": "RP-PC-41",
+                        "Noteworthy Findings": "No clinically meaningful QTc effect observed.",
+                        "GLP Compliance": "GLP",
+                    }
+                ],
+            }
+        ],
+        "section_sources": [],
+    }
+
+    candidates = server._extract_primary_pd_candidates(context)
+    assert candidates == []
+
+
+def test_extract_primary_pd_candidates_strips_path_artifacts_from_findings(
+    server: Any,
+) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.1", "category": "Primary Pharmacodynamics"}],
+        "ncd_payload": {"studies": [], "source_documents": []},
+        "table_assets": [
+            {
+                "s3_key": (
+                    "filynai.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
+                    "4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/report.pdf.tables/1.json"
+                ),
+                "caption": "Primary pharmacology summary",
+                "description": "",
+                "keywords": ["primary pharmacology"],
+                "preview_rows": [
+                    {
+                        "Study Number": "LT3114-PHA-006-R",
+                        "Noteworthy Findings": (
+                            "filynai.com/demo/report.pdf.tables/input.p1.t1.csv ...[truncated]; "
+                            "0: LT3114 significantly reduced pain behavior versus control."
+                        ),
+                        "GLP Compliance": "Non-GLP",
+                    }
+                ],
+            }
+        ],
+        "section_sources": [],
+    }
+
+    candidates = server._extract_primary_pd_candidates(context)
+    assert len(candidates) == 1
+    findings = candidates[0]["noteworthy findings"].lower()
+    assert "filynai.com" not in findings
+    assert "truncated" not in findings
+    assert "reduced pain behavior" in findings
+
+
+def test_extract_primary_pd_candidates_infers_missing_fields_from_section_summary(
+    server: Any,
+) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.1", "category": "Primary Pharmacodynamics"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "LT3114-PHA-018-R",
+                    "module4_section": "4.2.1.1",
+                    "species": "",
+                    "strain": "",
+                    "route": "",
+                    "extra_attributes": {},
+                }
+            ],
+            "source_documents": [],
+            "dose_groups": [],
+        },
+        "table_assets": [],
+        "section_sources": [
+            {
+                "section_number": "4.2.1.1.LT3114-PHA-018-R",
+                "section_title": "Primary Pharmacodynamics",
+                "summary_text": (
+                    "Male Sprague-Dawley rats received intravenous anti-LPA antibody "
+                    "doses of 10 and 30 mg/kg (n=8/group)."
+                ),
+            }
+        ],
+    }
+
+    candidates = server._extract_primary_pd_candidates(context)
+    assert len(candidates) == 1
+    candidate = candidates[0]
+    assert candidate["study number"] == "LT3114-PHA-018-R"
+    assert "sprague-dawley" in candidate["species strain"].lower()
+    assert "rat" in candidate["species strain"].lower()
+    assert "intravenous" in candidate["method of administration"].lower()
+    assert "10 mg/kg" in candidate["doses"].lower()
+    assert "30 mg/kg" in candidate["doses"].lower()
+    assert "male" in candidate["gender and no per group"].lower()
+    assert "n=8/group" in candidate["gender and no per group"].lower()
+
+
+def test_extract_primary_pd_candidates_replaces_placeholder_with_asset_value(
+    server: Any,
+) -> None:
+    context = {
+        "mapping": [{"module4_section": "4.2.1.1", "category": "Primary Pharmacodynamics"}],
+        "ncd_payload": {
+            "studies": [
+                {
+                    "id": "study-1",
+                    "sponsor_study_id": "LT3114-PHA-006-R",
+                    "module4_section": "4.2.1.1",
+                    "species": "Rat",
+                    "strain": "",
+                    "route": "",
+                    "extra_attributes": {
+                        "method_of_administration": "N/A",
+                    },
+                }
+            ],
+            "source_documents": [],
+            "dose_groups": [],
+        },
+        "table_assets": [
+            {
+                "s3_key": (
+                    "filynai.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
+                    "4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/report.pdf.tables/1.json"
+                ),
+                "caption": "Primary pharmacology summary",
+                "description": "",
+                "keywords": ["primary pharmacology"],
+                "preview_rows": [
+                    {
+                        "Study Number": "LT3114-PHA-006-R",
+                        "Method of Administration": "intravenous",
+                    }
+                ],
+            }
+        ],
+        "section_sources": [],
+    }
+
+    candidates = server._extract_primary_pd_candidates(context)
+    assert len(candidates) == 1
+    assert candidates[0]["method of administration"].lower() == "intravenous"
 
 
 def test_repair_primary_pd_table_merges_asset_fields_for_existing_ncd_row(

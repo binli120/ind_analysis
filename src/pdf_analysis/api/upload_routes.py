@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from pdf_analysis.api.constants import UPLOAD_ROUTER_TAGS
+from pdf_analysis.constants.metadata_keys import ANALYZED_KEY
 
 def _sync_server_globals_dep() -> None:
     """Refresh server globals before each request."""
@@ -549,7 +550,7 @@ async def fetch_s3_markdown(payload: S3MarkdownRequest) -> Dict[str, Any]:
                     "Metadata generation failed for %s: %s", payload.key, exc
                 )
                 metadata_fields = {}
-        metadata_fields.setdefault("analyzed", True)
+        metadata_fields.setdefault(ANALYZED_KEY, True)
 
         meta_payload = {
             "bucket": payload.bucket,

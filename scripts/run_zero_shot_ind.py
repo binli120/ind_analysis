@@ -140,6 +140,15 @@ def main() -> None:
     _load_env_files()
     _ensure_src_on_path()
     from pdf_analysis.service.ai_metadata import OpenAIMetadataGenerator
+    from pdf_analysis.constants.metadata_keys import (
+        IND_CLASSIFICATION_CONFIDENCE_KEY,
+        IND_DOCUMENT_TYPE_KEY,
+        IND_SECTION_NUMBER_KEY,
+        IND_SECTION_TITLE_KEY,
+        KEYWORDS_KEY,
+        LABELS_KEY,
+        LANGUAGE_KEY,
+    )
 
     generator = OpenAIMetadataGenerator(model=args.model)
     _ensure_client(generator)
@@ -155,16 +164,16 @@ def main() -> None:
     output: Dict[str, Any] = {
         "document": analysis.get("document") or pdf_path.name,
         "ind_metadata": {
-            "ind_document_type": metadata.get("ind_document_type"),
-            "ind_section_number": metadata.get("ind_section_number"),
-            "ind_section_title": metadata.get("ind_section_title"),
-            "ind_classification_confidence": metadata.get(
-                "ind_classification_confidence"
+            IND_DOCUMENT_TYPE_KEY: metadata.get(IND_DOCUMENT_TYPE_KEY),
+            IND_SECTION_NUMBER_KEY: metadata.get(IND_SECTION_NUMBER_KEY),
+            IND_SECTION_TITLE_KEY: metadata.get(IND_SECTION_TITLE_KEY),
+            IND_CLASSIFICATION_CONFIDENCE_KEY: metadata.get(
+                IND_CLASSIFICATION_CONFIDENCE_KEY
             ),
         },
-        "labels": metadata.get("labels", []),
-        "keywords": metadata.get("keywords", []),
-        "language": metadata.get("language"),
+        LABELS_KEY: metadata.get(LABELS_KEY, []),
+        KEYWORDS_KEY: metadata.get(KEYWORDS_KEY, []),
+        LANGUAGE_KEY: metadata.get(LANGUAGE_KEY),
         "metrics": analysis.get("metrics", {}),
     }
 

@@ -23,6 +23,15 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
 from ind_pipeline.consumer import ModuleConfig, NotificationConsumer
 from ind_pipeline.registry import ModuleDescriptor, register_module
 from ind_pipeline.utils import build_metadata_key, parse_s3_uri, utc_timestamp
+from pdf_analysis.constants.metadata_keys import (
+    IND_CLASSIFICATION_CONFIDENCE_KEY,
+    IND_DOCUMENT_TYPE_KEY,
+    IND_SECTION_NUMBER_KEY,
+    IND_SECTION_TITLE_KEY,
+    KEYWORDS_KEY,
+    LABELS_KEY,
+    LANGUAGE_KEY,
+)
 from pdf_analysis.service.ai_metadata import OpenAIMetadataGenerator
 
 logger = logging.getLogger(__name__)
@@ -232,13 +241,15 @@ def zeroshot_handler(payload: Dict[str, Any]) -> Dict[str, Any]:
         "project": project,
         "file": file_name,
         "metadata_s3_uri": metadata_s3_uri,
-        "labels": metadata.get("labels", []),
-        "keywords": metadata.get("keywords", []),
-        "language": metadata.get("language"),
-        "ind_document_type": metadata.get("ind_document_type"),
-        "ind_section_number": metadata.get("ind_section_number"),
-        "ind_section_title": metadata.get("ind_section_title"),
-        "ind_classification_confidence": metadata.get("ind_classification_confidence"),
+        LABELS_KEY: metadata.get(LABELS_KEY, []),
+        KEYWORDS_KEY: metadata.get(KEYWORDS_KEY, []),
+        LANGUAGE_KEY: metadata.get(LANGUAGE_KEY),
+        IND_DOCUMENT_TYPE_KEY: metadata.get(IND_DOCUMENT_TYPE_KEY),
+        IND_SECTION_NUMBER_KEY: metadata.get(IND_SECTION_NUMBER_KEY),
+        IND_SECTION_TITLE_KEY: metadata.get(IND_SECTION_TITLE_KEY),
+        IND_CLASSIFICATION_CONFIDENCE_KEY: metadata.get(
+            IND_CLASSIFICATION_CONFIDENCE_KEY
+        ),
         "stage": MODULE_NAME,
         "status": "completed",
     }

@@ -73,6 +73,12 @@ from pdf_analysis.api.constants import (
     STUDY_ID_TRAILERS,
     UPLOAD_ROUTER_TAGS,
 )
+from pdf_analysis.constants.metadata_keys import (
+    ANALYZED_KEY,
+    KEYWORDS_KEY,
+    LABELS_KEY,
+    LANGUAGE_KEY,
+)
 from pdf_analysis.api.request_utils import (
     _normalize_json_dict,
     _normalize_optional_uuid,
@@ -375,10 +381,14 @@ def _split_text_for_embedding(
                 start += step
             return chunks
 
-    if _approx_token_count(normalized) <= max_tokens:
+    # Tokenizer unavailable (or tokenization failed): use conservative
+    # character chunking to avoid model context-limit failures.
+    # We cap chunk characters to <= max_tokens to keep a worst-case
+    # 1 char ~= 1 token safety envelope.
+    max_chars = max(1000, int(max_tokens))
+    if len(normalized) <= max_chars:
         return [normalized]
 
-    max_chars = max(1000, max_tokens * 4)
     chunks: List[str] = []
     start = 0
     while start < len(normalized):
@@ -392,7 +402,7 @@ def _split_text_for_embedding(
             chunks.append(chunk)
         if end >= len(normalized):
             break
-        overlap_chars = max(100, overlap_tokens * 4)
+        overlap_chars = max(100, min(max_chars // 5, int(overlap_tokens)))
         start = max(0, end - overlap_chars)
     return chunks
 
@@ -954,9 +964,9 @@ def _store_embedding_for_document(
             company=company,
             project=project,
             module_label=module_label,
-            labels=metadata_fields.get("labels"),
-            keywords=metadata_fields.get("keywords"),
-            language=metadata_fields.get("language"),
+            labels=metadata_fields.get(LABELS_KEY),
+            keywords=metadata_fields.get(KEYWORDS_KEY),
+            language=metadata_fields.get(LANGUAGE_KEY),
         )
     except Exception as exc:  # pragma: no cover - best effort
         logger.warning("Embedding storage failed for %s: %s", key, exc)
@@ -1086,7 +1096,7 @@ def _process_pdf_and_store_analysis(
         except Exception as exc:  # pragma: no cover - best effort
             logger.warning("Metadata generation failed for %s: %s", key, exc)
             metadata_fields = {}
-    metadata_fields.setdefault("analyzed", True)
+    metadata_fields.setdefault(ANALYZED_KEY, True)
     for meta_key, meta_value in metadata_context.items():
         if meta_value:
             metadata_fields.setdefault(meta_key, meta_value)
@@ -1175,7 +1185,7 @@ async def _analyze_uploaded_pdf(upload: UploadFile) -> Dict[str, Any]:
         except Exception as exc:  # pragma: no cover - best effort
             logger.warning("Metadata generation failed for %s: %s", filename, exc)
             metadata_fields = {}
-    metadata_fields.setdefault("analyzed", True)
+    metadata_fields.setdefault(ANALYZED_KEY, True)
 
     if metadata_fields:
         analysis_with_metadata = dict(analysis)
@@ -1240,7 +1250,7 @@ async def _analyze_s3_payload(payload: S3AnalyzeRequest) -> Dict[str, Any]:
                     exc,
                 )
                 metadata_fields = {}
-        metadata_fields.setdefault("analyzed", True)
+        metadata_fields.setdefault(ANALYZED_KEY, True)
 
         if markdown:
             _store_embedding_for_document(

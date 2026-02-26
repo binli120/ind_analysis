@@ -14,6 +14,16 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
 from fastapi import HTTPException
 
 from pdf_analysis.api.constants import DEFAULT_TEMPLATE_PREFIXES
+from pdf_analysis.constants.metadata_keys import (
+    ANALYZED_KEY,
+    IND_CLASSIFICATION_CONFIDENCE_KEY,
+    IND_DOCUMENT_TYPE_KEY,
+    IND_SECTION_NUMBER_KEY,
+    IND_SECTION_TITLE_KEY,
+    KEYWORDS_KEY,
+    LABELS_KEY,
+    LANGUAGE_KEY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,28 +54,28 @@ def _update_object_metadata(
         content_type = None
 
     new_metadata = dict(existing_metadata)
-    labels = metadata_fields.get("labels")
-    keywords = metadata_fields.get("keywords")
-    language = metadata_fields.get("language")
+    labels = metadata_fields.get(LABELS_KEY)
+    keywords = metadata_fields.get(KEYWORDS_KEY)
+    language = metadata_fields.get(LANGUAGE_KEY)
     if labels:
-        new_metadata["labels"] = ",".join(labels)
+        new_metadata[LABELS_KEY] = ",".join(labels)
     if keywords:
-        new_metadata["keywords"] = ",".join(keywords)
+        new_metadata[KEYWORDS_KEY] = ",".join(keywords)
     if language:
-        new_metadata["language"] = str(language)
-    document_type = metadata_fields.get("ind_document_type")
-    section_number = metadata_fields.get("ind_section_number")
-    section_title = metadata_fields.get("ind_section_title")
-    classification_confidence = metadata_fields.get("ind_classification_confidence")
+        new_metadata[LANGUAGE_KEY] = str(language)
+    document_type = metadata_fields.get(IND_DOCUMENT_TYPE_KEY)
+    section_number = metadata_fields.get(IND_SECTION_NUMBER_KEY)
+    section_title = metadata_fields.get(IND_SECTION_TITLE_KEY)
+    classification_confidence = metadata_fields.get(IND_CLASSIFICATION_CONFIDENCE_KEY)
     if document_type:
-        new_metadata["ind_document_type"] = str(document_type)
+        new_metadata[IND_DOCUMENT_TYPE_KEY] = str(document_type)
     if section_number:
-        new_metadata["ind_section_number"] = str(section_number)
+        new_metadata[IND_SECTION_NUMBER_KEY] = str(section_number)
     if section_title:
-        new_metadata["ind_section_title"] = str(section_title)
+        new_metadata[IND_SECTION_TITLE_KEY] = str(section_title)
     if classification_confidence is not None:
-        new_metadata["ind_classification_confidence"] = str(classification_confidence)
-    new_metadata["analyzed"] = "true"
+        new_metadata[IND_CLASSIFICATION_CONFIDENCE_KEY] = str(classification_confidence)
+    new_metadata[ANALYZED_KEY] = "true"
 
     copy_source: Dict[str, Any] = {"Bucket": bucket, "Key": key}
     if version_id:

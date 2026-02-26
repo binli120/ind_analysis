@@ -10,6 +10,7 @@ from typing import Any, Dict
 
 import pytest
 
+from pdf_analysis.constants.metadata_keys import IND_SECTION_NUMBER_KEY
 from pdf_analysis.service import embedding_store
 
 
@@ -41,7 +42,7 @@ def test_build_embedding_text_includes_metadata(monkeypatch) -> None:
     instance.max_chars = 500
     text = instance._build_embedding_text(
         markdown="Body",
-        metadata={"ind_section_number": "2.4"},
+        metadata={IND_SECTION_NUMBER_KEY: "2.4"},
         filename="file.pdf",
         company="Acme",
         project="Rocket",

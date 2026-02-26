@@ -13,6 +13,18 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
+from pdf_analysis.constants.metadata_keys import (
+    IND_CLASSIFICATION_CONFIDENCE_KEY,
+    IND_DOCUMENT_TYPE_KEY,
+    IND_SECTION_NUMBER_KEY,
+    IND_SECTION_TITLE_KEY,
+    KEYWORDS_KEY,
+    LABELS_KEY,
+    LANGUAGE_KEY,
+    QUALITY_MARKDOWN_KEY,
+    SUMMARY_KEY,
+)
+
 try:
     import httpx  # type: ignore
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
@@ -175,9 +187,9 @@ class SupabaseEmbeddingStore:
         if not embedding:
             return False
 
-        labels = labels or _ensure_list(metadata.get("labels"))
-        keywords = keywords or _ensure_list(metadata.get("keywords"))
-        language = language or metadata.get("language")
+        labels = labels or _ensure_list(metadata.get(LABELS_KEY))
+        keywords = keywords or _ensure_list(metadata.get(KEYWORDS_KEY))
+        language = language or metadata.get(LANGUAGE_KEY)
         row = self._build_row(
             s3_bucket=s3_bucket,
             s3_key=s3_key,
@@ -340,19 +352,19 @@ class SupabaseEmbeddingStore:
         if module_label:
             sections.append(f"Module: {module_label}")
 
-        ind_section = metadata.get("ind_section_number")
+        ind_section = metadata.get(IND_SECTION_NUMBER_KEY)
         if ind_section:
-            title = metadata.get("ind_section_title") or ""
+            title = metadata.get(IND_SECTION_TITLE_KEY) or ""
             sections.append(f"IND Section: {ind_section} {title}".strip())
 
-        labels = _ensure_list(metadata.get("labels"))
+        labels = _ensure_list(metadata.get(LABELS_KEY))
         if labels:
             sections.append("Labels: " + ", ".join(labels))
-        keywords = _ensure_list(metadata.get("keywords"))
+        keywords = _ensure_list(metadata.get(KEYWORDS_KEY))
         if keywords:
             sections.append("Keywords: " + ", ".join(keywords))
 
-        summary = metadata.get("summary") or metadata.get("quality_markdown")
+        summary = metadata.get(SUMMARY_KEY) or metadata.get(QUALITY_MARKDOWN_KEY)
         if summary:
             sections.append(f"Summary:\n{summary}")
 
@@ -379,7 +391,7 @@ class SupabaseEmbeddingStore:
         markdown: str,
         document_hash: str,
     ) -> Dict[str, Any]:
-        section = metadata.get("ind_section_number")
+        section = metadata.get(IND_SECTION_NUMBER_KEY)
         if not section:
             module_part = module_label or ""
             if module_number is not None:
@@ -402,13 +414,13 @@ class SupabaseEmbeddingStore:
                 "project": project,
                 "module_label": module_label,
                 "module_number": module_number,
-                "labels": list(labels) if labels else [],
-                "keywords": list(keywords) if keywords else [],
-                "language": language,
-                "ind_document_type": metadata.get("ind_document_type"),
-                "ind_section_title": metadata.get("ind_section_title"),
-                "ind_classification_confidence": metadata.get(
-                    "ind_classification_confidence"
+                LABELS_KEY: list(labels) if labels else [],
+                KEYWORDS_KEY: list(keywords) if keywords else [],
+                LANGUAGE_KEY: language,
+                IND_DOCUMENT_TYPE_KEY: metadata.get(IND_DOCUMENT_TYPE_KEY),
+                IND_SECTION_TITLE_KEY: metadata.get(IND_SECTION_TITLE_KEY),
+                IND_CLASSIFICATION_CONFIDENCE_KEY: metadata.get(
+                    IND_CLASSIFICATION_CONFIDENCE_KEY
                 ),
             },
             "embedding_1536": [float(value) for value in embedding],

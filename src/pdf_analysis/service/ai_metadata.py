@@ -16,6 +16,25 @@ import textwrap
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from pdf_analysis.constants.metadata_keys import (
+    ANALYZED_KEY,
+    IND_CLASSIFICATION_CONFIDENCE_KEY,
+    IND_DOCUMENT_TYPE_KEY,
+    IND_SECTION_NUMBER_KEY,
+    IND_SECTION_TITLE_KEY,
+    KEYWORDS_KEY,
+    LABELS_KEY,
+    LANGUAGE_KEY,
+    LLM_CONFIDENCE_FALLBACK_KEY,
+    LLM_CONFIDENCE_KEY,
+    LLM_DOCUMENT_TYPE_KEY,
+    LLM_LABEL_KEY,
+    LLM_LANG_KEY,
+    LLM_SECTION_NUMBER_KEY,
+    LLM_SECTION_TITLE_KEY,
+    LLM_TAGS_KEY,
+)
+
 logger = logging.getLogger(__name__)
 
 try:  # Optional dependency loaded when infra extras are installed.
@@ -104,10 +123,13 @@ class OpenAIMetadataGenerator:
             "Leverage the following guide:\n"
             f"{self._SECTION_GUIDE}\n"
             "Respond ONLY with minified JSON using the schema: "
-            + '{"labels": ["..."], "keywords": ["..."], "language": "en", '
-            '"ind_document_type": "...", "ind_section_number": "...", '
-            '"ind_section_title": "...", "ind_confidence": 0.0}. '
-            "Provide at most 3 descriptive labels (lowercase) and up to 5 concise keywords. "
+            + (
+                f'{{"{LABELS_KEY}": ["..."], "{KEYWORDS_KEY}": ["..."], '
+                f'"{LANGUAGE_KEY}": "en", "{IND_DOCUMENT_TYPE_KEY}": "...", '
+                f'"{IND_SECTION_NUMBER_KEY}": "...", "{IND_SECTION_TITLE_KEY}": "...", '
+                f'"{LLM_CONFIDENCE_KEY}": 0.0}}. '
+            )
+            + "Provide at most 3 descriptive labels (lowercase) and up to 5 concise keywords. "
             "Use two-letter ISO codes for language. "
             "When uncertain, set ind_document_type, ind_section_number, or ind_section_title to null "
             "and reduce ind_confidence (0.0-1.0). "
@@ -138,35 +160,45 @@ class OpenAIMetadataGenerator:
             return {}
 
         metadata: Dict[str, Any] = {}
-        labels = _ensure_list(data.get("labels") or data.get("label"), limit=3)
-        keywords = _ensure_list(data.get("keywords") or data.get("tags"), limit=5)
-        language = str(data.get("language") or data.get("lang") or "unknown").lower()
-        ind_document_type = data.get("ind_document_type") or data.get("document_type")
-        ind_section_number = data.get("ind_section_number") or data.get(
-            "section_number"
+        labels = _ensure_list(data.get(LABELS_KEY) or data.get(LLM_LABEL_KEY), limit=3)
+        keywords = _ensure_list(
+            data.get(KEYWORDS_KEY) or data.get(LLM_TAGS_KEY), limit=5
         )
-        ind_section_title = data.get("ind_section_title") or data.get("section_title")
-        ind_confidence = data.get("ind_confidence") or data.get("confidence")
+        language = str(
+            data.get(LANGUAGE_KEY) or data.get(LLM_LANG_KEY) or "unknown"
+        ).lower()
+        ind_document_type = data.get(IND_DOCUMENT_TYPE_KEY) or data.get(
+            LLM_DOCUMENT_TYPE_KEY
+        )
+        ind_section_number = data.get(IND_SECTION_NUMBER_KEY) or data.get(
+            LLM_SECTION_NUMBER_KEY
+        )
+        ind_section_title = data.get(IND_SECTION_TITLE_KEY) or data.get(
+            LLM_SECTION_TITLE_KEY
+        )
+        ind_confidence = data.get(LLM_CONFIDENCE_KEY) or data.get(
+            LLM_CONFIDENCE_FALLBACK_KEY
+        )
 
         if labels:
-            metadata["labels"] = labels
+            metadata[LABELS_KEY] = labels
         if keywords:
-            metadata["keywords"] = keywords
-        metadata["language"] = language[:10] if language else "unknown"
+            metadata[KEYWORDS_KEY] = keywords
+        metadata[LANGUAGE_KEY] = language[:10] if language else "unknown"
         if ind_document_type:
-            metadata["ind_document_type"] = str(ind_document_type).strip()
+            metadata[IND_DOCUMENT_TYPE_KEY] = str(ind_document_type).strip()
         if ind_section_number:
-            metadata["ind_section_number"] = str(ind_section_number).strip()
+            metadata[IND_SECTION_NUMBER_KEY] = str(ind_section_number).strip()
         if ind_section_title:
-            metadata["ind_section_title"] = str(ind_section_title).strip()
+            metadata[IND_SECTION_TITLE_KEY] = str(ind_section_title).strip()
         if ind_confidence is not None:
             try:
-                metadata["ind_classification_confidence"] = round(
+                metadata[IND_CLASSIFICATION_CONFIDENCE_KEY] = round(
                     float(ind_confidence), 3
                 )
             except (TypeError, ValueError):
                 pass
-        metadata["analyzed"] = True
+        metadata[ANALYZED_KEY] = True
         return metadata
 
 

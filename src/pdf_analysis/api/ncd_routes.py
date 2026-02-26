@@ -10,6 +10,15 @@ from pdf_analysis.api.constants import (
     NCD_ROUTER_PREFIX,
     NCD_ROUTER_TAGS,
 )
+from pdf_analysis.constants.metadata_keys import (
+    CLASSIFICATION_METHOD_KEY,
+    IND_CLASSIFICATION_CONFIDENCE_KEY,
+    IND_SECTION_NUMBER_KEY,
+    IND_SECTION_TITLE_KEY,
+    LABELS_KEY,
+    PAGES_SAMPLED_KEY,
+    SOURCE_KEY_KEY,
+)
 
 def _sync_server_globals_dep() -> None:
     """Refresh server globals before each request."""
@@ -205,15 +214,15 @@ async def label_s3_pdf(payload: NCDLabelRequest) -> Dict[str, Any]:
 
         dest_version_id = copy_resp.get("VersionId")
         meta_fields: Dict[str, Any] = {
-            "ind_section_number": section_number,
-            "ind_section_title": section_title,
-            "ind_classification_confidence": confidence,
-            "classification_method": method,
-            "source_key": payload.key,
-            "pages_sampled": pages_sampled,
+            IND_SECTION_NUMBER_KEY: section_number,
+            IND_SECTION_TITLE_KEY: section_title,
+            IND_CLASSIFICATION_CONFIDENCE_KEY: confidence,
+            CLASSIFICATION_METHOD_KEY: method,
+            SOURCE_KEY_KEY: payload.key,
+            PAGES_SAMPLED_KEY: pages_sampled,
         }
         if section_number:
-            meta_fields["labels"] = [f"section:{section_number}"]
+            meta_fields[LABELS_KEY] = [f"section:{section_number}"]
 
         _update_object_metadata(
             s3_client,
@@ -402,11 +411,11 @@ async def relabel_s3_pdf(payload: NCDRelabelRequest) -> Dict[str, Any]:
 
     dest_version_id = copy_resp.get("VersionId")
     meta_fields: Dict[str, Any] = {
-        "ind_section_number": payload.section_number,
-        "ind_section_title": payload.section_title or payload.section_number,
-        "classification_method": "manual",
-        "source_key": payload.key,
-        "labels": [f"section:{payload.section_number}"],
+        IND_SECTION_NUMBER_KEY: payload.section_number,
+        IND_SECTION_TITLE_KEY: payload.section_title or payload.section_number,
+        CLASSIFICATION_METHOD_KEY: "manual",
+        SOURCE_KEY_KEY: payload.key,
+        LABELS_KEY: [f"section:{payload.section_number}"],
     }
 
     _update_object_metadata(
@@ -425,7 +434,7 @@ async def relabel_s3_pdf(payload: NCDRelabelRequest) -> Dict[str, Any]:
 
     return {
         "section_number": payload.section_number,
-        "section_title": meta_fields["ind_section_title"],
+        "section_title": meta_fields[IND_SECTION_TITLE_KEY],
         "method": "manual",
         "s3": {
             "bucket": bucket,

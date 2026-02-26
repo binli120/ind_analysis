@@ -20,6 +20,12 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Iterator, Optional, Sequence
 
 from pdf_analysis.pipeline import DocxProcessingPipeline, PDFProcessingPipeline, PipelineConfig
+from pdf_analysis.constants.metadata_keys import (
+    ANALYZED_KEY,
+    KEYWORDS_KEY,
+    LABELS_KEY,
+    LANGUAGE_KEY,
+)
 from pdf_analysis.service.document_summarizer import (
     OpenAIDocumentSummarizer,
     TopicSummaryResult,
@@ -172,7 +178,7 @@ class S3RedisSyncService:
                         "Metadata generation failed for %s: %s", document.key, exc
                     )
                     metadata_fields = {}
-            metadata_fields.setdefault("analyzed", True)
+            metadata_fields.setdefault(ANALYZED_KEY, True)
 
             redis_key = self.config.redis_key_template.format(
                 company=document.company,
@@ -186,9 +192,9 @@ class S3RedisSyncService:
                 filename=document.filename,
             )
 
-            labels = metadata_fields.get("labels", [])
-            keywords = metadata_fields.get("keywords", [])
-            language = metadata_fields.get("language")
+            labels = metadata_fields.get(LABELS_KEY, [])
+            keywords = metadata_fields.get(KEYWORDS_KEY, [])
+            language = metadata_fields.get(LANGUAGE_KEY)
 
             payload = {
                 "s3_bucket": self.config.bucket,
@@ -207,11 +213,11 @@ class S3RedisSyncService:
                 "markdown": markdown,
             }
             if labels:
-                payload["labels"] = ",".join(labels)
+                payload[LABELS_KEY] = ",".join(labels)
             if keywords:
-                payload["keywords"] = ",".join(keywords)
+                payload[KEYWORDS_KEY] = ",".join(keywords)
             if language:
-                payload["language"] = language
+                payload[LANGUAGE_KEY] = language
             payload["metadata_json"] = json.dumps(metadata_fields)
             if summary_text:
                 payload["summary_text"] = summary_text
@@ -271,9 +277,9 @@ class S3RedisSyncService:
                         project=document.project,
                         module_label=document.module_label,
                         module_number=document.module_number,
-                        labels=metadata_fields.get("labels"),
-                        keywords=metadata_fields.get("keywords"),
-                        language=metadata_fields.get("language"),
+                        labels=metadata_fields.get(LABELS_KEY),
+                        keywords=metadata_fields.get(KEYWORDS_KEY),
+                        language=metadata_fields.get(LANGUAGE_KEY),
                     )
                 except Exception as exc:  # pragma: no cover - defensive
                     logger.warning(
@@ -533,16 +539,16 @@ class S3RedisSyncService:
             content_type = None
 
         new_metadata = dict(existing_metadata)
-        labels = metadata_fields.get("labels")
-        keywords = metadata_fields.get("keywords")
-        language = metadata_fields.get("language")
+        labels = metadata_fields.get(LABELS_KEY)
+        keywords = metadata_fields.get(KEYWORDS_KEY)
+        language = metadata_fields.get(LANGUAGE_KEY)
         if labels:
-            new_metadata["labels"] = ",".join(labels)
+            new_metadata[LABELS_KEY] = ",".join(labels)
         if keywords:
-            new_metadata["keywords"] = ",".join(keywords)
+            new_metadata[KEYWORDS_KEY] = ",".join(keywords)
         if language:
-            new_metadata["language"] = str(language)
-        new_metadata["analyzed"] = "true"
+            new_metadata[LANGUAGE_KEY] = str(language)
+        new_metadata[ANALYZED_KEY] = "true"
 
         copy_source: Dict[str, Any] = {
             "Bucket": self.config.bucket,

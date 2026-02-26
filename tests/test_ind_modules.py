@@ -18,6 +18,15 @@ from ind_pipeline.pdf_extraction import pdf_extraction_handler
 from ind_pipeline import pdf_extraction as pdf_extraction_module
 from ind_pipeline import zeroshot_labeling as zeroshot_module
 from ind_pipeline.zeroshot_labeling import zeroshot_handler
+from pdf_analysis.constants.metadata_keys import (
+    IND_CLASSIFICATION_CONFIDENCE_KEY,
+    IND_DOCUMENT_TYPE_KEY,
+    IND_SECTION_NUMBER_KEY,
+    IND_SECTION_TITLE_KEY,
+    KEYWORDS_KEY,
+    LABELS_KEY,
+    LANGUAGE_KEY,
+)
 
 
 class DummyResult:
@@ -110,13 +119,13 @@ def test_zeroshot_handler_smoke(monkeypatch: pytest.MonkeyPatch) -> None:
 
         def __call__(self, text: str) -> Dict[str, Any]:
             return {
-                "labels": ["ind"],
-                "keywords": ["rocket"],
-                "language": "en",
-                "ind_document_type": "summary",
-                "ind_section_number": "2.3",
-                "ind_section_title": "Quality Summary",
-                "ind_classification_confidence": 0.9,
+                LABELS_KEY: ["ind"],
+                KEYWORDS_KEY: ["rocket"],
+                LANGUAGE_KEY: "en",
+                IND_DOCUMENT_TYPE_KEY: "summary",
+                IND_SECTION_NUMBER_KEY: "2.3",
+                IND_SECTION_TITLE_KEY: "Quality Summary",
+                IND_CLASSIFICATION_CONFIDENCE_KEY: 0.9,
             }
 
     monkeypatch.setattr(zeroshot_module, "_load_analysis_document", fake_load)
@@ -129,8 +138,8 @@ def test_zeroshot_handler_smoke(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result["metadata_s3_uri"].endswith(
         "metadata/docs/proposal.classification.json"
     )
-    assert result["ind_section_number"] == "2.3"
-    assert stored_payload["metadata"]["labels"] == ["ind"]
+    assert result[IND_SECTION_NUMBER_KEY] == "2.3"
+    assert stored_payload["metadata"][LABELS_KEY] == ["ind"]
     assert result["stage"] == "zeroshot-labeling"
     assert result["status"] == "completed"
 
@@ -227,13 +236,13 @@ def test_zeroshot_publishes_next_topic(monkeypatch: pytest.MonkeyPatch) -> None:
 
         def __call__(self, text: str) -> Dict[str, Any]:
             return {
-                "labels": ["ind"],
-                "keywords": ["rocket"],
-                "language": "en",
-                "ind_document_type": "summary",
-                "ind_section_number": "2.3",
-                "ind_section_title": "Quality Summary",
-                "ind_classification_confidence": 0.9,
+                LABELS_KEY: ["ind"],
+                KEYWORDS_KEY: ["rocket"],
+                LANGUAGE_KEY: "en",
+                IND_DOCUMENT_TYPE_KEY: "summary",
+                IND_SECTION_NUMBER_KEY: "2.3",
+                IND_SECTION_TITLE_KEY: "Quality Summary",
+                IND_CLASSIFICATION_CONFIDENCE_KEY: 0.9,
             }
 
     monkeypatch.setattr(zeroshot_module, "_get_generator", lambda: FakeGenerator())
@@ -243,4 +252,4 @@ def test_zeroshot_publishes_next_topic(monkeypatch: pytest.MonkeyPatch) -> None:
     assert published
     assert published[0]["topic"] == topic_arn
     assert published[0]["message"]["stage"] == "zeroshot-labeling"
-    assert published[0]["message"]["output"]["labels"] == ["ind"]
+    assert published[0]["message"]["output"][LABELS_KEY] == ["ind"]

@@ -8,6 +8,16 @@ from __future__ import annotations
 
 import types
 
+from pdf_analysis.constants.metadata_keys import (
+    ANALYZED_KEY,
+    IND_CLASSIFICATION_CONFIDENCE_KEY,
+    IND_DOCUMENT_TYPE_KEY,
+    IND_SECTION_NUMBER_KEY,
+    IND_SECTION_TITLE_KEY,
+    KEYWORDS_KEY,
+    LABELS_KEY,
+    LANGUAGE_KEY,
+)
 from pdf_analysis.service.ai_metadata import OpenAIMetadataGenerator
 
 
@@ -27,9 +37,10 @@ class DummyClient:
 
 def test_openai_metadata_generator_extracts_ind_classification() -> None:
     payload = (
-        '{"labels":["module 1"],"keywords":["cover letter"],"language":"en",'
-        '"ind_document_type":"cover letter","ind_section_number":"1.2",'
-        '"ind_section_title":"Cover Letters","ind_confidence":0.78}'
+        f'{{"{LABELS_KEY}":["module 1"],"{KEYWORDS_KEY}":["cover letter"],'
+        f'"{LANGUAGE_KEY}":"en","{IND_DOCUMENT_TYPE_KEY}":"cover letter",'
+        f'"{IND_SECTION_NUMBER_KEY}":"1.2","{IND_SECTION_TITLE_KEY}":"Cover Letters",'
+        '"ind_confidence":0.78}'
     )
 
     generator = OpenAIMetadataGenerator()
@@ -37,11 +48,11 @@ def test_openai_metadata_generator_extracts_ind_classification() -> None:
 
     result = generator("Sample IND cover letter content referencing FDA Form 1571.")
 
-    assert result["labels"] == ["module 1"]
-    assert result["keywords"] == ["cover letter"]
-    assert result["language"] == "en"
-    assert result["ind_document_type"] == "cover letter"
-    assert result["ind_section_number"] == "1.2"
-    assert result["ind_section_title"] == "Cover Letters"
-    assert result["ind_classification_confidence"] == 0.78
-    assert result["analyzed"] is True
+    assert result[LABELS_KEY] == ["module 1"]
+    assert result[KEYWORDS_KEY] == ["cover letter"]
+    assert result[LANGUAGE_KEY] == "en"
+    assert result[IND_DOCUMENT_TYPE_KEY] == "cover letter"
+    assert result[IND_SECTION_NUMBER_KEY] == "1.2"
+    assert result[IND_SECTION_TITLE_KEY] == "Cover Letters"
+    assert result[IND_CLASSIFICATION_CONFIDENCE_KEY] == 0.78
+    assert result[ANALYZED_KEY] is True

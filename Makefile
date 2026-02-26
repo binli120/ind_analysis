@@ -1,6 +1,7 @@
 PYTHON ?= python
 POETRY ?= poetry
 BUILD_DIR ?= build
+DEV_POETRY_INSTALL_ARGS ?= --with infra
 
 S3_TO_SQS_SRC := lambda/s3_to_sqs.py
 SQS_WORKER_SRC := lambda/sqs_worker.py
@@ -13,6 +14,7 @@ help:
 	@echo "Targets:"
 	@echo "  lint             - run ruff/flake8/mypy if configured"
 	@echo "  test             - run pytest"
+	@echo "  dev-watch        - poetry install (default: --with infra), then watch/build/test/serve"
 	@echo "  package-lambdas  - build ZIPs for s3_to_sqs and sqs_worker into $(BUILD_DIR)"
 
 .PHONY: lint
@@ -30,6 +32,7 @@ dev-watch:
 	@if ! command -v entr >/dev/null 2>&1; then \
 		echo "entr is required (brew install entr or apt-get install entr)"; exit 1; \
 	fi
+	$(POETRY) install $(DEV_POETRY_INSTALL_ARGS)
 	./scripts/dev_watch.sh
 
 .PHONY: package-lambdas

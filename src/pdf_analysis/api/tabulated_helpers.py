@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import html
 import json
 import logging
@@ -98,6 +99,7 @@ __all__ = [
     "_looks_like_safety_pharmacology_text",
     "_infer_safety_organ_systems",
     "_asset_matches_safety_pharmacology",
+    "_asset_matches_primary_pharmacology",
     "_extract_safety_sentences",
     "_synthesize_safety_findings",
     "_collect_safety_context_fragments",
@@ -113,6 +115,7 @@ __all__ = [
     "_extract_overview_candidates_from_ncd",
     "_extract_overview_candidates",
     "_repair_overview_table",
+    "_align_pharmacology_tabulated_specs",
     "_tabulated_template_entries_for_section",
     "_read_table_json_preview",
     "_build_tabulated_context",
@@ -125,6 +128,105 @@ __all__ = [
     "_attach_assets_to_topic",
     "_render_table_html",
 ]
+
+_PHARMACOLOGY_263_COLUMN_OVERRIDES: Dict[str, List[str]] = {
+    "2.6.3.1": [
+        "Type of Study",
+        "Test System",
+        "Method of Administration",
+        "Testing Facility",
+        "Study Number",
+    ],
+    "2.6.3.2": [
+        "Type of Study",
+        "Species/Strain",
+        "Method of Admin.",
+        "Doses (mg/kg)",
+        "Gender and No. per Group",
+        "Noteworthy Findings",
+        "Study Number",
+    ],
+    "2.6.3.3": ["Statement"],
+    "2.6.3.4": [
+        "Organ Systems Evaluated",
+        "Species/Strain",
+        "Method of Admin.",
+        "Doses (mg/kg)",
+        "Gender and No. per Group",
+        "Noteworthy Findings",
+        "GLP Compliance",
+        "Study Number",
+    ],
+    "2.6.3.5": ["Statement"],
+}
+
+_PHARMACOLOGY_263_STATEMENTS: Dict[str, str] = {
+    "2.6.3.3": "No secondary pharmacodynamics studies were conducted.",
+    "2.6.3.5": "No pharmacodynamic drug interaction studies were conducted.",
+}
+
+
+def _align_pharmacology_tabulated_specs(
+    section: str,
+    table_specs: Sequence[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Align 2.6.3 table specs to the legacy pharmacology tabulated layout."""
+    if not section.startswith("2.6.3"):
+        return [dict(spec) for spec in table_specs]
+
+    aligned: List[Dict[str, Any]] = []
+    for spec in table_specs:
+        updated = dict(spec)
+        subsection = str(updated.get("subsection") or "").strip()
+        override_columns = _PHARMACOLOGY_263_COLUMN_OVERRIDES.get(subsection)
+        if override_columns:
+            updated["columns"] = list(override_columns)
+            updated["columns_header"] = " | ".join(override_columns)
+        aligned.append(updated)
+    return aligned
+
+
+def _populate_pharmacology_statement_tables(
+    tables: Sequence[Dict[str, Any]],
+) -> None:
+    """Populate fixed statement rows for 2.6.3 subsections represented as narrative."""
+    for table in tables:
+        if not isinstance(table, dict):
+            continue
+        subsection = str(table.get("subsection") or "").strip()
+        statement = _PHARMACOLOGY_263_STATEMENTS.get(subsection)
+        if not statement:
+            continue
+
+        columns = [str(col) for col in (table.get("columns") or []) if str(col).strip()]
+        if not columns:
+            columns = ["Statement"]
+            table["columns"] = columns
+        statement_col = next(
+            (
+                col
+                for col in columns
+                if _normalize_header_token(col) == "statement"
+            ),
+            columns[0],
+        )
+
+        rows = table.get("rows")
+        if not isinstance(rows, list):
+            rows = []
+            table["rows"] = rows
+        if any(
+            isinstance(row, dict) and any(str(value).strip() for value in row.values())
+            for row in rows
+        ):
+            continue
+
+        row = {col: "" for col in columns}
+        row[statement_col] = statement
+        table["rows"] = [row]
+        if not str(table.get("notes") or "").strip():
+            table["notes"] = statement
+
 
 def _build_section_summary_context(
     db: Session,
@@ -550,6 +652,8 @@ def _extract_study_ids(text: str) -> List[str]:
             continue
         if not STUDY_ID_RE.fullmatch(cleaned):
             continue
+        if any(ch.isalpha() for ch in cleaned):
+            cleaned = cleaned.upper()
         found.append(cleaned)
     seen = set()
     ordered: List[str] = []
@@ -570,6 +674,8 @@ def _canonical_study_number(value: str) -> str:
     parsed = _extract_study_ids(raw)
     if parsed:
         return parsed[0]
+    if any(ch.isalpha() for ch in raw):
+        raw = raw.upper()
     if STUDY_ID_SKIP_RE.match(raw):
         return ""
     # Keep numeric sponsor/report IDs (for example, "600210" or "1006-2525")
@@ -585,6 +691,136 @@ def _canonical_study_number(value: str) -> str:
     if digit_count >= 2 and alpha_count >= 2 and len(raw) >= 6:
         return raw
     return ""
+
+
+_INTERNAL_DOCUMENT_STUDY_RE = re.compile(r"^DOC-\d+-[A-F0-9]{6,}$", re.IGNORECASE)
+_EXTRACTION_PATH_RE = re.compile(
+    r"\b(?:https?://|s3://|filynai\.com/)\S+|\b\S+\.pdf(?:\.(?:tables|images))?(?:/\S+)?",
+    re.IGNORECASE,
+)
+_EXTRACTION_TRUNCATED_RE = re.compile(r"\.\.\.\[truncated\]", re.IGNORECASE)
+_PLACEHOLDER_VALUE_RE = re.compile(
+    r"^(?:n/?a|none|not reported|not available|not communicated|unknown|nil)$",
+    re.IGNORECASE,
+)
+
+
+def _extract_summary_from_structured_text(text: str) -> str:
+    """Extract nested summary text from JSON/Python-literal payload strings."""
+    if not text:
+        return ""
+    candidate = text.strip()
+    if "summary" not in candidate.lower():
+        return ""
+
+    def _extract_summary(obj: Any) -> str:
+        if isinstance(obj, dict):
+            summary = obj.get("summary")
+            if isinstance(summary, str) and summary.strip():
+                return summary.strip()
+            if isinstance(summary, dict):
+                nested = _extract_summary(summary)
+                if nested:
+                    return nested
+        return ""
+
+    original = candidate
+    for _ in range(2):
+        parsed_summary = ""
+        for parser in (json.loads, ast.literal_eval):
+            try:
+                parsed = parser(candidate)
+            except Exception:
+                continue
+            parsed_summary = _extract_summary(parsed)
+            if parsed_summary:
+                candidate = parsed_summary.strip()
+                break
+        if not parsed_summary:
+            break
+
+    if candidate and candidate != original:
+        return candidate
+
+    summary_match = re.search(
+        r"""['"]summary['"]\s*:\s*['"](.+?)['"]\s*(?:,|})""",
+        original,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if summary_match:
+        return summary_match.group(1).strip()
+    return ""
+
+
+def _clean_extracted_text(value: Any) -> str:
+    """Clean OCR/asset extraction artifacts from free text fields."""
+    text = html.unescape(str(value or ""))
+    if not text:
+        return ""
+    structured_summary = _extract_summary_from_structured_text(text)
+    if structured_summary:
+        text = structured_summary
+    text = _EXTRACTION_PATH_RE.sub(" ", text)
+    text = _EXTRACTION_TRUNCATED_RE.sub(" ", text)
+    text = re.sub(r"(?:(?<=^)|(?<=[;,\s]))\d{1,2}\s*:\s*", " ", text)
+    text = re.sub(r"\s+", " ", text).strip(" ;,")
+    return text
+
+
+def _is_noisy_extraction_fragment(value: Any) -> bool:
+    """Detect obvious extraction noise snippets that should not feed findings."""
+    text = str(value or "").strip()
+    if not text:
+        return True
+    lowered = text.lower()
+    if "pdf.tables" in lowered or "filynai.com/" in lowered or "[truncated]" in lowered:
+        return True
+    if lowered.startswith("xml files/"):
+        return True
+    return False
+
+
+def _is_placeholder_value(value: Any) -> bool:
+    """Return True when value is a placeholder rather than meaningful content."""
+    text = str(value or "").strip()
+    if not text:
+        return True
+    normalized = re.sub(r"\s+", " ", text).strip()
+    if _PLACEHOLDER_VALUE_RE.match(normalized):
+        return True
+    if re.fullmatch(r"study\s*#?:?\s*(?:n/?a|not reported)", normalized, flags=re.IGNORECASE):
+        return True
+    return False
+
+
+def _select_preferred_study_number(*values: Any) -> str:
+    """Select preferred study number, avoiding internal document IDs when possible."""
+    ordered: List[str] = []
+    for value in values:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        canonical = _canonical_study_number(text)
+        if canonical:
+            ordered.append(canonical)
+        ids = _extract_study_ids(text)
+        if ids:
+            ordered.extend(ids)
+    if not ordered:
+        return ""
+    seen: Set[str] = set()
+    deduped: List[str] = []
+    for candidate in ordered:
+        key = candidate.upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(candidate)
+    for candidate in deduped:
+        if _INTERNAL_DOCUMENT_STUDY_RE.match(candidate):
+            continue
+        return candidate
+    return deduped[0]
 
 
 def _build_study_id_candidates(context: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
@@ -656,11 +892,12 @@ def _select_study_id_from_text(
     """Select study id from text."""
     if not text:
         return None
+    parsed_ids: List[str] = []
     for study_id in _extract_study_ids(text):
+        parsed_ids.append(study_id)
         key = study_id.upper()
         if key in candidates:
             return candidates[key]["study_id"]
-        return study_id
 
     best_id = None
     best_score = 0
@@ -673,6 +910,8 @@ def _select_study_id_from_text(
                 best_id = entry.get("study_id")
     if best_id and best_score >= 70:
         return best_id
+    if parsed_ids:
+        return parsed_ids[0]
     return None
 
 
@@ -1026,13 +1265,19 @@ def _extract_ncd_study_records(
     for study in studies:
         if not isinstance(study, dict):
             continue
-        sponsor_study_id = str(study.get("sponsor_study_id") or "").strip()
-        study_number = _canonical_study_number(sponsor_study_id)
+        extra = _normalize_extra_attributes(study.get("extra_attributes"))
+        study_number = _select_preferred_study_number(
+            study.get("sponsor_study_id"),
+            study.get("study_number"),
+            extra.get("sponsor_study_number"),
+            extra.get("study_number"),
+            extra.get("study_number_display"),
+            extra.get("cro_study_number"),
+        )
         if not study_number:
             continue
         normalized_key = study_number.upper()
 
-        extra = _normalize_extra_attributes(study.get("extra_attributes"))
         source_doc_id = _first_non_empty(
             (
                 study.get("main_source_document_id"),
@@ -1632,6 +1877,210 @@ def _asset_single_study_id(asset: Dict[str, Any]) -> str:
     return deduped_asset_ids[0] if len(deduped_asset_ids) == 1 else ""
 
 
+_PRIMARY_PD_ROUTE_PATTERNS: Sequence[Tuple[str, Sequence[str]]] = (
+    ("In vitro", (r"\bin vitro\b", r"\bcell[- ]based\b", r"\belisa\b")),
+    ("Intravenous", (r"\bintravenous\b", r"\biv\b")),
+    ("Subcutaneous", (r"\bsubcutaneous\b", r"\bsc\b")),
+    ("Intraperitoneal", (r"\bintraperitoneal\b", r"\bip\b")),
+    ("Intrathecal", (r"\bintrathecal\b", r"\bit\b")),
+    ("Intraplantar", (r"\bintraplantar\b",)),
+    ("Oral", (r"\boral\b", r"\bpo\b")),
+    ("Topical", (r"\btopical\b",)),
+    ("Inhalation", (r"\binhal(?:ation|ed)\b",)),
+)
+
+_PRIMARY_PD_STRAIN_RULES: Sequence[Tuple[str, str, Sequence[str]]] = (
+    (
+        "Sprague-Dawley",
+        "Rat",
+        (
+            r"\bsprague[- ]?dawley\b",
+            r"\bsd rats?\b",
+        ),
+    ),
+    (
+        "Wistar",
+        "Rat",
+        (
+            r"\bwistar\b",
+            r"\bwistar[- ]rats?\b",
+        ),
+    ),
+    (
+        "C57BL/6",
+        "Mouse",
+        (
+            r"\bc57\s*bl\s*/?\s*6\b",
+            r"\bc57bl/?6\b",
+        ),
+    ),
+    ("DBA/2", "Mouse", (r"\bdba/?2\b",)),
+    ("CBA", "Mouse", (r"\bcba\b",)),
+    ("NMRI", "Mouse", (r"\bnmri\b",)),
+    ("CD-1", "Mouse", (r"\bcd[- ]?1\b",)),
+    ("ZDF", "Rat", (r"\bzdf\b", r"\bzucker diabetic fatty\b")),
+)
+
+_PRIMARY_PD_SPECIES_RULES: Sequence[Tuple[str, Sequence[str]]] = (
+    ("Cynomolgus monkey", (r"\bcynomolgus\b",)),
+    ("Monkey", (r"\bmonkeys?\b", r"\bnon[- ]human primates?\b")),
+    ("Dog", (r"\bdogs?\b", r"\bbeagles?\b")),
+    ("Rabbit", (r"\brabbits?\b",)),
+    ("Rat", (r"\brats?\b",)),
+    ("Mouse", (r"\bmice\b", r"\bmouse\b")),
+    ("Human whole blood (in vitro)", (r"\bhuman whole blood\b",)),
+)
+
+_PRIMARY_PD_DOSE_SERIES_RE = re.compile(
+    r"\b((?:\d+(?:\.\d+)?\s*(?:,|and|or)\s*)+\d+(?:\.\d+)?)\s*"
+    r"(mg|ug|g)\s*/\s*kg\b",
+    re.IGNORECASE,
+)
+_PRIMARY_PD_DOSE_SINGLE_RE = re.compile(
+    r"\b(\d+(?:\.\d+)?)\s*(mg|ug|g)\s*/\s*kg\b",
+    re.IGNORECASE,
+)
+_PRIMARY_PD_ABSOLUTE_DOSE_RE = re.compile(
+    r"\b(\d+(?:\.\d+)?)\s*(ug|mg)\b\s*(?:intrathecal|it)\b",
+    re.IGNORECASE,
+)
+_PRIMARY_PD_GROUP_PATTERNS: Sequence[re.Pattern[str]] = (
+    re.compile(r"\bn\s*=\s*(\d+)\b", re.IGNORECASE),
+    re.compile(r"\b(\d+)\s*(?:animals?|rats?|mice|monkeys?|dogs?)\s*/\s*group\b", re.IGNORECASE),
+    re.compile(r"\b(\d+)\s*per\s*group\b", re.IGNORECASE),
+)
+
+
+def _infer_method_of_administration(*values: Any) -> str:
+    """Infer administration route from free text."""
+    text = " ".join(str(value or "") for value in values if str(value or "").strip())
+    if not text:
+        return ""
+    lowered = text.lower()
+    routes: List[str] = []
+    for label, patterns in _PRIMARY_PD_ROUTE_PATTERNS:
+        if any(re.search(pattern, lowered) for pattern in patterns):
+            routes.append(label)
+    seen: Set[str] = set()
+    ordered: List[str] = []
+    for route in routes:
+        key = route.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(route)
+    return "; ".join(ordered)
+
+
+def _infer_species_strain_from_text(*values: Any) -> str:
+    """Infer species/strain from free text."""
+    text = " ".join(str(value or "") for value in values if str(value or "").strip())
+    if not text:
+        return ""
+    lowered = text.lower()
+    strains: List[str] = []
+    inferred_species = ""
+    for strain, species, patterns in _PRIMARY_PD_STRAIN_RULES:
+        if any(re.search(pattern, lowered) for pattern in patterns):
+            strains.append(strain)
+            if not inferred_species:
+                inferred_species = species
+    species = inferred_species
+    for label, patterns in _PRIMARY_PD_SPECIES_RULES:
+        if any(re.search(pattern, lowered) for pattern in patterns):
+            species = label
+            break
+    if not species:
+        return ""
+    if strains:
+        unique_strains: List[str] = []
+        seen: Set[str] = set()
+        for strain in strains:
+            key = strain.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_strains.append(strain)
+        return f"{species} ({', '.join(unique_strains)})"
+    return species
+
+
+def _infer_dose_summary_from_text(*values: Any) -> str:
+    """Infer dose summary from free text."""
+    text = " ".join(str(value or "") for value in values if str(value or "").strip())
+    if not text:
+        return ""
+    doses: List[str] = []
+    seen: Set[str] = set()
+
+    def _add_dose(number_text: str, unit: str, *, per_kg: bool = True) -> None:
+        compact = _format_metric_value(number_text)
+        if not compact:
+            return
+        normalized_unit = unit.lower()
+        suffix = f"{normalized_unit}/kg" if per_kg else normalized_unit
+        dose = f"{compact} {suffix}"
+        key = dose.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        doses.append(dose)
+
+    for match in _PRIMARY_PD_DOSE_SERIES_RE.finditer(text):
+        number_series = str(match.group(1) or "")
+        unit = str(match.group(2) or "")
+        for part in re.split(r"\s*(?:,|and|or)\s*", number_series):
+            if not part:
+                continue
+            _add_dose(part, unit, per_kg=True)
+
+    for number_text, unit in _PRIMARY_PD_DOSE_SINGLE_RE.findall(text):
+        _add_dose(number_text, unit, per_kg=True)
+
+    for number_text, unit in _PRIMARY_PD_ABSOLUTE_DOSE_RE.findall(text):
+        _add_dose(number_text, unit, per_kg=False)
+
+    return ", ".join(doses)
+
+
+def _infer_group_size_from_text(*values: Any) -> str:
+    """Infer sex and n/group from free text."""
+    text = " ".join(str(value or "") for value in values if str(value or "").strip())
+    if not text:
+        return ""
+    lowered = text.lower()
+    sex_label = ""
+    has_male = bool(re.search(r"\bmale\b", lowered))
+    has_female = bool(re.search(r"\bfemale\b", lowered))
+    if has_male and has_female:
+        sex_label = "Male/Female"
+    elif has_male:
+        sex_label = "Male"
+    elif has_female:
+        sex_label = "Female"
+
+    group_sizes: List[str] = []
+    seen_sizes: Set[str] = set()
+    for pattern in _PRIMARY_PD_GROUP_PATTERNS:
+        for match in pattern.findall(text):
+            size = str(match or "").strip()
+            if not size or size in seen_sizes:
+                continue
+            seen_sizes.add(size)
+            group_sizes.append(size)
+
+    if sex_label and len(group_sizes) == 1:
+        return f"{sex_label}, n={group_sizes[0]}/group"
+    if sex_label and group_sizes:
+        joined = ", ".join(f"n={size}/group" for size in group_sizes[:3])
+        return f"{sex_label}; {joined}"
+    if group_sizes:
+        return ", ".join(f"n={size}/group" for size in group_sizes[:3])
+    if sex_label:
+        return sex_label
+    return ""
+
+
 def _infer_primary_pd_endpoints(*values: Any) -> str:
     """Infer primary pd endpoints."""
     text = " ".join(str(value or "") for value in values if str(value or "").strip())
@@ -1740,12 +2189,47 @@ def _asset_matches_safety_pharmacology(asset: Dict[str, Any]) -> bool:
     return "safety pharmacology" in blob.lower()
 
 
+def _asset_matches_primary_pharmacology(asset: Dict[str, Any]) -> bool:
+    """Asset matches primary pharmacology content (Module 4.2.1.1)."""
+    if not isinstance(asset, dict):
+        return False
+    extra = (
+        asset.get("extra_attributes") if isinstance(asset.get("extra_attributes"), dict) else {}
+    )
+    parts: List[str] = [
+        str(asset.get("s3_key") or ""),
+        str(asset.get("json_key") or ""),
+        str(asset.get("caption") or ""),
+        str(asset.get("description") or ""),
+        str(extra.get("section_number") or ""),
+        str(extra.get("module4_section") or ""),
+        str(extra.get("section_title") or ""),
+    ]
+    keywords = asset.get("keywords") or []
+    if isinstance(keywords, list):
+        parts.extend(str(item) for item in keywords if item)
+    blob = " ".join(part for part in parts if part).strip()
+    if not blob:
+        return False
+    lowered = blob.lower()
+    if _gap_key_mentions_module4_section(blob, "4.2.1.1"):
+        return True
+    return "primary pharmacodynamics" in lowered or "primary pharmacology" in lowered
+
+
 def _extract_safety_sentences(text: str, max_parts: int = 4) -> List[str]:
     """Extract safety sentences."""
     parts: List[str] = []
-    for chunk in re.split(r"(?<=[.!?])\s+|\s*;\s*", str(text or "").strip()):
-        cleaned = chunk.strip(" ;")
+    source_text = _clean_extracted_text(text)
+    if not source_text:
+        return parts
+    for chunk in re.split(r"(?<=[.!?])\s+|\s*;\s*", source_text):
+        cleaned = _clean_extracted_text(chunk)
         if not cleaned:
+            continue
+        if _is_noisy_extraction_fragment(cleaned):
+            continue
+        if sum(1 for ch in cleaned if ch.isalpha()) < 5:
             continue
         parts.append(cleaned)
         if len(parts) >= max_parts:
@@ -1893,6 +2377,29 @@ def _merge_safety_candidate_records(
     return [*ordered, *passthrough]
 
 
+def _row_non_study_quality_score(
+    row: Dict[str, Any],
+    columns: Sequence[str],
+    *,
+    study_col: Optional[str],
+) -> int:
+    """Score row quality by counting meaningful non-study values."""
+    score = 0
+    for col in columns:
+        if study_col and col == study_col:
+            continue
+        text = str(row.get(col) or "").strip()
+        if not text:
+            continue
+        token = _normalize_header_token(col)
+        if token == "glp compliance" and text.lower() == "not reported":
+            continue
+        if _is_placeholder_value(text):
+            continue
+        score += 1
+    return score
+
+
 def _rows_from_token_candidates(
     columns: Sequence[str], candidates: Sequence[Dict[str, str]]
 ) -> List[Dict[str, str]]:
@@ -1911,6 +2418,13 @@ def _rows_from_token_candidates(
                 row[str(col)] = value
         if not any(str(value).strip() for value in row.values()):
             continue
+        quality_score = _row_non_study_quality_score(
+            row,
+            columns,
+            study_col=study_col,
+        )
+        if quality_score == 0:
+            continue
         if not study_col:
             passthrough_rows.append(row)
             continue
@@ -1920,7 +2434,7 @@ def _rows_from_token_candidates(
             continue
         canonical_id = parsed_ids[0]
         row[study_col] = canonical_id
-        score = sum(1 for value in row.values() if str(value).strip())
+        score = quality_score
         current = deduped.get(canonical_id)
         if current is None or score > int(current.get("_score", 0)):
             row_with_score = dict(row)
@@ -1939,6 +2453,7 @@ def _rows_from_token_candidates(
 def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, str]]:
     """Extract primary pd candidates."""
     candidates: List[Dict[str, str]] = []
+    study_id_candidates = _build_study_id_candidates(context)
     ncd_records = _extract_ncd_study_records(context, module4_section="4.2.1.1")
     if ncd_records:
         payload = context.get("ncd_payload") or {}
@@ -1955,7 +2470,7 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
             extra = record.get("extra") if isinstance(record.get("extra"), dict) else {}
             study_id = str(record.get("study_id") or "").strip()
             study_dose_groups = dose_groups_by_study.get(study_id, [])
-            dose_text, _ = _render_dose_group_summary(study_dose_groups)
+            dose_text, sex_group_text = _render_dose_group_summary(study_dose_groups)
             study_number = str(record.get("study_number") or "").strip()
             location_in_ctd = str(record.get("location_in_ctd") or "")
             location_title = _extract_location_title(location_in_ctd)
@@ -1964,9 +2479,7 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
                 if not isinstance(source, dict):
                     continue
                 section_number = str(source.get("section_number") or "").strip()
-                if section_number and not section_number_matches(section_number, "4.2.1.1"):
-                    continue
-                summary_text = str(source.get("summary_text") or "").strip()
+                summary_text = _clean_extracted_text(source.get("summary_text"))
                 if not summary_text:
                     continue
                 source_blob = " ".join(
@@ -1979,12 +2492,32 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
                     )
                     if part
                 )
-                source_ids = _extract_study_ids(source_blob)
-                if source_ids and study_number and not any(
-                    _study_numbers_overlap(sid, study_number) for sid in source_ids
+                if section_number:
+                    if not section_number_matches(section_number, "4.2.1.1"):
+                        continue
+                elif not (
+                    _gap_key_mentions_module4_section(source_blob, "4.2.1.1")
+                    or "primary pharmacodynamics" in source_blob.lower()
+                    or "primary pharmacology" in source_blob.lower()
                 ):
                     continue
-                context_fragments.extend(_extract_safety_sentences(summary_text, max_parts=2))
+                source_ids = _extract_study_ids(source_blob)
+                if source_ids:
+                    if study_number and not any(
+                        _study_numbers_overlap(sid, study_number) for sid in source_ids
+                    ):
+                        continue
+                else:
+                    title_tokens = {
+                        token for token in _tokenize_text(location_title) if len(token) > 3
+                    }
+                    source_tokens = _tokenize_text(source_blob)
+                    if not title_tokens:
+                        continue
+                    if len(title_tokens & source_tokens) < min(3, len(title_tokens)):
+                        continue
+                context_fragments.extend(_extract_safety_sentences(summary_text, max_parts=4))
+            context_blob = "; ".join(context_fragments)
             glp_text = _first_non_empty(
                 (
                     str(record.get("glp_compliance") or ""),
@@ -2000,7 +2533,7 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
                         extra.get("noteworthy_findings") if extra else "",
                         extra.get("findings") if extra else "",
                         location_title,
-                        "; ".join(context_fragments),
+                        context_blob,
                     ),
                 )
             )
@@ -2013,10 +2546,11 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
                         extra.get("study_title") if extra else "",
                         extra.get("title") if extra else "",
                         location_title,
-                        "; ".join(context_fragments),
+                        context_blob,
                     ),
                 )
             )
+            endpoints_text = _clean_extracted_text(endpoints_text)
             findings_text = _first_non_empty(
                 (
                     extra.get("key_findings") if extra else "",
@@ -2024,38 +2558,110 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
                     extra.get("findings") if extra else "",
                     extra.get("result_summary") if extra else "",
                     _infer_primary_pd_findings(
-                        "; ".join(context_fragments),
+                        context_blob,
                         location_title,
                         endpoints_text,
                     ),
                 )
             )
+            findings_text = _clean_extracted_text(findings_text)
             if not glp_text:
                 glp_text = "Not reported"
+            type_of_study = _first_non_empty(
+                (
+                    extra.get("type_of_study") if extra else "",
+                    record.get("type_of_study"),
+                    extra.get("study_title") if extra else "",
+                    extra.get("title") if extra else "",
+                )
+            )
+            type_of_study = _clean_extracted_text(type_of_study)
+            test_system_value = _first_non_empty(
+                (
+                    record.get("test_system"),
+                    f"{record.get('species')}; {record.get('strain')}"
+                    if record.get("species") and record.get("strain")
+                    else "",
+                    record.get("species"),
+                )
+            )
+            test_system_value = _clean_extracted_text(test_system_value)
+            if _is_placeholder_value(test_system_value):
+                test_system_value = ""
+            if not test_system_value:
+                test_system_value = _infer_species_strain_from_text(
+                    extra.get("study_title") if extra else "",
+                    extra.get("title") if extra else "",
+                    location_title,
+                    context_blob,
+                )
+            method_value = _clean_extracted_text(record.get("method_of_administration"))
+            if _is_placeholder_value(method_value):
+                method_value = ""
+            if not method_value:
+                method_value = _infer_method_of_administration(
+                    extra.get("method_of_administration") if extra else "",
+                    extra.get("route_of_administration") if extra else "",
+                    extra.get("route") if extra else "",
+                    extra.get("study_title") if extra else "",
+                    extra.get("title") if extra else "",
+                    location_title,
+                    context_blob,
+                )
+            dose_value = _first_non_empty(
+                (
+                    extra.get("dose_concentration") if extra else "",
+                    extra.get("dose_levels") if extra else "",
+                    extra.get("dose_level") if extra else "",
+                    extra.get("dose") if extra else "",
+                    dose_text,
+                )
+            )
+            dose_value = _clean_extracted_text(dose_value)
+            if _is_placeholder_value(dose_value):
+                dose_value = ""
+            if not dose_value:
+                dose_value = _infer_dose_summary_from_text(
+                    extra.get("dose_concentration") if extra else "",
+                    extra.get("dose_levels") if extra else "",
+                    extra.get("dose_level") if extra else "",
+                    extra.get("dose") if extra else "",
+                    extra.get("study_title") if extra else "",
+                    extra.get("title") if extra else "",
+                    location_title,
+                    context_blob,
+                )
+            group_value = _first_non_empty(
+                (
+                    extra.get("gender_group") if extra else "",
+                    extra.get("sex_and_n_per_group") if extra else "",
+                    sex_group_text,
+                )
+            )
+            group_value = _clean_extracted_text(group_value)
+            if _is_placeholder_value(group_value):
+                group_value = ""
+            if not group_value:
+                group_value = _infer_group_size_from_text(
+                    extra.get("gender_group") if extra else "",
+                    extra.get("sex_and_n_per_group") if extra else "",
+                    extra.get("study_title") if extra else "",
+                    extra.get("title") if extra else "",
+                    location_title,
+                    context_blob,
+                )
+            location_in_ctd = _clean_extracted_text(location_in_ctd)
             candidates.append(
                 {
                     "study number": study_number,
-                    "species strain or test system": _first_non_empty(
-                        (
-                            record.get("test_system"),
-                            f"{record.get('species')}; {record.get('strain')}"
-                            if record.get("species") and record.get("strain")
-                            else "",
-                            record.get("species"),
-                        )
-                    ),
-                    "method of administration": str(
-                        record.get("method_of_administration") or ""
-                    ),
-                    "dose concentration": _first_non_empty(
-                        (
-                            extra.get("dose_concentration") if extra else "",
-                            extra.get("dose_levels") if extra else "",
-                            extra.get("dose_level") if extra else "",
-                            extra.get("dose") if extra else "",
-                            dose_text,
-                        )
-                    ),
+                    "type of study": type_of_study,
+                    "species strain or test system": test_system_value,
+                    "species strain": test_system_value,
+                    "method of administration": method_value,
+                    "method of admin": method_value,
+                    "dose concentration": dose_value,
+                    "doses": dose_value,
+                    "gender and no per group": group_value,
                     "endpoints assays": endpoints_text,
                     "noteworthy findings": findings_text,
                     "glp compliance": glp_text,
@@ -2074,6 +2680,8 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
         candidate_by_study[key] = candidate
 
     for asset in context.get("table_assets", []) or []:
+        if not _asset_matches_primary_pharmacology(asset):
+            continue
         asset_blob = " ".join(
             str(part)
             for part in (
@@ -2098,11 +2706,16 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
                 canonical_id = asset_study_id
             if not canonical_id:
                 continue
+            normalized_id = _select_study_id_from_text(canonical_id, study_id_candidates)
+            if normalized_id:
+                canonical_id = normalized_id
             row_blob = " ".join(
-                f"{str(key)}: {str(value or '').strip()}"
+                f"{str(key)}: {_clean_extracted_text(value)}"
                 for key, value in row.items()
-                if str(value or "").strip()
+                if _clean_extracted_text(value)
             )
+            if not row_blob or _is_noisy_extraction_fragment(row_blob):
+                continue
             type_text = _pick_first_value(
                 row,
                 key_map,
@@ -2120,6 +2733,13 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
             )
             method_text = _pick_first_value(row, key_map, "method of administration")
             dose_text = _pick_first_value(row, key_map, "dose concentration", "doses")
+            gender_text = _pick_first_value(
+                row,
+                key_map,
+                "gender and no per group",
+                "gender",
+                "sex",
+            )
             endpoints_text = _pick_first_value(
                 row,
                 key_map,
@@ -2136,10 +2756,19 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
                 "findings",
                 "result summary",
             )
+            type_text = _clean_extracted_text(type_text)
+            species_text = _clean_extracted_text(species_text)
+            method_text = _clean_extracted_text(method_text)
+            dose_text = _clean_extracted_text(dose_text)
+            gender_text = _clean_extracted_text(gender_text)
+            endpoints_text = _clean_extracted_text(endpoints_text)
+            findings_text = _clean_extracted_text(findings_text)
             if not endpoints_text:
                 endpoints_text = _infer_primary_pd_endpoints(row_blob, asset_blob)
             if not findings_text:
                 findings_text = _infer_primary_pd_findings(row_blob, asset_blob, endpoints_text)
+            findings_text = _clean_extracted_text(findings_text)
+            endpoints_text = _clean_extracted_text(endpoints_text)
             glp_text = _first_non_empty(
                 (
                     _normalize_glp_value(_pick_first_value(row, key_map, "glp compliance")),
@@ -2149,6 +2778,7 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
             if not glp_text:
                 glp_text = "Not reported"
             location_text = _pick_first_value(row, key_map, "location in ctd")
+            location_text = _clean_extracted_text(location_text)
             if not any(
                 text
                 for text in (
@@ -2160,6 +2790,7 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
                     findings_text,
                     glp_text,
                     location_text,
+                    gender_text,
                 )
             ):
                 continue
@@ -2168,9 +2799,14 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
                 dose_text = str(row.get(doses_key or "") or "").strip()
             asset_candidate = {
                 "study number": canonical_id,
+                "type of study": type_text,
                 "species strain or test system": species_text,
+                "species strain": species_text,
                 "method of administration": method_text,
+                "method of admin": method_text,
                 "dose concentration": dose_text,
+                "doses": dose_text,
+                "gender and no per group": gender_text,
                 "endpoints assays": endpoints_text,
                 "noteworthy findings": findings_text,
                 "glp compliance": glp_text,
@@ -2192,10 +2828,13 @@ def _extract_primary_pd_candidates(context: Dict[str, Any]) -> List[Dict[str, st
                 if not text:
                     continue
                 current = str(existing.get(field) or "").strip()
-                if not current:
+                if not current or _is_placeholder_value(current):
                     existing[field] = text
                     continue
                 if field in {"dose concentration", "endpoints assays", "noteworthy findings"}:
+                    if current.lower() != text.lower():
+                        existing[field] = _merge_text_segments(current, text)
+                elif field == "type of study":
                     if current.lower() != text.lower():
                         existing[field] = _merge_text_segments(current, text)
                 elif field == "glp compliance":
@@ -2243,6 +2882,7 @@ def _extract_safety_pharmacology_candidates(
 ) -> List[Dict[str, str]]:
     """Extract safety pharmacology candidates."""
     candidates: List[Dict[str, str]] = []
+    study_id_candidates = _build_study_id_candidates(context)
     ncd_records = _extract_ncd_study_records(context, module4_section="4.2.1.3")
     if ncd_records:
         payload = context.get("ncd_payload") or {}
@@ -2415,6 +3055,10 @@ def _extract_safety_pharmacology_candidates(
             study_number = _pick_first_value(row, key_map, "study number")
             if not study_number:
                 continue
+            normalized_study_number = (
+                _select_study_id_from_text(study_number, study_id_candidates)
+                or study_number.strip()
+            )
             row_blob = " ".join(
                 f"{str(key)}: {str(value or '').strip()}"
                 for key, value in row.items()
@@ -2449,7 +3093,7 @@ def _extract_safety_pharmacology_candidates(
                         row, key_map, "noteworthy findings"
                     ),
                     "glp compliance": glp_text,
-                    "study number": study_number.strip(),
+                    "study number": normalized_study_number,
                     "location in ctd": _pick_first_value(row, key_map, "location in ctd"),
                 }
             )
@@ -2625,28 +3269,29 @@ def _extract_overview_candidates(context: Dict[str, Any]) -> List[Dict[str, str]
         ncd_ids.add(key)
 
     # Fallback study IDs are provided by context when extracted study records are not
-    # available; include these so invalid table IDs can still be repaired.
-    for study_number in context.get("ncd_study_ids", []) or []:
-        value = str(study_number or "").strip()
-        if not value:
-            continue
-        canonical = _canonical_study_number(value)
-        normalized = canonical or value
-        key = normalized.upper()
-        if key in seen:
-            continue
-        candidates.append(
-            {
-                "type_of_study": "",
-                "test_system": "",
-                "method_of_administration": "",
-                "testing_facility": "",
-                "location_in_ctd": "",
-                "study_number": normalized,
-            }
-        )
-        seen.add(key)
-        ncd_ids.add(key)
+    # available; avoid mixing low-fidelity IDs into otherwise complete NCD records.
+    if not ncd_ids:
+        for study_number in context.get("ncd_study_ids", []) or []:
+            value = str(study_number or "").strip()
+            if not value:
+                continue
+            canonical = _canonical_study_number(value)
+            normalized = canonical or value
+            key = normalized.upper()
+            if key in seen:
+                continue
+            candidates.append(
+                {
+                    "type_of_study": "",
+                    "test_system": "",
+                    "method_of_administration": "",
+                    "testing_facility": "",
+                    "location_in_ctd": "",
+                    "study_number": normalized,
+                }
+            )
+            seen.add(key)
+            ncd_ids.add(key)
 
     logger.debug(
         "overview: table_assets=%s preview_rows_total=%s section_sources=%s",
@@ -3119,7 +3764,22 @@ def _build_tabulated_context(
         asset_type="table",
     )
 
-    s3_client = _boto3_client("s3")
+    s3_client: Any = None
+    s3_unavailable = False
+    try:
+        s3_client = _boto3_client("s3")
+    except HTTPException as exc:
+        detail_text = str(getattr(exc, "detail", "") or "")
+        if exc.status_code == 500 and "boto3 is required for S3 operations" in detail_text:
+            s3_unavailable = True
+            logger.warning(
+                "tabulated ctx: boto3 unavailable; proceeding without S3 table previews/listing "
+                "(section=%s project=%s)",
+                section,
+                project_id,
+            )
+        else:
+            raise
     s3_listing_keys: List[str] = []
     table_assets: List[Dict[str, Any]] = []
     selected_assets: List[Dict[str, Any]] = []
@@ -3147,12 +3807,17 @@ def _build_tabulated_context(
         extra = _normalize_extra_attributes(row.get("extra_attributes"))
         json_key = extra.get("json_key")
         preview_rows: List[Dict[str, Any]] = []
-        if json_key:
+        if json_key and s3_client is not None:
             preview_rows = _read_table_json_preview(
                 s3_client,
                 bucket=row.get("s3_bucket") or bucket,
                 key=json_key,
                 max_rows=max_table_rows,
+            )
+        elif json_key and s3_client is None:
+            logger.debug(
+                "tabulated ctx: skipping preview_rows for asset %s because S3 client is unavailable",
+                row.get("id"),
             )
         else:
             logger.debug(
@@ -3189,18 +3854,19 @@ def _build_tabulated_context(
             }
         )
 
-    s3_listing_keys = _list_module4_study_keys(
-        s3_client,
-        bucket=bucket,
-        project_name=project_name,
-        module4_sections=module4_sections,
-        seeds=[
-            *(asset.get("s3_key") for asset in table_assets if asset.get("s3_key")),
-            *(source.get("s3_key") for source in sources if source.get("s3_key")),
-            *document_keys,
-            *project_document_keys,
-        ],
-    )
+    if s3_client is not None:
+        s3_listing_keys = _list_module4_study_keys(
+            s3_client,
+            bucket=bucket,
+            project_name=project_name,
+            module4_sections=module4_sections,
+            seeds=[
+                *(asset.get("s3_key") for asset in table_assets if asset.get("s3_key")),
+                *(source.get("s3_key") for source in sources if source.get("s3_key")),
+                *document_keys,
+                *project_document_keys,
+            ],
+        )
 
     template_entries = _tabulated_template_entries_for_section(section)
     table_specs: List[Dict[str, Any]] = []
@@ -3237,6 +3903,7 @@ def _build_tabulated_context(
             table_specs,
             target_sections=mapped_target_sections,
         )
+    table_specs = _align_pharmacology_tabulated_specs(section, table_specs)
 
     preview_row_total = sum(
         len(asset.get("preview_rows") or []) for asset in table_assets
@@ -3261,6 +3928,10 @@ def _build_tabulated_context(
     if fallback_section:
         warnings.append(
             f"No mapping for {section}; using {fallback_section} module sections."
+        )
+    if s3_unavailable:
+        warnings.append(
+            "boto3 unavailable; skipped S3 table preview retrieval and study-key listing."
         )
     ncd_studies_count = len(ncd_payload.get("studies") or [])
     ncd_source_documents_count = len(ncd_payload.get("source_documents") or [])
@@ -3355,6 +4026,7 @@ def _merge_tabulated_tables(
                 "notes": existing.get("notes") or "",
             }
         )
+    _populate_pharmacology_statement_tables(merged)
     return merged
 
 
