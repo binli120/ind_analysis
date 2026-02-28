@@ -1,10 +1,10 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """
 @author: Bin Lee
-@email: blee@filynai.com
+@email: blee@longooc.com
 
 Centralized logging helpers shared across scripts and services.
 """

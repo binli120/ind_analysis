@@ -1,6 +1,6 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """Unit tests for pdf_analysis.api.server helpers."""
 
@@ -177,15 +177,15 @@ def test_split_text_for_embedding_without_tokenizer_keeps_short_text(
 
 def test_gap_key_mentions_module4_section(server: Any) -> None:
     assert server._gap_key_mentions_module4_section(
-        "filynai.com/demo/4.2.1.1/report.pdf",
+        "longooc.com/demo/4.2.1.1/report.pdf",
         "4.2.1.1",
     )
     assert server._gap_key_mentions_module4_section(
-        "filynai.com/demo/4211-primary-pd/report.pdf",
+        "longooc.com/demo/4211-primary-pd/report.pdf",
         "4.2.1.1",
     )
     assert not server._gap_key_mentions_module4_section(
-        "filynai.com/demo/4.2.2.1/report.pdf",
+        "longooc.com/demo/4.2.2.1/report.pdf",
         "4.2.1.1",
     )
 
@@ -909,7 +909,7 @@ def test_extract_safety_candidates_reads_report_study_no_and_infers_organ_system
         "table_assets": [
             {
                 "s3_key": (
-                    "filynai.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
+                    "longooc.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
                     "4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/report.pdf.tables/1.json"
                 ),
                 "caption": "",
@@ -982,7 +982,7 @@ def test_extract_primary_pd_candidates_infers_glp_from_qa_statement(
         "table_assets": [
             {
                 "s3_key": (
-                    "filynai.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
+                    "longooc.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
                     "4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/report.pdf.tables/1.json"
                 ),
                 "caption": "",
@@ -1013,7 +1013,7 @@ def test_extract_primary_pd_candidates_ignores_safety_assets(server: Any) -> Non
         "table_assets": [
             {
                 "s3_key": (
-                    "filynai.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
+                    "longooc.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
                     "4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/report.pdf.tables/1.json"
                 ),
                 "caption": "Safety pharmacology summary",
@@ -1044,7 +1044,7 @@ def test_extract_primary_pd_candidates_strips_path_artifacts_from_findings(
         "table_assets": [
             {
                 "s3_key": (
-                    "filynai.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
+                    "longooc.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
                     "4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/report.pdf.tables/1.json"
                 ),
                 "caption": "Primary pharmacology summary",
@@ -1054,7 +1054,7 @@ def test_extract_primary_pd_candidates_strips_path_artifacts_from_findings(
                     {
                         "Study Number": "LT3114-PHA-006-R",
                         "Noteworthy Findings": (
-                            "filynai.com/demo/report.pdf.tables/input.p1.t1.csv ...[truncated]; "
+                            "longooc.com/demo/report.pdf.tables/input.p1.t1.csv ...[truncated]; "
                             "0: LT3114 significantly reduced pain behavior versus control."
                         ),
                         "GLP Compliance": "Non-GLP",
@@ -1068,7 +1068,7 @@ def test_extract_primary_pd_candidates_strips_path_artifacts_from_findings(
     candidates = server._extract_primary_pd_candidates(context)
     assert len(candidates) == 1
     findings = candidates[0]["noteworthy findings"].lower()
-    assert "filynai.com" not in findings
+    assert "longooc.com" not in findings
     assert "truncated" not in findings
     assert "reduced pain behavior" in findings
 
@@ -1144,7 +1144,7 @@ def test_extract_primary_pd_candidates_replaces_placeholder_with_asset_value(
         "table_assets": [
             {
                 "s3_key": (
-                    "filynai.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
+                    "longooc.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
                     "4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/report.pdf.tables/1.json"
                 ),
                 "caption": "Primary pharmacology summary",
@@ -1219,7 +1219,7 @@ def test_repair_primary_pd_table_merges_asset_fields_for_existing_ncd_row(
         "table_assets": [
             {
                 "s3_key": (
-                    "filynai.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
+                    "longooc.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
                     "4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/report.pdf.tables/3.json"
                 ),
                 "caption": "Primary pharmacology summary",
@@ -1298,7 +1298,7 @@ def test_repair_primary_pd_table_uses_asset_study_id_when_row_lacks_study_number
         "table_assets": [
             {
                 "s3_key": (
-                    "filynai.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
+                    "longooc.com/demo/Module 4 Nonclinical Study Reports/4.2 Study Reports/"
                     "4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/RP-PC-22.pdf.tables/1.json"
                 ),
                 "caption": "RP-PC-22 efficacy table",

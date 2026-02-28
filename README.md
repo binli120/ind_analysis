@@ -1,6 +1,6 @@
-@copyright filynai.com
+@copyright longooc.com
 @author: Bin Lee
-@email: blee@filynai.com
+@email: blee@longooc.com
 
 # Project Vision
 
@@ -249,12 +249,12 @@ export USER_UUID="00000000-0000-0000-0000-000000000000"
 LLM_MODEL_NAME=gpt-4.1-mini \
 poetry run python scripts/ingest_module4_batch.py \
   --bucket doc-repository-dev \
-  --company filynai.com \
+  --company longooc.com \
   --project "${PROJECT_NAME}" \
   --project-id "${PROJECT_UUID}" \
   --tenant-id "${TENANT_UUID}" \
   --created-by "${USER_UUID}" \
-  --prefix "filynai.com/${PROJECT_NAME}/" \
+  --prefix "longooc.com/${PROJECT_NAME}/" \
   --all-modules \
   --mode core \
   --force-core \
@@ -276,7 +276,7 @@ poetry run python scripts/ingest_module4_batch.py \
 ```shell
 poetry run python scripts/s3_sync.py \
   --bucket doc-repository-dev \
-  --company filynai.com \
+  --company longooc.com \
   --projects "${PROJECT_NAME}" \
   --modules 1,2,3,4,5 \
   --ai-metadata \
@@ -290,12 +290,12 @@ LANGCHAIN_TRACING_V2=false LANGCHAIN_API_KEY= \
 LLM_MODEL_NAME=gpt-4.1-mini \
 poetry run python scripts/ingest_module4_batch.py \
   --bucket doc-repository-dev \
-  --company filynai.com \
+  --company longooc.com \
   --project "${PROJECT_NAME}" \
   --project-id "${PROJECT_UUID}" \
   --tenant-id "${TENANT_UUID}" \
   --created-by "${USER_UUID}" \
-  --prefix "filynai.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/" \
+  --prefix "longooc.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/" \
   --mode core \
   --run-langchain --force-langchain \
   --core-table-engines pdfplumber,camelot \
@@ -318,12 +318,12 @@ LANGCHAIN_TRACING_V2=false LANGCHAIN_API_KEY= \
 LLM_MODEL_NAME=gpt-4.1-mini \
 poetry run python scripts/ingest_module4_batch.py \
   --bucket doc-repository-dev \
-  --company filynai.com \
+  --company longooc.com \
   --project "${PROJECT_NAME}" \
   --project-id "${PROJECT_UUID}" \
   --tenant-id "${TENANT_UUID}" \
   --created-by "${USER_UUID}" \
-  --prefix "filynai.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/4.2 Study reports/" \
+  --prefix "longooc.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/4.2 Study reports/" \
   --mode core \
   --no-force-core \
   --no-context \
@@ -342,12 +342,12 @@ LANGCHAIN_TRACING_V2=false LANGCHAIN_API_KEY= \
 LLM_MODEL_NAME=gpt-4.1-mini \
 poetry run python scripts/ingest_module4_batch.py \
   --bucket doc-repository-dev \
-  --company filynai.com \
+  --company longooc.com \
   --project "${PROJECT_NAME}" \
   --project-id "${PROJECT_UUID}" \
   --tenant-id "${TENANT_UUID}" \
   --created-by "${USER_UUID}" \
-  --prefix "filynai.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/" \
+  --prefix "longooc.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/" \
   --mode core \
   --no-force-core \
   --context \
@@ -363,12 +363,12 @@ LANGCHAIN_TRACING_V2=false LANGCHAIN_API_KEY= \
 LLM_MODEL_NAME=gpt-4.1-mini \
 poetry run python scripts/ingest_module4_batch.py \
   --bucket doc-repository-dev \
-  --company filynai.com \
+  --company longooc.com \
   --project "${PROJECT_NAME}" \
   --project-id "${PROJECT_UUID}" \
   --tenant-id "${TENANT_UUID}" \
   --created-by "${USER_UUID}" \
-  --prefix "filynai.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/.../specific_report.pdf" \
+  --prefix "longooc.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/.../specific_report.pdf" \
   --mode core \
   --no-force-core \
   --force-pharm-overview \
@@ -388,12 +388,12 @@ LANGCHAIN_TRACING_V2=false LANGCHAIN_API_KEY= \
 LLM_MODEL_NAME=gpt-4.1-mini \
 poetry run python scripts/ingest_module4_batch.py \
   --bucket doc-repository-dev \
-  --company filynai.com \
+  --company longooc.com \
   --project "${PROJECT_NAME}" \
   --project-id "${PROJECT_UUID}" \
   --tenant-id "${TENANT_UUID}" \
   --created-by "${USER_UUID}" \
-  --prefix "filynai.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/" \
+  --prefix "longooc.com/${PROJECT_NAME}/Module 4 Nonclinical Study Reports/" \
   --mode tox \
   --force-tox \
   --workers 1 \
@@ -429,7 +429,7 @@ ls -t tmp/ingestion_reports/ingestion_module4-*.json | head -n 1
   ```shell
   poetry run python scripts/s3_sync.py \
     --bucket YOUR_BUCKET \
-    --company filynai.com \
+    --company longooc.com \
     --projects LT1009 \
     --modules 1,2,3 \
     --redis-url redis://localhost:6379/0 \
@@ -446,7 +446,7 @@ ls -t tmp/ingestion_reports/ingestion_module4-*.json | head -n 1
   Add `--ai-summary` to call OpenAI once per document and produce:
   - `<original-key>.summary.txt` containing an executive summary plus topic-level links
   - link-aware markdown (anchors inserted inline) so clicking a topic link jumps to the related section in the `.md` artefact
-  The path parser expects keys shaped like `filynai.com/<Project>/Module N.<description>/...`. Module numbers are inferred automatically; pass `--modules` with integers (e.g. `--modules 1,2`) if you want to limit the scrape, otherwise omit the flag to index every module it encounters.
+  The path parser expects keys shaped like `longooc.com/<Project>/Module N.<description>/...`. Module numbers are inferred automatically; pass `--modules` with integers (e.g. `--modules 1,2`) if you want to limit the scrape, otherwise omit the flag to index every module it encounters.
 
 - Keys in Redis take the form `company:module:filename` and a hash payload with `markdown`, `s3_version`, `last_modified`, etc. The S3 document hierarchy is preserved, which makes it easy for downstream systems to correlate entries back to their source objects.
 - During each run the service checks for matching `<key>.pdf.md` + `<key>.pdf.meta.json` artefacts whose `version_id` equals the current S3 object; when both exist it skips reprocessing that PDF to keep runtimes down.
@@ -456,7 +456,7 @@ ls -t tmp/ingestion_reports/ingestion_module4-*.json | head -n 1
 
 If this repository is deployed to ECS/Fargate you can keep the markdown pipeline fresh by running it as a scheduled task. A Terraform module lives at `infra/terraform/ecs_s3_sync_cron` that wires up:
 
-- An ECS task definition that runs `poetry run python scripts/s3_sync.py --bucket doc-repository-dev --company filynai.com --projects LT1009 --modules 1,2,3,4,5 --redis-url redis://localhost:6379/0 --ai-metadata --ai-embeddings`
+- An ECS task definition that runs `poetry run python scripts/s3_sync.py --bucket doc-repository-dev --company longooc.com --projects LT1009 --modules 1,2,3,4,5 --redis-url redis://localhost:6379/0 --ai-metadata --ai-embeddings`
 - An EventBridge cron rule that triggers the task on whatever cadence you need.
 
 Pass in the cluster ARN, task/execution roles, VPC subnet/security-group IDs, and any secrets (e.g. `OPENAI_API_KEY`, Supabase keys) via `container_environment`. See the module README for a complete example.
@@ -487,7 +487,7 @@ Add `--ai-summary` (and optionally `--ai-metadata`) to `command_additional_args`
 
 - Windows (WSL or native): install from <https://github.com/microsoftarchive/redis/releases> or run `sudo apt-get install redis-server` inside WSL. Ensure the daemon is listening on `localhost:6379`.
 
-Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and run the sync script. Use `redis-cli hgetall filynai.com:module1:example.pdf` to inspect the stored markdown.
+Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and run the sync script. Use `redis-cli hgetall longooc.com:module1:example.pdf` to inspect the stored markdown.
 
 ### On-Demand S3 Markdown API
 
@@ -499,7 +499,7 @@ Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and r
 
   {
     "bucket": "YOUR_BUCKET",
-    "key": "filynai.com/LT1009/Module 1.Quality/report.pdf",
+    "key": "longooc.com/LT1009/Module 1.Quality/report.pdf",
     "version_id": "optional-version",
     "aws_region": "us-east-1"
   }
@@ -515,7 +515,7 @@ Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and r
 
   {
     "bucket": "YOUR_BUCKET",
-    "key": "filynai.com/LT1009/Module 1.Quality/report.pdf",
+    "key": "longooc.com/LT1009/Module 1.Quality/report.pdf",
     "version_id": "optional-version",
     "aws_region": "us-east-1"
   }
@@ -531,7 +531,7 @@ Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and r
 
   {
     "bucket": "YOUR_BUCKET",
-    "path": "filynai.com/LT1009/Module 1.Quality",
+    "path": "longooc.com/LT1009/Module 1.Quality",
     "filename": "report",
     "markdown": "# revised ...",
     "label": "annotated",
@@ -611,13 +611,13 @@ Point `REDIS_URL` at your local instance (e.g. `redis://localhost:6379/0`) and r
 
   ```shell
   poetry run python scripts/pipeline.py data/42-stud-rep/421-pharmacol/4211-prim-pd/lt3114-pha-001-r/lt3114-pha-001-r.pdf
-  poetry run python scripts/s3_sync.py --bucket doc-repository-dev  --company filynai.com --projects LT1009 --modules 1,2 --redis-url redis://localhost:6379/0 --ai-metadata --ai-embeddings
-  poetry run python scripts/s3_sync.py --bucket doc-repository-dev  --company filynai.com --projects LT1009 --modules 1,2 --redis-url redis://localhost:6379/0 --ai-metadata --ai-embeddings --force
+  poetry run python scripts/s3_sync.py --bucket doc-repository-dev  --company longooc.com --projects LT1009 --modules 1,2 --redis-url redis://localhost:6379/0 --ai-metadata --ai-embeddings
+  poetry run python scripts/s3_sync.py --bucket doc-repository-dev  --company longooc.com --projects LT1009 --modules 1,2 --redis-url redis://localhost:6379/0 --ai-metadata --ai-embeddings --force
   ```
  - Test for generate the summary
   ```poetry run python scripts/s3_sync.py \
     --bucket doc-repository-dev \
-    --company filynai.com \
+    --company longooc.com \
     --projects LT1009 \
     --modules 1 \
     --limit 1 \

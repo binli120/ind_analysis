@@ -1,6 +1,6 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """Unit tests for pdf_analysis.service.s3_sync helpers."""
 
@@ -31,8 +31,8 @@ def test_stringify() -> None:
 
 def test_extract_document_metadata() -> None:
     service = s3_sync.S3RedisSyncService(s3_sync.S3SyncConfig(bucket="b"))
-    parsed = service._extract_document_metadata("filynai.com/Proj/Module 4/file.pdf")
-    assert parsed.company == "filynai.com"
+    parsed = service._extract_document_metadata("longooc.com/Proj/Module 4/file.pdf")
+    assert parsed.company == "longooc.com"
     assert parsed.project == "Proj"
     assert parsed.module_number == 4
 
@@ -58,8 +58,8 @@ def test_is_not_found_error() -> None:
 def test_persist_markdown_file(tmp_path: Path) -> None:
     service = s3_sync.S3RedisSyncService(s3_sync.S3SyncConfig(bucket="b"))
     doc = s3_sync.S3Document(
-        key="filynai.com/Proj/Module 4/file.pdf",
-        company="filynai.com",
+        key="longooc.com/Proj/Module 4/file.pdf",
+        company="longooc.com",
         project="Proj",
         module_label="Module 4",
         module_number=4,
@@ -69,6 +69,6 @@ def test_persist_markdown_file(tmp_path: Path) -> None:
     service._persist_markdown_file(
         tmp_path, doc, "text", {"meta": True}, summary_text="summary"
     )
-    assert (tmp_path / "filynai.com/Proj/Module 4/file.v1.pdf.md").exists()
-    assert (tmp_path / "filynai.com/Proj/Module 4/file.v1.pdf.meta.json").exists()
-    assert (tmp_path / "filynai.com/Proj/Module 4/file.v1.pdf.summary.txt").exists()
+    assert (tmp_path / "longooc.com/Proj/Module 4/file.v1.pdf.md").exists()
+    assert (tmp_path / "longooc.com/Proj/Module 4/file.v1.pdf.meta.json").exists()
+    assert (tmp_path / "longooc.com/Proj/Module 4/file.v1.pdf.summary.txt").exists()

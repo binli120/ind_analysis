@@ -1,11 +1,11 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """Integration-style tests for markdown writer, pipeline, and API workflows."""
 
 # @author: Bin Lee
-# @email: blee@filynai.com
+# @email: blee@longooc.com
 
 from __future__ import annotations
 
@@ -514,7 +514,7 @@ class ApiEndpointTests(unittest.TestCase):
                 json={
                     "project_id": project_id,
                     "bucket": "demo-bucket",
-                    "project_prefix": "filynai.com/LT1009/",
+                    "project_prefix": "longooc.com/LT1009/",
                 },
             )
         self.assertEqual(response.status_code, 200)
@@ -550,7 +550,7 @@ class ApiEndpointTests(unittest.TestCase):
                 "/s3/markdown/save",
                 json={
                     "bucket": "demo-bucket",
-                    "path": "filynai.com/LT1009/Module 1.Quality",
+                    "path": "longooc.com/LT1009/Module 1.Quality",
                     "filename": "report",
                     "markdown": "# updated",
                     "label": "annotated",
@@ -564,7 +564,7 @@ class ApiEndpointTests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["bucket"], "demo-bucket")
         self.assertEqual(
-            payload["key"], "filynai.com/LT1009/Module 1.Quality/report.md"
+            payload["key"], "longooc.com/LT1009/Module 1.Quality/report.md"
         )
         self.assertEqual(payload["version_id"], "ver-002")
         self.assertEqual(payload["label"], "annotated")
@@ -578,7 +578,7 @@ class ApiEndpointTests(unittest.TestCase):
         primary_put = put_calls[0]
         self.assertEqual(primary_put["Bucket"], "demo-bucket")
         self.assertEqual(
-            primary_put["Key"], "filynai.com/LT1009/Module 1.Quality/report.md"
+            primary_put["Key"], "longooc.com/LT1009/Module 1.Quality/report.md"
         )
         self.assertEqual(primary_put["ContentType"], "text/markdown")
         self.assertIn(b"# updated", primary_put["Body"])

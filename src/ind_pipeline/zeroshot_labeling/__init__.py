@@ -1,6 +1,6 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """Zero-shot labeling stage that enriches extracted markdown with OpenAI metadata."""
 

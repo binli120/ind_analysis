@@ -1,6 +1,6 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """Validate IND 2.4 generation outputs (gap analysis and summary)."""
 
@@ -35,7 +35,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(
         "--gap-key",
         required=False,
-        help="S3 key for gap_analysis JSON (use with --bucket). Example: filynai.com/LT1009/.../section_2_6_gap_analysis.json",
+        help="S3 key for gap_analysis JSON (use with --bucket). Example: longooc.com/LT1009/.../section_2_6_gap_analysis.json",
     )
     parser.add_argument(
         "--summary-json",

@@ -1,6 +1,6 @@
 {
   "bucket": "doc-repository-dev",
-  "key": "filynai.com/LT1009/Module 1. Administrative information/us/1.3 Administrative information/1.3.1 Contact-sponsor-applicant information/statement-of-transfer-sponsor-obligations.pdf",
+  "key": "longooc.com/LT1009/Module 1. Administrative information/us/1.3 Administrative information/1.3.1 Contact-sponsor-applicant information/statement-of-transfer-sponsor-obligations.pdf",
   "version_id": "9V_jEpk2H8NFeivELI4jV..iReVc6hIp",
   "project": "LT1009",
   "module": "Module 1. Administrative information",
@@ -10,10 +10,10 @@
   },
   "redis": {
     "s3_bucket": "doc-repository-dev",
-    "s3_key": "filynai.com/LT1009/Module 1. Administrative information/us/1.3 Administrative information/1.3.1 Contact-sponsor-applicant information/statement-of-transfer-sponsor-obligations.pdf",
+    "s3_key": "longooc.com/LT1009/Module 1. Administrative information/us/1.3 Administrative information/1.3.1 Contact-sponsor-applicant information/statement-of-transfer-sponsor-obligations.pdf",
     "s3_version": "9V_jEpk2H8NFeivELI4jV..iReVc6hIp",
     "last_modified": "2025-10-23T19:25:34+00:00",
-    "company": "filynai.com",
+    "company": "longooc.com",
     "project": "LT1009",
     "module_label": "Module 1. Administrative information",
     "module_number": "1",

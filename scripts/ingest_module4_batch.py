@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """
 Batch runner to ingest Module 4 PDFs from S3 into the NCD database.
@@ -1741,7 +1741,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--bucket", default=os.getenv("S3_BUCKET"), help="S3 bucket name."
     )
     parser.add_argument(
-        "--company", default=os.getenv("COMPANY", "filynai.com"), help="Company prefix."
+        "--company", default=os.getenv("COMPANY", "longooc.com"), help="Company prefix."
     )
     parser.add_argument(
         "--project", default=os.getenv("PROJECT"), help="Project name under company."
@@ -1944,7 +1944,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--project-sponsor-email",
-        default=os.getenv("PROJECT_SPONSOR_EMAIL", "unknown@filynai.com"),
+        default=os.getenv("PROJECT_SPONSOR_EMAIL", "unknown@longooc.com"),
         help="Sponsor contact email for project auto-creation.",
     )
     parser.add_argument(

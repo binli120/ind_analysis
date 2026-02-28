@@ -1,11 +1,11 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """Command-line interface for PDF extraction and quality reporting."""
 
 # @author: Bin Lee
-# @email: blee@filynai.com
+# @email: blee@longooc.com
 
 import argparse
 import json

@@ -1,6 +1,6 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """Batch runner to pull Module 4 PDFs from S3, extract tables/images/text, and emit per-PDF folders."""
 
@@ -36,7 +36,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--prefix",
         required=True,
-        help="S3 prefix under the bucket that points to Module 4 content (e.g. filynai.com/LT1009/Module 4).",
+        help="S3 prefix under the bucket that points to Module 4 content (e.g. longooc.com/LT1009/Module 4).",
     )
     parser.add_argument(
         "--output-dir",

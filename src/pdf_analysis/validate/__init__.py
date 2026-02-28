@@ -1,11 +1,11 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """Validation helpers for sanity-checking extraction quality."""
 
 # @author: Bin Lee
-# @email: blee@filynai.com
+# @email: blee@longooc.com
 
 from .quality import generate_quality_report
 

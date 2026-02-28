@@ -61,7 +61,7 @@ Method of Administration: Intraperitoneal injection, every other day (q2d)
 Testing Facility: BioTest Labs, Inc.
 """
     metadata = mod._extract_pharm_overview_metadata(
-        key="filynai.com/ASONEP2/Module 4 Nonclinical Study Reports/4.2 Study reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/example.pdf",
+        key="longooc.com/ASONEP2/Module 4 Nonclinical Study Reports/4.2 Study reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/example.pdf",
         file_name="example.pdf",
         module4_section="4.2.1.1",
         markdown=markdown,

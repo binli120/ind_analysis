@@ -1,11 +1,11 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """Exports for markdown/html composition helpers."""
 
 # @author: Bin Lee
-# @email: blee@filynai.com
+# @email: blee@longooc.com
 
 from pdf_analysis.transform.markdown_writer import (
     PAGE_BREAK,

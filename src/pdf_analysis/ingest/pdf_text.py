@@ -1,11 +1,11 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """PDF text extraction utilities with optional OCR fallback."""
 
 # @author: Bin Lee
-# @email: blee@filynai.com
+# @email: blee@longooc.com
 
 from io import StringIO
 from pathlib import Path

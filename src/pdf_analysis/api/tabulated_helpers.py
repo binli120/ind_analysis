@@ -773,7 +773,7 @@ def _is_noisy_extraction_fragment(value: Any) -> bool:
     if not text:
         return True
     lowered = text.lower()
-    if "pdf.tables" in lowered or "filynai.com/" in lowered or "[truncated]" in lowered:
+    if "pdf.tables" in lowered or "longooc.com/" in lowered or "[truncated]" in lowered:
         return True
     if lowered.startswith("xml files/"):
         return True

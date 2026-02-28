@@ -1,11 +1,11 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """Services for mirroring S3 PDF/DOCX extracts into Redis (and optional metadata stores)."""
 
 # author: Bin Lee
-# email: blee@filynai.com
+# email: blee@longooc.com
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ class S3Document:
 @dataclass(slots=True)
 class S3SyncConfig:
     bucket: str
-    company: str = "filynai.com"
+    company: str = "longooc.com"
     projects: Sequence[str] | None = None
     module_filters: Sequence[int] | None = None
     aws_region: Optional[str] = None

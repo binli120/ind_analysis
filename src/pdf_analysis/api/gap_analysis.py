@@ -413,7 +413,7 @@ def _gap_check_project_prefix(
     elif project_name:
         candidates = [
             _gap_normalize_project_prefix(project_name),
-            _gap_normalize_project_prefix(f"filynai.com/{project_name}"),
+            _gap_normalize_project_prefix(f"longooc.com/{project_name}"),
         ]
     else:
         candidates = []

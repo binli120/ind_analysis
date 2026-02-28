@@ -88,7 +88,7 @@ variable "s3_bucket" {
 variable "company" {
   description = "Company folder prefix (passed to --company)."
   type        = string
-  default     = "filynai.com"
+  default     = "longooc.com"
 }
 
 variable "projects" {

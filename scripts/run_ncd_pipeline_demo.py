@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """
 Run the NCD ingest + LLM extraction pipeline against a local PDF and persist to the DB.

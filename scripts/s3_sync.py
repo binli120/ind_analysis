@@ -1,11 +1,11 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """CLI helper that mirrors S3 extracts into Redis (and optional AI metadata)."""
 
 # author: Bin Lee
-# email: blee@filynai.com
+# email: blee@longooc.com
 
 from __future__ import annotations
 
@@ -83,8 +83,8 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--company",
-        default="filynai.com",
-        help="Top-level company folder (default: filynai.com).",
+        default="longooc.com",
+        help="Top-level company folder (default: longooc.com).",
     )
     parser.add_argument(
         "--modules",

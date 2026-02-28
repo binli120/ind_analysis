@@ -1,6 +1,6 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 import hashlib
 from typing import cast
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 """
 Coyright (c) Filynai.com 2024. All Rights Reserved.
 author: Bin Lee
-email: blee@filynai.com
+email: blee@longooc.com
 PDF ingestion utilities for NCD document processing.
 """
 

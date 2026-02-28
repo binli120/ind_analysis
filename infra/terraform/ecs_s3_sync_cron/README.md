@@ -1,6 +1,6 @@
-@copyright filynai.com
+@copyright longooc.com
 @author: Bin Lee
-@email: blee@filynai.com
+@email: blee@longooc.com
 
 # ECS Scheduled S3 Sync
 
@@ -47,7 +47,7 @@ module "s3_sync_cron" {
 
   schedule_expression = "cron(0 10 * * ? *)" # 10:00 UTC daily
   s3_bucket           = "doc-repository-dev"
-  company             = "filynai.com"
+  company             = "longooc.com"
   projects            = ["LT1009"]
   modules             = [1, 2, 3, 4, 5]
   redis_url           = "redis://cache.internal:6379/0"

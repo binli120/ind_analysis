@@ -3,7 +3,7 @@ name = "pdf-analysis"
 version = "0.1.0"
 description = ""
 authors = [
-    { name = "blee@filynai", email = "blee@filynai.com" }
+    { name = "blee@filynai", email = "blee@longooc.com" }
 ]
 readme = "README.md"
 requires-python = ">=3.11,<4.0"

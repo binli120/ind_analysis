@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """Ad-hoc tool for running zero-shot IND classification from the CLI."""
 

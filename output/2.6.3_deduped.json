@@ -1034,8 +1034,8 @@
       {
         "id": "752fc320-a262-4de1-b224-3a2cee4e7203",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled form titled \"GXP and Non-GXP Study Report Review and Approval Form\" (Document No. GE003FM01, Version 02; Issue Date 17 Oct 2014; Effective Date 20 Oct 2014; Page 2 of 2) referencing vendor study protocol/vendor study report and Lpath Study No.: LT 3114-PHA-017 -R, Version No.: 0, with mentions of Non-GXP, GLP, GCP, and GMP.",
         "keywords": [
@@ -1056,7 +1056,7 @@
           "columns": [
             "0"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf.tables/input.p1.t1.json",
           "row_count": 46,
           "fast_extract": []
         },
@@ -1208,8 +1208,8 @@
       {
         "id": "348be008-42a8-4743-b1ea-6aeaf18deba9",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled form titled 'GXP and Non-GXP Study Report Review and Approval Form' (Document No. GE003FM01, Version 02; Issue Date 17 Oct 2014; Effective Date 20 Oct 2014; page 2 of 2) for Lpath Study No.: LT 3114-PHA-014-R indicating Non-GXP status. The table references Lab Notebook Reference: LNBs#1 8 1 pp.66-95; ELISA Binder#5, Tab 181, notes an executive summary ('see Attached'), lists Jan 2010 dates, and describes evaluation of anti-lysophosphatidic acid (anti-LPA) antibodies (murine and humanized: LT3015).",
         "keywords": [
@@ -1234,7 +1234,7 @@
             "2",
             "3"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf.tables/input.p1.t1.json",
           "row_count": 11,
           "fast_extract": []
         },
@@ -1317,8 +1317,8 @@
       {
         "id": "e5e500db-b947-44fc-866f-9d87523dee7c",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled form titled 'GXP and Non-GXP Study Report Review and Approval Form' containing document metadata (Document No. GE003FM01, Version I 02, Issue Date 17 Oct 2014, Effective Date 20 Oct 2014, Page 2 of 2) and checklist entries for vendor study protocol/report and Lpath Study Report; Lpath Study No.: LT 3114-PHA-016-R, Version No.: 0, with a Non GXP GLP notation.",
         "keywords": [
@@ -1340,7 +1340,7 @@
           "columns": [
             "0"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf.tables/input.p1.t1.json",
           "row_count": 43,
           "fast_extract": []
         },
@@ -1483,8 +1483,8 @@
       {
         "id": "798b4b4c-5b5f-4a2d-9054-242902c3b36d",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Final report (March 29, 2013) for Project DIP-LPI-1 titled \"Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain,\" describing evaluation of dose-response therapeutic efficacy of Lpath, Inc. test compounds in a rat model of diabetes-induced neuropathic pain. The report was prepared by Washington Biotechnology, Inc., with mailing and laboratory contact information listed.",
         "keywords": [
@@ -1508,7 +1508,7 @@
             "1",
             "2"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain.pdf.tables/input.p2.t1.json",
           "row_count": 26,
           "fast_extract": []
         },
@@ -1654,8 +1654,8 @@
       {
         "id": "450279ae-e965-428c-92c3-4d1acc9d98f7",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA).pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA).pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA).pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA).pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Final Report for study LT3114-PHA-004-R titled \"Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA)\". Administrative details: Study Monitor Rosalia Matteo, Study Director Camilla Svensson, Performance Site Karolinska Institute, Initiation Date 04-2011.",
         "keywords": [
@@ -1678,7 +1678,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA).pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA).pdf.tables/input.p2.t1.json",
           "row_count": 11,
           "fast_extract": []
         },
@@ -1737,8 +1737,8 @@
       {
         "id": "8b014935-8fd9-4277-aec3-cd04795370d9",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of IV 504B3 on Primary Hyperalgesia in the Brennan Model of Post-Incisional Pain in Rats (non-GLP).pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of IV 504B3 on Primary Hyperalgesia in the Brennan Model of Post-Incisional Pain in Rats (non-GLP).pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of IV 504B3 on Primary Hyperalgesia in the Brennan Model of Post-Incisional Pain in Rats (non-GLP).pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of IV 504B3 on Primary Hyperalgesia in the Brennan Model of Post-Incisional Pain in Rats (non-GLP).pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled form titled \"GXP and Non-GXP Study Report Review and Approval Form\" listing document metadata (Document No.: GEOOJFMOI, Version 02, Issue Date 17 Oct 2014, Effective Date 20 Oct 2014, page 2 of 2). It references Lpath Study No.: L T31 14-PHA-018-R, Product Name: L T3114, Test Article: 83 (50483); L T1 015, and notes GLP / GCP / GMP and vendor study protocol/report status (Non-GXP).",
         "keywords": [
@@ -1761,7 +1761,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of IV 504B3 on Primary Hyperalgesia in the Brennan Model of Post-Incisional Pain in Rats (non-GLP).pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of IV 504B3 on Primary Hyperalgesia in the Brennan Model of Post-Incisional Pain in Rats (non-GLP).pdf.tables/input.p1.t1.json",
           "row_count": 17,
           "fast_extract": []
         },
@@ -1844,8 +1844,8 @@
       {
         "id": "395c0224-563c-4ce3-921d-d4d54833f9d4",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of anti-LPA mAbs B3 and LT3114 in a rat model of acute inflammatory pain.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of anti-LPA mAbs B3 and LT3114 in a rat model of acute inflammatory pain.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of anti-LPA mAbs B3 and LT3114 in a rat model of acute inflammatory pain.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of anti-LPA mAbs B3 and LT3114 in a rat model of acute inflammatory pain.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled GxP/Non‑GxP Study Report Review and Approval form (Document GE003FM01, Version 02; issue date 17 Oct 2014, effective 20 Oct 2014) for Lpath Study No.: LT 3114‑PHA‑006‑R (Version No.: 01) documenting a study to test the efficacy of murine (B3) and humanized (L T3 114) anti‑lysophosphatidic acid, with Lab Notebook LNB #295 and Binder #295 cited and an executive summary noted as attached.",
         "keywords": [
@@ -1867,7 +1867,7 @@
           "columns": [
             "0"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of anti-LPA mAbs B3 and LT3114 in a rat model of acute inflammatory pain.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of anti-LPA mAbs B3 and LT3114 in a rat model of acute inflammatory pain.pdf.tables/input.p1.t1.json",
           "row_count": 15,
           "fast_extract": []
         },
@@ -1926,8 +1926,8 @@
       {
         "id": "f89b5160-5292-4a44-b570-fbc78e8db34d",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes – Preliminary Study.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes – Preliminary Study.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes – Preliminary Study.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes – Preliminary Study.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Final Report (Report Number: LT3114-PHA-001-R) titled \"Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes \t6 Preliminary Study\", initiated 04-2010, performance site UCSD; Study Monitor: Rosalia Matteo; Study Director: Nigel Calcutt.",
         "keywords": [
@@ -1950,7 +1950,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes – Preliminary Study.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes – Preliminary Study.pdf.tables/input.p2.t1.json",
           "row_count": 11,
           "fast_extract": []
         },
@@ -2009,8 +2009,8 @@
       {
         "id": "fcf12ffc-b3a3-49e0-823e-9c59dbd473c3",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes_ Repeat Dose Study.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes_ Repeat Dose Study.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes_ Repeat Dose Study.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes_ Repeat Dose Study.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "This table lists metadata for Study Number LT3114-PHA-002-R titled \"Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes: Repeat Dose Study\" and identifies the document as a Final Report. Administrative details include Study Monitor Rosalia Matteo, Study Director Nigel Calcutt, Performance Site UCSD, and Initiation Date June -2012.",
         "keywords": [
@@ -2033,7 +2033,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes_ Repeat Dose Study.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes_ Repeat Dose Study.pdf.tables/input.p2.t1.json",
           "row_count": 11,
           "fast_extract": []
         },
@@ -2092,8 +2092,8 @@
       {
         "id": "1fa3da1c-ade7-4a4b-9094-341eceeb7085",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA mAb B3 in a mouse model of paclitaxel-induced peripheral neuropathy.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA mAb B3 in a mouse model of paclitaxel-induced peripheral neuropathy.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA mAb B3 in a mouse model of paclitaxel-induced peripheral neuropathy.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA mAb B3 in a mouse model of paclitaxel-induced peripheral neuropathy.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Approval/signature block from Lpath's GXP and Non-GXP Study Report Review and Approval Form (Document No. GE003FM01, effective 20 Oct 2014) showing Lpath approval fields for Function, Name (print), Date and Signature and a line for Study Director/Monitor. The table also includes a study finding note referencing allodynia when administered during or following completion of chemotherapeutic treatment and cites Lpath Study No. LT 3114-PHA-013-R.",
         "keywords": [
@@ -2116,7 +2116,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA mAb B3 in a mouse model of paclitaxel-induced peripheral neuropathy.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Efficacy of murine anti-LPA mAb B3 in a mouse model of paclitaxel-induced peripheral neuropathy.pdf.tables/input.p1.t1.json",
           "row_count": 21,
           "fast_extract": []
         },
@@ -2215,8 +2215,8 @@
       {
         "id": "4b4c76a5-82fa-40f7-b777-9a328ffa3973",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of 1023 and 3114 Using the Tail-Flick Test in the Mouse.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of 1023 and 3114 Using the Tail-Flick Test in the Mouse.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of 1023 and 3114 Using the Tail-Flick Test in the Mouse.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of 1023 and 3114 Using the Tail-Flick Test in the Mouse.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Study report No. 14.0062 titled \"Evaluation of 1023 and 3114 using the tail-flick test in the mouse (S.C. administration)\". Sponsor: LPATH INC., 4025 Sorrento Valley Blvd.; Author: Dr. Camille LE CUDENNEC.",
         "keywords": [
@@ -2244,7 +2244,7 @@
             "K",
             "TEST IN"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of 1023 and 3114 Using the Tail-Flick Test in the Mouse.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of 1023 and 3114 Using the Tail-Flick Test in the Mouse.pdf.tables/input.p2.t1.json",
           "row_count": 36,
           "fast_extract": []
         },
@@ -2625,8 +2625,8 @@
       {
         "id": "c0f3d070-dcd2-42c4-90d5-22ce38cbdfc1",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of LPA concentrations in a model of STZ-induced diabetes in rats and preliminary efficacy with an anti-LPA antibody.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of LPA concentrations in a model of STZ-induced diabetes in rats and preliminary efficacy with an anti-LPA antibody.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of LPA concentrations in a model of STZ-induced diabetes in rats and preliminary efficacy with an anti-LPA antibody.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of LPA concentrations in a model of STZ-induced diabetes in rats and preliminary efficacy with an anti-LPA antibody.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Study metadata for Report Number LT3114-PHA-020-R: a Final Report titled \"Evaluation of LPA concentrations in a model of STZ-induced diabetes in rats and preliminary efficacy with an anti-LPA antibody\", with Study Monitor Rosalia Matteo, Study Director Nigel Calcutt, performed at UCSD, initiation date 04-2010.",
         "keywords": [
@@ -2649,7 +2649,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of LPA concentrations in a model of STZ-induced diabetes in rats and preliminary efficacy with an anti-LPA antibody.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of LPA concentrations in a model of STZ-induced diabetes in rats and preliminary efficacy with an anti-LPA antibody.pdf.tables/input.p2.t1.json",
           "row_count": 11,
           "fast_extract": []
         },
@@ -2708,8 +2708,8 @@
       {
         "id": "259d337c-a555-43ff-8662-88e245861965",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of Selected Test Substances for Analgesic Activity Using the Spinal Nerve Ligation (Chung) Model of Neuropathic Pain in the Rat (I.V. Administration).pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of Selected Test Substances for Analgesic Activity Using the Spinal Nerve Ligation (Chung) Model of Neuropathic Pain in the Rat (I.V. Administration).pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of Selected Test Substances for Analgesic Activity Using the Spinal Nerve Ligation (Chung) Model of Neuropathic Pain in the Rat (I.V. Administration).pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of Selected Test Substances for Analgesic Activity Using the Spinal Nerve Ligation (Chung) Model of Neuropathic Pain in the Rat (I.V. Administration).pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "This Lpath study (L T3114-PHA-008-R, July–August 2014) evaluated murine antibody 83 versus control IgG (LT1015) for analgesic activity in the spinal nerve ligation (Chung) rat model, with antibodies dosed intravenously (reported 10 and 30 mg/kg; dosing on days 14, 17, 21, 24) and morphine (12 mg/kg i.p.) and gabapentin (100 mg/kg i.p.) as comparators. Spinal ligation produced decreased withdrawal thresholds; antibody 83 gave transient tactile improvement but no overall mechanical effect, yet produced significant improvement in thermal paw-withdrawal latency at both doses (10 mg/kg benefit sustained through day 24; 30 mg/kg response diminished after day 21).",
         "keywords": [
@@ -2734,7 +2734,7 @@
             "2",
             "3"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of Selected Test Substances for Analgesic Activity Using the Spinal Nerve Ligation (Chung) Model of Neuropathic Pain in the Rat (I.V. Administration).pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Evaluation of Selected Test Substances for Analgesic Activity Using the Spinal Nerve Ligation (Chung) Model of Neuropathic Pain in the Rat (I.V. Administration).pdf.tables/input.p1.t1.json",
           "row_count": 15,
           "fast_extract": []
         },
@@ -2841,8 +2841,8 @@
       {
         "id": "13ad7603-bbeb-4d8e-a8cb-63841cce4b00",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-001-R.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-001-R.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-001-R.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-001-R.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Final Report (Report Number LT3114-PHA-001-R) titled \"Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes \t6 Preliminary Study.\" Study Monitor: Rosalia Matteo; Study Director: Nigel Calcutt; Performance Site: UCSD; Initiation Date: 04-2010.",
         "keywords": [
@@ -2865,7 +2865,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-001-R.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-001-R.pdf.tables/input.p2.t1.json",
           "row_count": 11,
           "fast_extract": []
         },
@@ -2924,8 +2924,8 @@
       {
         "id": "6a029e41-d6f0-42a8-aa19-e67b543b73e0",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-002-R.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-002-R.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-002-R.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-002-R.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Final Report for Study Number LT3114-PHA-002-R, titled \"Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes: Repeat Dose Study,\" lists Rosalia Matteo as Study Monitor and Nigel Calcutt as Study Director, with performance site UCSD and initiation date June -2012.",
         "keywords": [
@@ -2948,7 +2948,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-002-R.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-002-R.pdf.tables/input.p2.t1.json",
           "row_count": 11,
           "fast_extract": []
         },
@@ -3007,8 +3007,8 @@
       {
         "id": "f2d73299-ac6f-4ccf-b2f3-2066a94e58ca",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-004-R.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-004-R.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-004-R.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-004-R.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Final Report (Study No. LT3114-PHA-004-R) titled \"Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA)\". Study monitor: Rosalia Matteo; Study director: Camilla Svensson; Performance site: Karolinska Institute; Initiation date: 04-2011.",
         "keywords": [
@@ -3030,7 +3030,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-004-R.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-004-R.pdf.tables/input.p2.t1.json",
           "row_count": 11,
           "fast_extract": []
         },
@@ -3089,8 +3089,8 @@
       {
         "id": "999412a0-bb49-401f-96c6-2969ada87cd0",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-006-R.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-006-R.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-006-R.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-006-R.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled GxP/Non-GxP study report review and approval form (Document GE003FM01, Version 02; issue date 17 Oct 2014, effective 20 Oct 2014) for Lpath Study No. LT 3114-PHA-006-R (Version 01) referencing lab notebook LNB #295 and Binder #295, summarizing an efficacy study of murine (B3) and humanized (LT3114) anti-lysophosphatidic acid antibodies with an executive summary attached; dates noted October 2013 and October 2014.",
         "keywords": [
@@ -3112,7 +3112,7 @@
           "columns": [
             "0"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-006-R.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-006-R.pdf.tables/input.p1.t1.json",
           "row_count": 15,
           "fast_extract": []
         },
@@ -3171,8 +3171,8 @@
       {
         "id": "bed04beb-e297-4754-aa7b-919b59a7df9f",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-007-R.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-007-R.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-007-R.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-007-R.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Study No. 14.0062 — study report titled \"Evaluation of 1023 and 3114 using the tail-flick test in the mouse (S.C. administration)\"; Sponsor: LPATH INC.; Author: Dr. Camille LE CUDENNEC (4025 Sorrento Valley Blvd.).",
         "keywords": [
@@ -3201,7 +3201,7 @@
             "K",
             "TEST IN"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-007-R.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-007-R.pdf.tables/input.p2.t1.json",
           "row_count": 36,
           "fast_extract": []
         },
@@ -3582,8 +3582,8 @@
       {
         "id": "f8317a1a-25be-4cde-817e-6ab955450ab8",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-008-R.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-008-R.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-008-R.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-008-R.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Study report LT3114-PHA-008-R evaluated murine antibody 83 versus control IgG (LT1015) for analgesic activity in the rat spinal nerve ligation (Chung) model, with IV administration on days 14, 17, 21 and 24 and assessments by electronic von Frey (mechanical) and infrared (thermal) paw withdrawal. Antibody 83 produced significant improvement in thermal paw withdrawal latency at both reported doses (benefit at 10 mg/kg sustained through day 24; response at 30 mg/kg decreased after day 21), while both antibodies transiently improved tactile responses after the first dose but showed no overall significant tactile effect; morphine and gabapentin were used as comparators.",
         "keywords": [
@@ -3608,7 +3608,7 @@
             "2",
             "3"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-008-R.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-008-R.pdf.tables/input.p1.t1.json",
           "row_count": 15,
           "fast_extract": []
         },
@@ -3715,8 +3715,8 @@
       {
         "id": "68a66fab-6226-45c7-8036-75b0670dbd2b",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-011-R.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-011-R.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-011-R.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-011-R.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Final report (Project Title: DIP-LPI-1) titled \"Dose-response efficacy of test compound in a therapeutic model of diabetes-induced neuropathic pain,\" dated March 29, 2013, from Washington Biotechnology, Inc.; the project objective is to evaluate dose-response therapeutic efficacy of Lpath, Inc. test compounds in a rat model of diabetes-induced neuropathic pain.",
         "keywords": [
@@ -3739,7 +3739,7 @@
             "1",
             "2"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-011-R.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-011-R.pdf.tables/input.p2.t1.json",
           "row_count": 26,
           "fast_extract": []
         },
@@ -3885,8 +3885,8 @@
       {
         "id": "dea7be60-db3e-4053-a700-b3a33353267c",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-012-R.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-012-R.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-012-R.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-012-R.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled form titled 'GXP and Non-GXP Study Report Review and Approval Form' (Document No. GE003FM01, Version 02) with issue date 17 Oct 2014, effective date 20 Oct 2014, page 2 of 2. The form indicates the Lpath Study Report was selected for Lpath Study No. LT3114-PHA-012-R, Version 0/B (NonGXP GLP); includes a Lab Notebook Reference field and notes the executive summary as 'see Attached' with dates referenced as 2011 / March 2011.",
         "keywords": [
@@ -3910,7 +3910,7 @@
             "2",
             "3"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-012-R.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-012-R.pdf.tables/input.p1.t1.json",
           "row_count": 13,
           "fast_extract": []
         },
@@ -4005,8 +4005,8 @@
       {
         "id": "5d9555da-1dcf-40e5-a7c6-429f14d37347",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-013-R.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-013-R.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-013-R.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-013-R.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Approval/signature block from Lpath's controlled GxP and Non‑GxP Study Report Review and Approval Form (Document No. GE003FM01, effective 20 Oct 2014) for Lpath Study No. LT 3114-PHA-013-R (NonGXP GLP), containing fields for Function, Name (Print), Date, Signature, and noting \"allodynia when administered either during or following completion of chemotherapeutic treatment.\"",
         "keywords": [
@@ -4029,7 +4029,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-013-R.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-013-R.pdf.tables/input.p1.t1.json",
           "row_count": 21,
           "fast_extract": []
         },
@@ -4128,8 +4128,8 @@
       {
         "id": "7fb53583-9fd4-4510-81bb-b520f4c901b2",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-014-R.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-014-R.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-014-R.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-014-R.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled form titled \"GXP and Non-GXP Study Report Review and Approval Form\" (Document No. GE003FM01, Version 02; Issue Date 17 Oct 2014; Effective Date 20 Oct 2014; page 2 of 2) referencing Lpath Study No. LT 3114-PHA-014-R and lab records (Lab Notebook Reference: LNBs#1 8 1 pp.66-95; ELISA Binder#5, Tab 181). The entry notes an executive summary (\"see Attached\") and mentions evaluation of several anti-lysophosphatidic acid (anti-LPA) antibodies, including murine and humanized LT3015.",
         "keywords": [
@@ -4154,7 +4154,7 @@
             "2",
             "3"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-014-R.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-014-R.pdf.tables/input.p1.t1.json",
           "row_count": 11,
           "fast_extract": []
         },
@@ -4237,8 +4237,8 @@
       {
         "id": "fb8427c6-a1da-4203-b85f-210a2a92d90b",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-016-R.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-016-R.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-016-R.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-016-R.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled form titled \"GXP and Non-GXP Study Report Review and Approval Form\" (Document No. GE003FM01, Version 02, Issue Date 17 Oct 2014, Effective Date 20 Oct 2014, Page 2 of 2) referencing Lpath Study No. LT 3114-PHA-016-R, Version No. 0, with selectable items for vendor Study Protocol, vendor Study Report, or Lpath Study Report.",
         "keywords": [
@@ -4260,7 +4260,7 @@
           "columns": [
             "0"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-016-R.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-016-R.pdf.tables/input.p1.t1.json",
           "row_count": 43,
           "fast_extract": []
         },
@@ -4403,8 +4403,8 @@
       {
         "id": "ac647c3b-7e48-4a94-be9a-3f9eeb789798",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-017-R.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-017-R.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-017-R.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-017-R.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled form titled \"GXP and Non-GXP Study Report Review and Approval Form\" (Document No. GE003FM01, Version 02, Issue Date 17 Oct 2014, Effective Date 20 Oct 2014, page 2 of 2) referencing vendor Study Protocol/Report and Lpath Study Report (Lpath Study No.: LT 3114-PHA-017 -R, Version No.: 0) and mentioning Non-GXP and GxP categories (GLP, GCP, GMP).",
         "keywords": [
@@ -4426,7 +4426,7 @@
           "columns": [
             "0"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-017-R.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-017-R.pdf.tables/input.p1.t1.json",
           "row_count": 46,
           "fast_extract": []
         },
@@ -4578,8 +4578,8 @@
       {
         "id": "8aa490e9-974b-45f7-802c-bc17948e544f",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-018-R.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-018-R.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-018-R.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-018-R.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled form titled 'GXP and Non-GXP Study Report Review and Approval Form' for Lpath Study No.: L T31 14-PHA-018-R (Version No.: 0), referencing GLP/GCP/GMP, listing Product Name 'L T3114' and Test Article '83 (50483); L T1015'; document GEOOJFMOI with issue date 17 Oct 2014 and effective date 20 Oct 2014 (page 2 of 2).",
         "keywords": [
@@ -4602,7 +4602,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-018-R.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-018-R.pdf.tables/input.p1.t1.json",
           "row_count": 17,
           "fast_extract": []
         },
@@ -4685,8 +4685,8 @@
       {
         "id": "2751b651-779f-4f53-ba2f-9218d6e08108",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-020-R.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-020-R.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-020-R.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-020-R.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Final Report (Report Number LT3114-PHA-020-R) titled \"Evaluation of LPA concentrations in a model of STZ-induced diabetes in rats and preliminary efficacy with an anti-LPA antibody\" was initiated in 04-2010. Study Director: Nigel Calcutt; Study Monitor: Rosalia Matteo; Performance Site: UCSD.",
         "keywords": [
@@ -4709,7 +4709,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-020-R.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/LT3114-PHA-020-R.pdf.tables/input.p2.t1.json",
           "row_count": 11,
           "fast_extract": []
         },
@@ -4768,8 +4768,8 @@
       {
         "id": "b80519de-2c9f-482e-8edb-308f93676105",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Pharmacological Assessment of anti-S1P and anti-LPA antibodies in Paclitaxel-induced Neuropathic Pain.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Pharmacological Assessment of anti-S1P and anti-LPA antibodies in Paclitaxel-induced Neuropathic Pain.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Pharmacological Assessment of anti-S1P and anti-LPA antibodies in Paclitaxel-induced Neuropathic Pain.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Pharmacological Assessment of anti-S1P and anti-LPA antibodies in Paclitaxel-induced Neuropathic Pain.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "The table shows form metadata for a controlled document titled \"GXP and Non-GXP Study Report Review and Approval Form\" (Document NO. GE003FM01, Version I/02, Issue Date 17 Oct 2014, Effective Date 20 Oct 2014, page 2 of 2) and identifies the Lpath study (Lpath Study No.: LT3114-PHA-012-R, Version No.: 0/B, NonGXP GLP). It also includes date entries (2011; March 2011), a partially illegible lab notebook reference, and an executive summary note reading \"see Attached.\"",
         "keywords": [
@@ -4794,7 +4794,7 @@
             "2",
             "3"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Pharmacological Assessment of anti-S1P and anti-LPA antibodies in Paclitaxel-induced Neuropathic Pain.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Pharmacological Assessment of anti-S1P and anti-LPA antibodies in Paclitaxel-induced Neuropathic Pain.pdf.tables/input.p1.t1.json",
           "row_count": 13,
           "fast_extract": []
         },
@@ -4889,8 +4889,8 @@
       {
         "id": "85fd73e8-ea99-45f5-86d8-d9954238c2d7",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-001-r/lt3114-pha-001-r.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-001-r/lt3114-pha-001-r.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-001-r/lt3114-pha-001-r.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-001-r/lt3114-pha-001-r.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Final Report (Report No. LT3114-PHA-001-R) titled \"Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes \t6 Preliminary Study\", initiated 04-2010, with Study Monitor Rosalia Matteo and Study Director Nigel Calcutt; performance site: UCSD.",
         "keywords": [
@@ -4913,7 +4913,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-001-r/lt3114-pha-001-r.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-001-r/lt3114-pha-001-r.pdf.tables/input.p2.t1.json",
           "row_count": 11,
           "fast_extract": []
         },
@@ -4972,8 +4972,8 @@
       {
         "id": "9df1f7e0-e4be-4c46-93f8-f1d5de78a1e3",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-002-r/lt3114-pha-002-r.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-002-r/lt3114-pha-002-r.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-002-r/lt3114-pha-002-r.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-002-r/lt3114-pha-002-r.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Final Report for Study Number LT3114-PHA-002-R titled \"Efficacy of murine anti-LPA Ab in the STZ rat model of type 1 diabetes: Repeat Dose Study.\" Study Monitor: Rosalia Matteo; Study Director: Nigel Calcutt; Performance Site: UCSD; Initiation Date: June -2012.",
         "keywords": [
@@ -4994,7 +4994,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-002-r/lt3114-pha-002-r.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-002-r/lt3114-pha-002-r.pdf.tables/input.p2.t1.json",
           "row_count": 11,
           "fast_extract": []
         },
@@ -5053,8 +5053,8 @@
       {
         "id": "d5241107-c055-4185-a5cc-e890396c4a5c",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-003-r/Efficacy of murine anti-LPA Ab in the ZDF rat model of type 2 diabetes.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-003-r/Efficacy of murine anti-LPA Ab in the ZDF rat model of type 2 diabetes.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-003-r/Efficacy of murine anti-LPA Ab in the ZDF rat model of type 2 diabetes.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-003-r/Efficacy of murine anti-LPA Ab in the ZDF rat model of type 2 diabetes.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Approval/signature block labeled \"LPATII APPROVAL\" showing columns Function, Name (Print), Signature, and Date, with a Study Director/Monitor row that includes a printed name (illegible) and a partially illegible date referencing 2014.",
         "keywords": [
@@ -5079,7 +5079,7 @@
             "2",
             "3"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-003-r/Efficacy of murine anti-LPA Ab in the ZDF rat model of type 2 diabetes.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-003-r/Efficacy of murine anti-LPA Ab in the ZDF rat model of type 2 diabetes.pdf.tables/input.p1.t1.json",
           "row_count": 18,
           "fast_extract": []
         },
@@ -5204,8 +5204,8 @@
       {
         "id": "0804f385-8fe2-4f88-be23-c7326bd0d6ec",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-004-r/lt3114-pha-004-r.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-004-r/lt3114-pha-004-r.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-004-r/lt3114-pha-004-r.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-004-r/lt3114-pha-004-r.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Final report for study LT3114-PHA-004-R titled \"Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA)\", initiated 04-2011; Study Monitor: Rosalia Matteo, Study Director: Camilla Svensson, Performance Site: Karolinska Institute.",
         "keywords": [
@@ -5227,7 +5227,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-004-r/lt3114-pha-004-r.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-004-r/lt3114-pha-004-r.pdf.tables/input.p2.t1.json",
           "row_count": 11,
           "fast_extract": []
         },
@@ -5286,8 +5286,8 @@
       {
         "id": "74eed4b2-c19a-4256-95cb-f4d17007651f",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-005-r/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA). Wash-out study.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-005-r/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA). Wash-out study.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-005-r/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA). Wash-out study.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-005-r/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA). Wash-out study.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Table titled \"LPATII APPROVAL\" lists functions/approval roles including \"Study Director/Monitor\", \"Connibutor\", and \"Research\" and is part of the controlled \"GXP and Non-GXP Study Rep011 Review and Approval Form\" (Document No. GE003FM01) for Lpath Study No. LT 3114-PHA-005-R, Version No. 01 (Non GXP i== GLP).",
         "keywords": [
@@ -5309,7 +5309,7 @@
           "columns": [
             "0"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-005-r/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA). Wash-out study.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-005-r/Efficacy of B3 antibody in a mouse model of Collagen Antibody Induced Arthritis (CAIA). Wash-out study.pdf.tables/input.p1.t1.json",
           "row_count": 7,
           "fast_extract": []
         },
@@ -5344,8 +5344,8 @@
       {
         "id": "0c270d00-4876-43e9-af61-7f6d5118756f",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-005-r/lt3114-pha-005-r.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-005-r/lt3114-pha-005-r.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-005-r/lt3114-pha-005-r.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-005-r/lt3114-pha-005-r.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "The table (headed \"LPATII APPROVAL\") lists approval-related functions/roles including \"Study Director/Monitor\", \"Connibutor\", and \"Research\" on a controlled form titled \"GXP and Non-GXP Study Rep011 Review and Approval Form\" (Document No. GE003FM01) for Lpath Study No. LT 3114-PHA-005-R, Version No. 01. The form metadata includes issue/effective dates (17 Oct 2014 / 20 Oct 2014) and references vendor study protocol/report and GLP/Non GXP status.",
         "keywords": [
@@ -5367,7 +5367,7 @@
           "columns": [
             "0"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-005-r/lt3114-pha-005-r.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-005-r/lt3114-pha-005-r.pdf.tables/input.p1.t1.json",
           "row_count": 7,
           "fast_extract": []
         },
@@ -5402,8 +5402,8 @@
       {
         "id": "378ca833-492d-4172-8e84-9fb0b63524a1",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-006-r/lt3114-pha-006-r.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-006-r/lt3114-pha-006-r.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-006-r/lt3114-pha-006-r.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-006-r/lt3114-pha-006-r.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled \"GXP and Non-GXP Study Report Review and Approval Form\" (Document GE003FM01, Version 02; issue date 17 Oct 2014; effective 20 Oct 2014; page 2 of 2) for Lpath Study No. LT3114-PHA-006-R (Version 01) referencing Lab Notebook LNB #295 and Binder #295 (specified pages), with an attached executive summary; the study purpose was to test the efficacy of murine (B3) and humanized (LT3114) anti-lysophosphatidic acid, with dates October 2013 and October 2014 noted and GxP category checkboxes (GLP/GCP/GMP) indicated.",
         "keywords": [
@@ -5425,7 +5425,7 @@
           "columns": [
             "0"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-006-r/lt3114-pha-006-r.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-006-r/lt3114-pha-006-r.pdf.tables/input.p1.t1.json",
           "row_count": 15,
           "fast_extract": []
         },
@@ -5484,8 +5484,8 @@
       {
         "id": "7dd49ddd-e074-4fed-9587-fb3828be0e8c",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-007-r/lt3114-pha-007-r.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-007-r/lt3114-pha-007-r.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-007-r/lt3114-pha-007-r.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-007-r/lt3114-pha-007-r.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Study No. 14.0062 is a study report titled \"Evaluation of 1023 and 3114 using the tail-flick test in the mouse (S.C. administration)\", listing LPATH INC. as sponsor and Dr. Camille LE CUDENNEC as author.",
         "keywords": [
@@ -5513,7 +5513,7 @@
             "K",
             "TEST IN"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-007-r/lt3114-pha-007-r.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-007-r/lt3114-pha-007-r.pdf.tables/input.p2.t1.json",
           "row_count": 36,
           "fast_extract": []
         },
@@ -5894,8 +5894,8 @@
       {
         "id": "be0f4cef-126c-4813-b6f9-49eaa94392a7",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-008-r/lt3114-pha-008-r.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-008-r/lt3114-pha-008-r.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-008-r/lt3114-pha-008-r.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-008-r/lt3114-pha-008-r.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Lpath Study Report LT3114-PHA-008-R (Version 01; product LT3114; test articles: antibody 83 and control IgG LT1015) evaluated analgesic activity after spinal nerve ligation (Chung model) in rats with antibodies administered intravenously (reported 30 mg/kg on days 14, 17, 21, 24) and morphine (12 mg/kg i.p.) and gabapentin (100 mg/kg i.p.) as comparators. Results showed SNL-induced decreases in paw withdrawal thresholds, morphine and gabapentin increased thresholds, antibody 83 produced transient tactile improvement but a significant improvement in thermal paw withdrawal latency at both doses (with the 10 mg/kg effect sustained through day 24 and a diminished response after day 21 at 30 mg/kg), while LT1015 showed no overall significant effects.",
         "keywords": [
@@ -5920,7 +5920,7 @@
             "2",
             "3"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-008-r/lt3114-pha-008-r.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-008-r/lt3114-pha-008-r.pdf.tables/input.p1.t1.json",
           "row_count": 15,
           "fast_extract": []
         },
@@ -6027,8 +6027,8 @@
       {
         "id": "de95ddb7-e6c7-482b-bd65-4457d25f72dd",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-011-r/lt3114-pha-011-r.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-011-r/lt3114-pha-011-r.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-011-r/lt3114-pha-011-r.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-011-r/lt3114-pha-011-r.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Final report (March 29, 2013) titled \"Dose-Response Efficacy of Test Compound in a Therapeutic Model of Diabetes-Induced Neuropathic Pain\" for project DIP-LPI-1 describing evaluation of dose-response therapeutic efficacy of Lpath, Inc. test compounds in a rat model; prepared by Washington Biotechnology, Inc. with addresses and contact details provided.",
         "keywords": [
@@ -6052,7 +6052,7 @@
             "1",
             "2"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-011-r/lt3114-pha-011-r.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-011-r/lt3114-pha-011-r.pdf.tables/input.p2.t1.json",
           "row_count": 26,
           "fast_extract": []
         },
@@ -6198,8 +6198,8 @@
       {
         "id": "d052c79e-e265-4c8e-a050-62d74670d481",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-012-r/lt3114-pha-012-r.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-012-r/lt3114-pha-012-r.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-012-r/lt3114-pha-012-r.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-012-r/lt3114-pha-012-r.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled form titled \"GXP and Non-GXP Study Report Review and Approval Form\" (Document No. GE003FM01, Version 02; Issue Date 17 Oct 2014; Effective Date 20 Oct 2014; page 2 of 2) for Lpath Study No. L T3114-PHA-012-R (Version No. 0/ B NonGXP GLP), containing fields including dates (2011, March 2011), a Lab Notebook Reference ('[{)N IA'), and an executive summary note ('see Attached O' / 'UN/A').",
         "keywords": [
@@ -6224,7 +6224,7 @@
             "2",
             "3"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-012-r/lt3114-pha-012-r.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-012-r/lt3114-pha-012-r.pdf.tables/input.p1.t1.json",
           "row_count": 13,
           "fast_extract": []
         },
@@ -6319,8 +6319,8 @@
       {
         "id": "71d8201f-f9e7-4950-825f-c65ed9addae2",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-013-r/lt3114-pha-013-r.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-013-r/lt3114-pha-013-r.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-013-r/lt3114-pha-013-r.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-013-r/lt3114-pha-013-r.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "An approval/signature block from an Lpath controlled form (GXP and Non-GXP Study Report Review and Approval, Document GE003FM01) listing fields for Function, Name (Print)/Date/Signature and Study Director/Monitor; the table also references \"allodynia when administered either during or following completion of chemotherapeutic treatment.\"",
         "keywords": [
@@ -6343,7 +6343,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-013-r/lt3114-pha-013-r.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-013-r/lt3114-pha-013-r.pdf.tables/input.p1.t1.json",
           "row_count": 21,
           "fast_extract": []
         },
@@ -6442,8 +6442,8 @@
       {
         "id": "48302df9-6719-4a67-9e9e-7b18cbdd6239",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-014-r/lt3114-pha-014-r.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-014-r/lt3114-pha-014-r.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-014-r/lt3114-pha-014-r.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-014-r/lt3114-pha-014-r.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled form titled 'GXP and Non-GXP Study Report Review and Approval Form' (Document GE003FM01, Version 02) for Lpath Study No. LT 3114-PHA-014-R with issue/effective dates 17 Oct 2014 / 20 Oct 2014; includes lab notebook references, an executive summary, and notes on the ability of several anti-lysophosphatidic acid (anti-LPA) antibodies (murine and humanized LT3015).",
         "keywords": [
@@ -6468,7 +6468,7 @@
             "2",
             "3"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-014-r/lt3114-pha-014-r.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-014-r/lt3114-pha-014-r.pdf.tables/input.p1.t1.json",
           "row_count": 11,
           "fast_extract": []
         },
@@ -6551,8 +6551,8 @@
       {
         "id": "7b687f94-6d26-4e51-8507-2388c7e5c2d5",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-016-r/lt3114-pha-016-r.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-016-r/lt3114-pha-016-r.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-016-r/lt3114-pha-016-r.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-016-r/lt3114-pha-016-r.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled form titled \"GXP and Non-GXP Study Report Review and Approval Form\" (Document No. GE003FM01, Version 02) with issue date 17 Oct 2014, effective date 20 Oct 2014, and shown as page 2 of 2. The form references vendor study protocol/vendor study report and Lpath Study No.: LT 3114-PHA-016-R (Version No.: 0) and includes a truncated note indicating Non GXP / GLP.",
         "keywords": [
@@ -6574,7 +6574,7 @@
           "columns": [
             "0"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-016-r/lt3114-pha-016-r.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-016-r/lt3114-pha-016-r.pdf.tables/input.p1.t1.json",
           "row_count": 43,
           "fast_extract": []
         },
@@ -6717,8 +6717,8 @@
       {
         "id": "99f58f46-f2d5-4b46-81af-b73045fbbf23",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-017-r/lt3114-pha-017-r.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-017-r/lt3114-pha-017-r.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-017-r/lt3114-pha-017-r.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-017-r/lt3114-pha-017-r.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled form titled \"GXP and Non-GXP Study Report Review and Approval Form\" (Document No. GE003FM01, Version 02, Issue Date 17 Oct 2014, Effective Date 20 Oct 2014, Page 2 of 2) referencing vendor study protocol/report and Lpath Study No.: LT 3114-PHA-017 -R, Version No.: 0, with GXP classifications noted (Non-GXP, GLP, GCP, GMP).",
         "keywords": [
@@ -6740,7 +6740,7 @@
           "columns": [
             "0"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-017-r/lt3114-pha-017-r.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-017-r/lt3114-pha-017-r.pdf.tables/input.p1.t1.json",
           "row_count": 46,
           "fast_extract": []
         },
@@ -6892,8 +6892,8 @@
       {
         "id": "68c4752d-15c7-45ea-bdc2-09c84f298dda",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-018-r/lt3114-pha-018-r.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-018-r/lt3114-pha-018-r.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-018-r/lt3114-pha-018-r.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-018-r/lt3114-pha-018-r.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Controlled form titled \"GXP and Non-GXP Study Rep011 Review and Approval Form\" containing document metadata (Document No.: GEOOJFMOI; Version: 02; Issue Date: 17 Oct 2014; Effective Date: 20 Oct 2014) and study-specific entries. The table lists the Lpath Study No. (L T31 14-PHA-018-R; Version No.: 0), regulatory scope flags (GXP, Non GXP, GLP, GCP, GMP), and product/test-article identifiers (Product Name: L T3114; Test Article: 83 (50483); L T1 015).",
         "keywords": [
@@ -6915,7 +6915,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-018-r/lt3114-pha-018-r.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-018-r/lt3114-pha-018-r.pdf.tables/input.p1.t1.json",
           "row_count": 17,
           "fast_extract": []
         },
@@ -6998,8 +6998,8 @@
       {
         "id": "235286e8-4df2-4b49-8a3f-7cff57e23fe7",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-020-r/lt3114-pha-020-r.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-020-r/lt3114-pha-020-r.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-020-r/lt3114-pha-020-r.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-020-r/lt3114-pha-020-r.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Final Report (Report Number: LT3114-PHA-020-R) titled \"Evaluation of LPA concentrations in a model of STZ-induced diabetes in rats and preliminary efficacy with an anti-LPA antibody\", initiated 04-2010 at UCSD; Study Monitor: Rosalia Matteo; Study Director: Nigel Calcutt.",
         "keywords": [
@@ -7022,7 +7022,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-020-r/lt3114-pha-020-r.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/xml files/lt3114-pha-020-r/lt3114-pha-020-r.pdf.tables/input.p2.t1.json",
           "row_count": 11,
           "fast_extract": []
         },
@@ -7081,8 +7081,8 @@
       {
         "id": "de126185-6b8e-4d1f-8d82-49d1b1a744be",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/1259SL35.001.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/1259SL35.001.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/1259SL35.001.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/1259SL35.001.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Final report titled \"A Single Slow Bolus Injection Study of LT3114 in Cynomolgus Monkeys\" (Battelle Study Number: 52447; Calvert Study Number: 1259SL35.001).",
         "keywords": [
@@ -7102,7 +7102,7 @@
           "columns": [
             "0"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/1259SL35.001.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/1259SL35.001.pdf.tables/input.p1.t1.json",
           "row_count": 14,
           "fast_extract": []
         },
@@ -7158,8 +7158,8 @@
       {
         "id": "58b3064a-61e0-4eb0-b7f3-0ce5346719bc",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/A Study to Assess Wound Healing in C57 BL_6  Mice.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/A Study to Assess Wound Healing in C57 BL_6  Mice.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/A Study to Assess Wound Healing in C57 BL_6  Mice.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/A Study to Assess Wound Healing in C57 BL_6  Mice.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Amended Final Report for \"A Study to Assess Wound Healing in C57 BL/6 Mice\" listing test article LT3114 and Study Director Tricia Wolff; a Testing Facility field is present but its value is not shown.",
         "keywords": [
@@ -7181,7 +7181,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/A Study to Assess Wound Healing in C57 BL_6  Mice.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/A Study to Assess Wound Healing in C57 BL_6  Mice.pdf.tables/input.p2.t1.json",
           "row_count": 17,
           "fast_extract": []
         },
@@ -7264,8 +7264,8 @@
       {
         "id": "583c1042-511b-44e9-b557-cde5d2a97732",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/A single slow bolus injection study of LT3114 in cynomolgus monkeys.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/A single slow bolus injection study of LT3114 in cynomolgus monkeys.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/A single slow bolus injection study of LT3114 in cynomolgus monkeys.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/A single slow bolus injection study of LT3114 in cynomolgus monkeys.pdf.tables/input.p1.t1.json",
         "caption": "Table p1 t1",
         "description": "Final report for a single slow bolus injection study of LT3114 conducted in cynomolgus monkeys, identified as Battelle study number 52447 and Calvert study number 1259SL35.001.",
         "keywords": [
@@ -7284,7 +7284,7 @@
           "columns": [
             "0"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/A single slow bolus injection study of LT3114 in cynomolgus monkeys.pdf.tables/input.p1.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/A single slow bolus injection study of LT3114 in cynomolgus monkeys.pdf.tables/input.p1.t1.json",
           "row_count": 14,
           "fast_extract": []
         },
@@ -7340,8 +7340,8 @@
       {
         "id": "603a5757-145d-43b8-8a8e-11094d11179f",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/DGG14-010.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/DGG14-010.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/DGG14-010.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/DGG14-010.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Table of contents for the Final Tissue Cross Reactivity Report (Lpath, Inc., Study Number DGG14-010) listing major sections including Compliance Statement, Executive Summary, and Introduction with Protocol and Purpose.",
         "keywords": [
@@ -7363,7 +7363,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/DGG14-010.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/DGG14-010.pdf.tables/input.p2.t1.json",
           "row_count": 35,
           "fast_extract": []
         },
@@ -7518,8 +7518,8 @@
       {
         "id": "1bf1d328-10ba-49d4-a445-07dfd07df548",
         "s3_bucket": "doc-repository-dev",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/Full Human Tissue Cross-Reactivity Study of LT3114.pdf.tables/input.p2.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/Full Human Tissue Cross-Reactivity Study of LT3114.pdf.tables/input.p2.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/Full Human Tissue Cross-Reactivity Study of LT3114.pdf.tables/input.p2.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/Full Human Tissue Cross-Reactivity Study of LT3114.pdf.tables/input.p2.t1.json",
         "caption": "Table p2 t1",
         "description": "Table of contents for the Final Tissue Cross Reactivity Report (Lpath, Inc, Study Number DGG14-010) listing major sections including Compliance Statement, Executive Summary, and Introduction with subsections Protocol and Purpose.",
         "keywords": [
@@ -7541,7 +7541,7 @@
             "0",
             "1"
           ],
-          "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/Full Human Tissue Cross-Reactivity Study of LT3114.pdf.tables/input.p2.t1.json",
+          "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.3 Safety Pharmacology/Full Human Tissue Cross-Reactivity Study of LT3114.pdf.tables/input.p2.t1.json",
           "row_count": 35,
           "fast_extract": []
         },
@@ -9681,22 +9681,22 @@
     "table_asset_samples": [
       {
         "id": "752fc320-a262-4de1-b224-3a2cee4e7203",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Cell based activity of anti-LPA antibodies, B3 and LT3114.pdf.tables/input.p1.t1.json",
         "row_count": 46,
         "preview_rows_count": 46
       },
       {
         "id": "348be008-42a8-4743-b1ea-6aeaf18deba9",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Comparison of the binding of anti-LPA antibodies to other lipid molecules (cross-reactivity).pdf.tables/input.p1.t1.json",
         "row_count": 11,
         "preview_rows_count": 11
       },
       {
         "id": "e5e500db-b947-44fc-866f-9d87523dee7c",
-        "s3_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf.tables/input.p1.t1.csv",
-        "json_key": "filynai.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf.tables/input.p1.t1.json",
+        "s3_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf.tables/input.p1.t1.csv",
+        "json_key": "longooc.com/Lpathomab/Module 4 Nonclinical Study Reports/4.2 Study Reports/4.2.1 Pharmacology/4.2.1.1 Primary Pharmacodynamics/Direct and Competitive Binding of anti-LPA antibodies B3 and LT3114.pdf.tables/input.p1.t1.json",
         "row_count": 43,
         "preview_rows_count": 43
       }

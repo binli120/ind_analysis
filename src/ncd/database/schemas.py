@@ -1,6 +1,6 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 from typing import List, Optional
 
@@ -12,7 +12,7 @@ class DoseGroupSchema(BaseModel):
 
     Schemas for NCD data.
     @author: Bin Lee
-    @email: blee@filynai.com
+    @email: blee@longooc.com
     """
 
     name: Optional[str] = None

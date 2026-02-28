@@ -1,10 +1,10 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """
 @author: Bin Lee
-@email: blee@filynai.com
+@email: blee@longooc.com
 
 Lambda entry point that records ingest events and tracks pipeline progress."""
 
@@ -34,7 +34,7 @@ if not _TABLE_NAME:
         "PIPELINE_STATUS_TABLE is not set; handler will raise on first invocation."
     )
 
-_DEFAULT_COMPANY = os.getenv("DEFAULT_COMPANY", "filynai.com")
+_DEFAULT_COMPANY = os.getenv("DEFAULT_COMPANY", "longooc.com")
 _DEFAULT_PROJECT = os.getenv("DEFAULT_PROJECT", "LT1009")
 _ALLOWED_EXTENSIONS = {
     ext.strip().lower()

@@ -1,6 +1,6 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """Generate Section 2.6 summaries from Section 2.4 content stored in S3."""
 
@@ -32,8 +32,8 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--company",
-        default="filynai.com",
-        help="Top-level company prefix in S3 (default: filynai.com).",
+        default="longooc.com",
+        help="Top-level company prefix in S3 (default: longooc.com).",
     )
     parser.add_argument(
         "--project",

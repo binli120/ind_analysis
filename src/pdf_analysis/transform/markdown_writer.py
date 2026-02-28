@@ -1,11 +1,11 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """Utilities for rendering markdown and HTML representations of extraction results."""
 
 # @author: Bin Lee
-# @email: blee@filynai.com
+# @email: blee@longooc.com
 
 from html import escape
 from typing import Any, Dict, List
@@ -53,7 +53,7 @@ def build_markdown_document(
     """
     Build the editable markdown document combining page text and table previews.
     """
-    page_header = "> \u00a9 filynai.com | Author: Bin Lee | Email: blee@filynai.com"
+    page_header = "> \u00a9 longooc.com | Author: Bin Lee | Email: blee@longooc.com"
     tables_by_page: Dict[int, List[Dict[str, Any]]] = {}
     for table in table_manifest:
         tables_by_page.setdefault(table["page_number"], []).append(table)
@@ -129,7 +129,7 @@ def build_html_document(
     tables_by_page: Dict[int, List[Dict[str, Any]]] = {}
     for table in table_manifest:
         tables_by_page.setdefault(table["page_number"], []).append(table)
-    page_header_html = '<p class="page-meta">&copy; filynai.com | Author: Bin Lee | Email: blee@filynai.com</p>'
+    page_header_html = '<p class="page-meta">&copy; longooc.com | Author: Bin Lee | Email: blee@longooc.com</p>'
 
     parts = [
         '<article class="pdf-extraction" data-source="pdf">',

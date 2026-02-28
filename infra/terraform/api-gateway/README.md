@@ -1,6 +1,6 @@
-@copyright filynai.com
+@copyright longooc.com
 @author: Bin Lee
-@email: blee@filynai.com
+@email: blee@longooc.com
 
 # API Gateway HTTP Proxy for ECS
 

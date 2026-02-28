@@ -13,5 +13,5 @@
   # Use full path to poetry if needed (run `which poetry`)
   /usr/local/bin/poetry run python scripts/ingest_module4_batch.py \
     --bucket doc-repository-dev \
-    --prefix filynai.com/ \
+    --prefix longooc.com/ \
     --all-modules

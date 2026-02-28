@@ -1,6 +1,6 @@
-@copyright filynai.com
+@copyright longooc.com
 @author: Bin Lee
-@email: blee@filynai.com
+@email: blee@longooc.com
 
 Module 4 extraction helpers for building the 2.4/2.6 scaffolding.
 

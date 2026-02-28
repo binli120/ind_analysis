@@ -1,11 +1,11 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """Standalone entry point for invoking the PDF processing pipeline."""
 
 # author: Bin Lee
-# email: blee@filynai.com
+# email: blee@longooc.com
 
 import argparse
 import csv

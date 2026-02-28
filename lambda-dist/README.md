@@ -1,6 +1,6 @@
-@copyright filynai.com
+@copyright longooc.com
 @author: Bin Lee
-@email: blee@filynai.com
+@email: blee@longooc.com
 
 Lambda build artifacts for the PDF analysis pipeline.
 

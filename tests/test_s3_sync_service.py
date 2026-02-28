@@ -1,11 +1,11 @@
-# Copyright (c) 2025 filynai.com
+# Copyright (c) 2025 longooc.com
 # Author: Bin Lee
-# Email: blee@filynai.com
+# Email: blee@longooc.com
 
 """Tests for S3 to Redis sync service and its supporting utilities."""
 
 # author: Bin Lee
-# email: blee@filynai.com
+# email: blee@longooc.com
 
 from __future__ import annotations
 
@@ -64,25 +64,25 @@ class FakeS3Client:
                 {
                     "Versions": [
                         {
-                            "Key": "filynai.com/LT1009/Module 1.Quality/report.pdf",
+                            "Key": "longooc.com/LT1009/Module 1.Quality/report.pdf",
                             "VersionId": "abc123",
                             "LastModified": datetime(2024, 1, 1, tzinfo=timezone.utc),
                             "IsLatest": True,
                         },
                         {
-                            "Key": "filynai.com/LT1009/Module 1.Quality/old_report.pdf",
+                            "Key": "longooc.com/LT1009/Module 1.Quality/old_report.pdf",
                             "VersionId": "old1",
                             "LastModified": datetime(2023, 1, 1, tzinfo=timezone.utc),
                             "IsLatest": False,
                         },
                         {
-                            "Key": "filynai.com/LT1009/Module 3.Safety/readme.txt",
+                            "Key": "longooc.com/LT1009/Module 3.Safety/readme.txt",
                             "VersionId": "notpdf",
                             "LastModified": datetime(2024, 3, 1, tzinfo=timezone.utc),
                             "IsLatest": True,
                         },
                         {
-                            "Key": "filynai.com/LT2001/Module 2.CMC/spec.pdf",
+                            "Key": "longooc.com/LT2001/Module 2.CMC/spec.pdf",
                             "VersionId": "def456",
                             "LastModified": datetime(2024, 2, 10, tzinfo=timezone.utc),
                             "IsLatest": True,
@@ -159,7 +159,7 @@ class S3RedisSyncServiceTests(unittest.TestCase):
             output_path = Path(tmp_dir)
             config = S3SyncConfig(
                 bucket="demo-bucket",
-                company="filynai.com",
+                company="longooc.com",
                 projects=("LT1009",),
                 module_filters=(1,),
                 redis_client=fake_redis,
@@ -213,7 +213,7 @@ class S3RedisSyncServiceTests(unittest.TestCase):
                 processed = service.run()
 
             self.assertEqual(processed, 1)
-            key = "filynai.com:lt1009:module-1-quality:report.pdf"
+            key = "longooc.com:lt1009:module-1-quality:report.pdf"
             self.assertIn(key, fake_redis.store)
             payload = fake_redis.store[key]
             self.assertEqual(payload["s3_bucket"], "demo-bucket")
@@ -230,21 +230,21 @@ class S3RedisSyncServiceTests(unittest.TestCase):
 
             markdown_path = (
                 output_path
-                / "filynai.com"
+                / "longooc.com"
                 / "LT1009"
                 / "Module 1.Quality"
                 / "report.abc123.pdf.md"
             )
             meta_path = (
                 output_path
-                / "filynai.com"
+                / "longooc.com"
                 / "LT1009"
                 / "Module 1.Quality"
                 / "report.abc123.pdf.meta.json"
             )
             summary_path = (
                 output_path
-                / "filynai.com"
+                / "longooc.com"
                 / "LT1009"
                 / "Module 1.Quality"
                 / "report.abc123.pdf.summary.txt"
@@ -261,19 +261,19 @@ class S3RedisSyncServiceTests(unittest.TestCase):
             )
             self.assertEqual(
                 meta_payload["markdown_file"],
-                "filynai.com/LT1009/Module 1.Quality/report.abc123.pdf.md",
+                "longooc.com/LT1009/Module 1.Quality/report.abc123.pdf.md",
             )
             self.assertEqual(
                 meta_payload["markdown_key"],
-                "filynai.com/LT1009/Module 1.Quality/report.pdf.md",
+                "longooc.com/LT1009/Module 1.Quality/report.pdf.md",
             )
             self.assertEqual(
                 meta_payload["summary_file"],
-                "filynai.com/LT1009/Module 1.Quality/report.abc123.pdf.summary.txt",
+                "longooc.com/LT1009/Module 1.Quality/report.abc123.pdf.summary.txt",
             )
             self.assertEqual(
                 meta_payload["summary_key"],
-                "filynai.com/LT1009/Module 1.Quality/report.pdf.summary.txt",
+                "longooc.com/LT1009/Module 1.Quality/report.pdf.summary.txt",
             )
             self.assertNotIn("markdown", meta_payload["redis"])
             self.assertIn("Key Topics", summary_path.read_text(encoding="utf-8"))
@@ -302,7 +302,7 @@ class S3RedisSyncServiceTests(unittest.TestCase):
             self.assertEqual(len(fake_embedding_store.calls), 1)
             self.assertEqual(
                 fake_embedding_store.calls[0]["s3_key"],
-                "filynai.com/LT1009/Module 1.Quality/report.pdf",
+                "longooc.com/LT1009/Module 1.Quality/report.pdf",
             )
             self.assertEqual(fake_summarizer.calls, 1)
 
@@ -310,7 +310,7 @@ class S3RedisSyncServiceTests(unittest.TestCase):
         fake_redis = FakeRedis()
         config = S3SyncConfig(
             bucket="demo-bucket",
-            company="filynai.com",
+            company="longooc.com",
             projects=("LT1009",),
             module_filters=(1,),
             redis_client=fake_redis,
@@ -332,11 +332,11 @@ class S3RedisSyncServiceTests(unittest.TestCase):
         )
 
         fake_s3 = FakeS3Client()
-        meta_key = "filynai.com/LT1009/Module 1.Quality/report.pdf.meta.json"
-        md_key = "filynai.com/LT1009/Module 1.Quality/report.pdf.md"
+        meta_key = "longooc.com/LT1009/Module 1.Quality/report.pdf.meta.json"
+        md_key = "longooc.com/LT1009/Module 1.Quality/report.pdf.md"
         existing_meta = {
             "bucket": "demo-bucket",
-            "key": "filynai.com/LT1009/Module 1.Quality/report.pdf",
+            "key": "longooc.com/LT1009/Module 1.Quality/report.pdf",
             "version_id": "abc123",
             "metadata": {"analyzed": True},
             "markdown_key": md_key,
@@ -358,7 +358,7 @@ class S3RedisSyncServiceTests(unittest.TestCase):
         fake_redis = FakeRedis()
         config = S3SyncConfig(
             bucket="demo-bucket",
-            company="filynai.com",
+            company="longooc.com",
             projects=("LT1009",),
             module_filters=(1,),
             redis_client=fake_redis,
@@ -381,11 +381,11 @@ class S3RedisSyncServiceTests(unittest.TestCase):
         )
 
         fake_s3 = FakeS3Client()
-        meta_key = "filynai.com/LT1009/Module 1.Quality/report.pdf.meta.json"
-        md_key = "filynai.com/LT1009/Module 1.Quality/report.pdf.md"
+        meta_key = "longooc.com/LT1009/Module 1.Quality/report.pdf.meta.json"
+        md_key = "longooc.com/LT1009/Module 1.Quality/report.pdf.md"
         existing_meta = {
             "bucket": "demo-bucket",
-            "key": "filynai.com/LT1009/Module 1.Quality/report.pdf",
+            "key": "longooc.com/LT1009/Module 1.Quality/report.pdf",
             "version_id": "abc123",
             "metadata": {"analyzed": True},
             "markdown_key": md_key,
@@ -401,7 +401,7 @@ class S3RedisSyncServiceTests(unittest.TestCase):
         self.assertEqual(processed, 1)
         self.assertEqual(pipeline.calls, 1)
         self.assertIn(
-            "filynai.com:lt1009:module-1-quality:report.pdf", fake_redis.store
+            "longooc.com:lt1009:module-1-quality:report.pdf", fake_redis.store
         )
         self.assertGreater(len(fake_s3.puts), 2)  # new uploads appended
 
